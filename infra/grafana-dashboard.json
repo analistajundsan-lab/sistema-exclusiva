@@ -1,0 +1,55 @@
+﻿{
+  "dashboard": {
+    "title": "Sistema Exclusiva Operacional - MÃ©tricas",
+    "panels": [
+      {
+        "title": "RequisiÃ§Ãµes HTTP por segundo",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[1m])"
+          }
+        ]
+      },
+      {
+        "title": "LatÃªncia P95 (ms)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, http_request_duration_seconds)"
+          }
+        ]
+      },
+      {
+        "title": "Erros de AutenticaÃ§Ã£o",
+        "targets": [
+          {
+            "expr": "rate(auth_attempts_total{status='failed'}[5m])"
+          }
+        ]
+      },
+      {
+        "title": "Taxa de Rate Limit",
+        "targets": [
+          {
+            "expr": "rate(rate_limit_hits_total[5m])"
+          }
+        ]
+      },
+      {
+        "title": "LatÃªncia de Queries BD (ms)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, db_query_duration_seconds)"
+          }
+        ]
+      },
+      {
+        "title": "OperaÃ§Ãµes Redis por segundo",
+        "targets": [
+          {
+            "expr": "rate(redis_operations_total[1m])"
+          }
+        ]
+      }
+    ]
+  }
+}

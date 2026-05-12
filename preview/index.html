@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Exclusiva Turismo | Preview Operacional</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">EX</div>
+          <div>
+            <strong>Exclusiva Turismo</strong>
+            <span>Central operacional</span>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Navegação principal">
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button class="nav-item" data-view="escala">Escala</button>
+          <button class="nav-item" data-view="plantao">Painel plantão</button>
+          <button class="nav-item" data-view="trocas">Trocas</button>
+          <button class="nav-item" data-view="ocorrencias">Ocorrências</button>
+          <button class="nav-item" data-view="seguranca">Segurança</button>
+        </nav>
+
+        <div class="profile-card">
+          <span class="eyebrow">Perfil ativo</span>
+          <strong>Administrador</strong>
+          <small>Acesso total, auditoria e dashboards</small>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <span class="eyebrow">MVP visual gratuito</span>
+            <h1 id="view-title">Dashboard executivo</h1>
+          </div>
+          <div class="top-actions">
+            <select aria-label="Unidade">
+              <option>Todas as unidades</option>
+              <option>Caieiras</option>
+              <option>Jundiaí</option>
+              <option>Santana de Parnaíba</option>
+            </select>
+            <input type="date" value="2026-05-12" aria-label="Data operacional" />
+          </div>
+        </header>
+
+        <section class="view active" id="dashboard">
+          <div class="metrics-grid">
+            <article class="metric">
+              <span>Linhas hoje</span>
+              <strong>148</strong>
+              <small>3 unidades em operação</small>
+            </article>
+            <article class="metric">
+              <span>Confirmadas</span>
+              <strong>112</strong>
+              <small>76% baixadas no prazo</small>
+            </article>
+            <article class="metric alert">
+              <span>Trocas</span>
+              <strong>9</strong>
+              <small>Mensagem pronta para cliente</small>
+            </article>
+            <article class="metric danger">
+              <span>Ocorrências</span>
+              <strong>4</strong>
+              <small>2 em andamento</small>
+            </article>
+          </div>
+
+          <div class="content-grid">
+            <section class="panel wide">
+              <div class="panel-header">
+                <div>
+                  <h2>Operação por unidade</h2>
+                  <p>Visão rápida para gestão acompanhar volume, confirmações e pendências.</p>
+                </div>
+              </div>
+              <div class="unit-list">
+                <div class="unit-row">
+                  <strong>Caieiras</strong>
+                  <span>58 linhas</span>
+                  <div class="bar"><i style="width: 82%"></i></div>
+                  <em>48 confirmadas</em>
+                </div>
+                <div class="unit-row">
+                  <strong>Jundiaí</strong>
+                  <span>51 linhas</span>
+                  <div class="bar"><i style="width: 71%"></i></div>
+                  <em>36 confirmadas</em>
+                </div>
+                <div class="unit-row">
+                  <strong>Santana de Parnaíba</strong>
+                  <span>39 linhas</span>
+                  <div class="bar"><i style="width: 72%"></i></div>
+                  <em>28 confirmadas</em>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>Por turno</h2>
+              <div class="stacked">
+                <div><span>Diurno</span><strong>84</strong></div>
+                <div><span>Noturno</span><strong>64</strong></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>Clientes</h2>
+              <div class="client-pill primary">Mercado Livre <strong>126</strong></div>
+              <div class="client-pill">Outros contratos <strong>22</strong></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="escala">
+          <div class="panel-header page-tools">
+            <div>
+              <h2>Criação e edição da escala</h2>
+              <p>Área administrativa para substituir a planilha e ainda permitir download em Excel.</p>
+            </div>
+            <button class="primary-button">Exportar Excel</button>
+          </div>
+
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Horário</th>
+                  <th>Unidade</th>
+                  <th>Cliente</th>
+                  <th>Linha</th>
+                  <th>Turno</th>
+                  <th>Carro previsto</th>
+                  <th>Motorista</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>06:20</td><td>Caieiras</td><td>Mercado Livre</td><td>ENT 7522</td><td>Diurno</td><td>3700</td><td>Fabio Anderson</td><td><span class="badge pending">Aguardando</span></td>
+                </tr>
+                <tr>
+                  <td>07:10</td><td>Jundiaí</td><td>Mercado Livre</td><td>SAI 7593</td><td>Diurno</td><td>2250</td><td>Carlos</td><td><span class="badge done">Confirmada</span></td>
+                </tr>
+                <tr>
+                  <td>18:30</td><td>Santana de Parnaíba</td><td>Mercado Livre</td><td>ENT 8014</td><td>Noturno</td><td>4140</td><td>Averaldo</td><td><span class="badge pending">Aguardando</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="plantao">
+          <div class="plantao-layout">
+            <section class="panel plantao-main">
+              <div class="panel-header">
+                <div>
+                  <h2>Linhas para confirmar</h2>
+                  <p>Aparecem 30 a 40 minutos antes do início da linha.</p>
+                </div>
+                <span class="live-dot">Tempo real visual</span>
+              </div>
+
+              <div class="route-card urgent">
+                <div>
+                  <span class="time">06:20</span>
+                  <strong>ENTRADA - 7522</strong>
+                  <small>Caieiras · Mercado Livre · Carro previsto 3700</small>
+                </div>
+                <div class="route-actions">
+                  <button class="confirm">Confirmar</button>
+                  <button class="swap">Troca</button>
+                </div>
+              </div>
+
+              <div class="route-card">
+                <div>
+                  <span class="time">06:45</span>
+                  <strong>SAÍDA - 7593</strong>
+                  <small>Caieiras · Mercado Livre · Carro previsto 3712</small>
+                </div>
+                <div class="route-actions">
+                  <button class="confirm">Confirmar</button>
+                  <button class="swap">Troca</button>
+                </div>
+              </div>
+
+              <div class="route-card">
+                <div>
+                  <span class="time">07:05</span>
+                  <strong>ENTRADA - 7601</strong>
+                  <small>Caieiras · Mercado Livre · Carro previsto 3698</small>
+                </div>
+                <div class="route-actions">
+                  <button class="confirm">Confirmar</button>
+                  <button class="swap">Troca</button>
+                </div>
+              </div>
+            </section>
+
+            <aside class="panel history-panel">
+              <h2>Histórico do dia</h2>
+              <div class="history-item ok">06:00 · 7480 confirmada · Fabio</div>
+              <div class="history-item ok">06:10 · 7511 confirmada · Anderson</div>
+              <div class="history-item swap-note">06:15 · 3700 trocado por 3750</div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="trocas">
+          <div class="content-grid">
+            <section class="panel wide">
+              <div class="panel-header">
+                <div>
+                  <h2>Registro de troca</h2>
+                  <p>O plantonista registra a substituição e o sistema monta o texto para WhatsApp.</p>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>Carro substituído<input value="3700" /></label>
+                <label>Carro substituto<input value="3750" /></label>
+                <label>Linhas atendidas<input value="ENTRADA - 7522, SAÍDA - 7593" /></label>
+                <label>Motivo<input value="Adequação operacional na garagem" /></label>
+              </div>
+            </section>
+            <section class="panel whatsapp-card">
+              <h2>Mensagem pronta</h2>
+              <pre>🔄 Carro 3700 substituído pelo 3750
+Linhas: ENTRADA - 7522, SAÍDA - 7593</pre>
+              <button class="primary-button full">Copiar para WhatsApp</button>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="ocorrencias">
+          <div class="panel-header page-tools">
+            <div>
+              <h2>Ocorrências operacionais</h2>
+              <p>Registro após o veículo sair: falhas, acidentes, atrasos e substituições em rota.</p>
+            </div>
+            <button class="primary-button">Nova ocorrência</button>
+          </div>
+
+          <div class="incident-grid">
+            <article class="incident-card high">
+              <span>Em andamento</span>
+              <h3>2250 · Falha mecânica após saída</h3>
+              <p>SAÍDA - 7593 · Jundiaí · Mercado Livre</p>
+              <small>Histórico: confirmado, saiu da garagem, apresentou falha, troca em rota solicitada.</small>
+            </article>
+            <article class="incident-card">
+              <span>Aberta</span>
+              <h3>4140 · Abalroamento sem vítima</h3>
+              <p>ENTRADA - 8014 · Santana de Parnaíba</p>
+              <small>3 fotos anexadas · aguardando fechamento da supervisão.</small>
+            </article>
+            <article class="incident-card closed">
+              <span>Fechada</span>
+              <h3>3698 · Atraso por trânsito</h3>
+              <p>ENTRADA - 7601 · Caieiras</p>
+              <small>Comunicado ao cliente e encerrado pelo analista.</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="seguranca">
+          <div class="security-grid">
+            <article class="security-card">
+              <strong>Perfis e permissões</strong>
+              <p>Administrador, gerente, analista e plantonista com acesso limitado por unidade e função.</p>
+            </article>
+            <article class="security-card">
+              <strong>Dados sensíveis</strong>
+              <p>Rotas, clientes e horários ficam protegidos por login, histórico e auditoria.</p>
+            </article>
+            <article class="security-card">
+              <strong>Auditoria</strong>
+              <p>Toda confirmação, troca, ocorrência e edição mantém usuário, data, hora e mudança feita.</p>
+            </article>
+            <article class="security-card">
+              <strong>Instalável no tablet</strong>
+              <p>Preview preparado como PWA para virar ícone na tela inicial quando evoluir para produção.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

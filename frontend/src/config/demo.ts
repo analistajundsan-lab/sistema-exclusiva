@@ -1,0 +1,1 @@
+export const DEFAULT_OPERATION_DATE = '2026-04-13'

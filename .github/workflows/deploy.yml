@@ -1,0 +1,58 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main, production]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aap_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+      
+      - name: Run tests
+        run: |
+          cd backend
+          pytest ../tests/ -v
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost/aap_test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/production'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Build and push Docker images
+        run: |
+          docker-compose -f docker-compose.prod.yml build
+          # Push to registry (configure based on your registry)
+      
+      - name: Deploy
+        run: |
+          echo "Deploying to production..."
+          # Add deployment steps here

@@ -1,0 +1,19 @@
+{
+  "name": "Sistema Exclusiva",
+  "short_name": "Exclusiva",
+  "description": "Painel operacional de escala, trocas e ocorrencias.",
+  "start_url": "/login",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f3f4f6",
+  "theme_color": "#1e40af",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
