@@ -15,7 +15,7 @@ Variaveis:
 
 ```txt
 VITE_DEMO_MODE=true
-VITE_API_URL=https://exclusiva-backend.onrender.com
+VITE_API_URL=/_/backend
 ```
 
 Com `VITE_DEMO_MODE=true`, o app usa dados demonstrativos no proprio navegador.
@@ -32,7 +32,7 @@ Para transformar em sistema real online:
 
 ```txt
 VITE_DEMO_MODE=false
-VITE_API_URL=https://URL-REAL-DO-BACKEND
+VITE_API_URL=/_/backend
 ```
 
 No backend:
@@ -44,3 +44,23 @@ DATABASE_URL=<postgres gerenciado>
 ALLOWED_ORIGINS=https://URL-DO-VERCEL
 EXPOSE_METRICS=false
 ```
+
+## Deploy multi-servico
+
+O arquivo `vercel.json` na raiz ja esta preparado para:
+
+```json
+{
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/"
+    },
+    "backend": {
+      "entrypoint": "backend",
+      "routePrefix": "/_/backend"
+    }
+  }
+}
+```
+
+Assim o frontend fica na raiz do dominio e o backend fica isolado em `/_/backend`.
