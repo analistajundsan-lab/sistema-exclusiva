@@ -4,9 +4,7 @@ import { demoAdapter } from './demo'
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000' })
 let refreshing = false
 
-if (import.meta.env.VITE_DEMO_MODE === 'true') {
-  api.defaults.adapter = demoAdapter
-}
+api.defaults.adapter = demoAdapter
 
 api.interceptors.request.use(cfg => {
   const token = localStorage.getItem('token')
