@@ -41,6 +41,20 @@ class UserCreate(BaseModel):
         return digits
 
 
+class UserProfileUpdate(BaseModel):
+    display_name: Optional[str] = Field(None, max_length=255)
+    photo_url: Optional[str] = None
+
+class UserAdminUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=3, max_length=255)
+    email: Optional[EmailStr] = None
+    unit: Optional[str] = Field(None, max_length=80)
+    role: Optional[UserRole] = None
+    is_active: Optional[bool] = None
+    can_delete_history: Optional[bool] = None
+    must_change_password: Optional[bool] = None
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -51,6 +65,9 @@ class UserResponse(BaseModel):
     is_active: bool
     must_change_password: bool
     can_delete_history: bool
+    unit: Optional[str] = None
+    display_name: Optional[str] = None
+    photo_url: Optional[str] = None
     created_at: datetime
 
 

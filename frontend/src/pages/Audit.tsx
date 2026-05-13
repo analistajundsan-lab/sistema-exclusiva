@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { AuditFilters, useAudit } from '../hooks/useAudit'
 import api from '../api/client'
@@ -67,7 +67,7 @@ export function Audit() {
               Ver apagados
             </label>
           ) : <span className="text-xs text-gray-400 h-10 flex items-center">Historico protegido</span>}
-          <button type="submit" className="bg-blue-700 text-white px-4 py-2 rounded text-sm hover:bg-blue-800">
+          <button type="submit" className="bg-brand-700 text-white px-4 py-2 rounded text-sm hover:bg-brand-800">
             Filtrar
           </button>
         </form>
@@ -110,7 +110,7 @@ export function Audit() {
                     <td className="px-3 py-2 border">
                       {canDeleteHistory ? (
                         log.deleted_at ? (
-                          <button onClick={() => restoreLog(log.id)} className="text-xs text-blue-700 hover:underline">Recuperar</button>
+                          <button onClick={() => restoreLog(log.id)} className="text-xs text-brand-700 hover:underline">Recuperar</button>
                         ) : (
                           <button onClick={() => deleteLog(log.id)} className="text-xs text-red-600 hover:underline">Apagar</button>
                         )

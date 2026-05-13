@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
@@ -77,7 +77,7 @@ export function ChangePassword() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-800 text-white py-2 rounded hover:bg-blue-900 disabled:opacity-50 text-sm font-medium"
+            className="w-full bg-brand-800 text-white py-2 rounded hover:bg-brand-900 disabled:opacity-50 text-sm font-medium"
           >
             {loading ? 'Salvando...' : 'Salvar senha'}
           </button>

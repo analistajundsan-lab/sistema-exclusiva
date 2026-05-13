@@ -201,6 +201,7 @@ async def list_schedule_lines(
     driver_name: Optional[str] = None,
     prefix_code: Optional[str] = None,
     status: Optional[ScheduleLineStatus] = None,
+    start_in_minutes: Optional[int] = Query(None, ge=1, le=1440),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -214,6 +215,18 @@ async def list_schedule_lines(
         prefix_code,
         status,
     )
+    if start_in_minutes is not None:
+        from datetime import timedelta
+        now = datetime.now()
+        cutoff = now + timedelta(minutes=start_in_minutes)
+        now_str = now.strftime('%H:%M')
+        cutoff_str = cutoff.strftime('%H:%M')
+        # Filtra apenas linhas de hoje que iniciam no intervalo [agora, agora+N min]
+        query = query.filter(
+            ScheduleLine.schedule_date == now.date(),
+            ScheduleLine.start_time >= now_str,
+            ScheduleLine.start_time <= cutoff_str,
+        )
     return (
         query.order_by(ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code)
         .offset(skip)

@@ -25,7 +25,7 @@ body {
 
 /* Focus ring */
 :focus-visible {
-  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+  @apply outline-none ring-2 ring-brand-600 ring-offset-2;
 }
 
 /* Card base */
@@ -47,7 +47,7 @@ body {
 .input {
   @apply block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
          placeholder-gray-400 shadow-sm
-         focus:border-blue-500 focus:ring-1 focus:ring-blue-500
+         focus:border-brand-600 focus:ring-1 focus:ring-brand-600
          disabled:bg-gray-50 disabled:text-gray-500;
 }
 
@@ -55,7 +55,7 @@ body {
 .select {
   @apply block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
          shadow-sm bg-white
-         focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+         focus:border-brand-600 focus:ring-1 focus:ring-brand-600;
 }
 
 /* Button base */
@@ -66,7 +66,7 @@ body {
          focus-visible:ring-2 focus-visible:ring-offset-2;
 }
 .btn-primary {
-  @apply btn bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-500;
+  @apply btn bg-brand-700 text-white hover:bg-brand-800 focus-visible:ring-brand-600;
 }
 .btn-secondary {
   @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus-visible:ring-gray-400;

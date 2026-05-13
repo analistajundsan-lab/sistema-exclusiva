@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { ScheduleFilters, useSchedule } from '../hooks/useSchedule'
 import { useAuthStore } from '../store/auth'
@@ -9,7 +9,7 @@ const units = ['', 'Caieiras', 'Jundiai', 'Santana de Parnaiba']
 const statusClass = {
   pendente: 'bg-yellow-100 text-yellow-800',
   confirmada: 'bg-green-100 text-green-800',
-  alterada: 'bg-blue-100 text-blue-800',
+  alterada: 'bg-brand-100 text-brand-800',
   cancelada: 'bg-red-100 text-red-800',
 }
 
@@ -105,13 +105,13 @@ export function Schedule() {
             <input value={search.driver_name || ''} onChange={e => setSearch(s => ({ ...s, driver_name: e.target.value }))}
               className="mt-1 border rounded px-2 py-1.5 text-sm w-full" placeholder="E N DA SILVA" />
           </label>
-          <button type="submit" className="bg-blue-700 text-white px-3 py-2 rounded text-sm hover:bg-blue-800">
+          <button type="submit" className="bg-brand-700 text-white px-3 py-2 rounded text-sm hover:bg-brand-800">
             Buscar
           </button>
         </form>
 
         {isAdmin && (
-          <form onSubmit={handleImport} className="bg-white rounded-lg shadow p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 items-end border-l-4 border-blue-700">
+          <form onSubmit={handleImport} className="bg-white rounded-lg shadow p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 items-end border-l-4 border-brand-700">
             <div>
               <h2 className="font-semibold text-gray-800">Importar escala em blocos</h2>
               <p className="text-xs text-gray-500 mb-2">
@@ -136,7 +136,7 @@ export function Schedule() {
             <button
               type="submit"
               disabled={!file || !search.schedule_date || importing || previewing}
-              className="bg-blue-700 text-white px-4 py-2 rounded text-sm hover:bg-blue-800 disabled:opacity-50"
+              className="bg-brand-700 text-white px-4 py-2 rounded text-sm hover:bg-brand-800 disabled:opacity-50"
             >
               {previewing ? 'Lendo planilha...' : importing ? 'Importando...' : importPreview ? 'Confirmar importacao' : 'Gerar previa'}
             </button>
@@ -144,22 +144,22 @@ export function Schedule() {
         )}
 
         {isAdmin && importPreview && (
-          <section className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <section className="bg-brand-50 border border-brand-200 rounded-lg p-4">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-blue-900">Previa da importacao</h2>
-                <p className="text-sm text-blue-800">{importPreview.total} linhas encontradas na planilha.</p>
+                <h2 className="font-semibold text-brand-900">Previa da importacao</h2>
+                <p className="text-sm text-brand-800">{importPreview.total} linhas encontradas na planilha.</p>
                 <div className="flex flex-wrap gap-2 mt-3">
                   {importPreview.units.map(unit => (
-                    <span key={unit.unit} className="bg-white border border-blue-200 rounded px-3 py-1 text-sm text-blue-900">
+                    <span key={unit.unit} className="bg-white border border-brand-200 rounded px-3 py-1 text-sm text-brand-900">
                       {unit.unit}: {unit.total}
                     </span>
                   ))}
                 </div>
               </div>
               <div className="min-w-64">
-                <h3 className="text-sm font-semibold text-blue-900 mb-1">Principais clientes</h3>
-                <ul className="text-xs text-blue-800 space-y-1">
+                <h3 className="text-sm font-semibold text-brand-900 mb-1">Principais clientes</h3>
+                <ul className="text-xs text-brand-800 space-y-1">
                   {importPreview.clients.slice(0, 5).map(client => (
                     <li key={client.client_name}>{client.client_name}: {client.total}</li>
                   ))}
@@ -255,7 +255,7 @@ export function Schedule() {
               <p className="text-xs text-gray-500 mb-2">Selecione uma unidade no filtro para gerar o texto oficial daquela unidade.</p>
               <textarea readOnly value={whatsappText || fallbackWhatsappText} className="w-full h-56 border rounded p-2 text-xs text-gray-700" />
               <button type="button" onClick={handleGenerateWhatsapp}
-                className="mt-2 w-full bg-blue-700 text-white px-3 py-2 rounded text-sm hover:bg-blue-800">
+                className="mt-2 w-full bg-brand-700 text-white px-3 py-2 rounded text-sm hover:bg-brand-800">
                 Gerar por unidade
               </button>
               <button type="button" onClick={() => navigator.clipboard?.writeText(whatsappText || fallbackWhatsappText)}

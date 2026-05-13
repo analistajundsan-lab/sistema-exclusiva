@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { formatCpf } from '../utils/cpf'
@@ -16,9 +16,9 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-900 flex items-center justify-center">
+    <div className="min-h-screen bg-brand-900 flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center mb-2 text-blue-900">Sistema Exclusiva</h1>
+        <h1 className="text-2xl font-bold text-center mb-2 text-brand-900">Sistema Exclusiva</h1>
         <p className="text-center text-gray-500 text-sm mb-6">Central operacional de escala, trocas e ocorrencias</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -31,7 +31,7 @@ export function Login() {
               placeholder="000.000.000-00"
               inputMode="numeric"
               maxLength={14}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600"
               required
             />
           </div>
@@ -41,7 +41,7 @@ export function Login() {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600"
               required
             />
           </div>
@@ -51,7 +51,7 @@ export function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-800 text-white py-2 rounded hover:bg-blue-900 disabled:opacity-50 text-sm font-medium"
+            className="w-full bg-brand-800 text-white py-2 rounded hover:bg-brand-900 disabled:opacity-50 text-sm font-medium"
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>

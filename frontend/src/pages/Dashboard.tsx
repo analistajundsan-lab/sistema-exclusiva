@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
 import { DEFAULT_OPERATION_DATE } from '../config/demo'
@@ -52,10 +52,10 @@ export function Dashboard() {
   }, [])
 
   const cards = [
-    { label: 'Linhas da escala', value: stats.schedule_total, color: 'border-blue-700', text: 'text-blue-800', link: '/schedule' },
+    { label: 'Linhas da escala', value: stats.schedule_total, color: 'border-brand-700', text: 'text-brand-800', link: '/schedule' },
     { label: 'Linhas pendentes', value: stats.schedule_pending, color: 'border-yellow-500', text: 'text-yellow-700', link: '/on-call' },
     { label: 'Linhas confirmadas', value: stats.schedule_confirmed, color: 'border-green-600', text: 'text-green-700', link: '/on-call' },
-    { label: 'Total ocorrencias', value: stats.incidents, color: 'border-blue-600', text: 'text-blue-700', link: '/incidents' },
+    { label: 'Total ocorrencias', value: stats.incidents, color: 'border-brand-700', text: 'text-brand-700', link: '/incidents' },
     { label: 'Total trocas', value: stats.swaps, color: 'border-green-600', text: 'text-green-700', link: '/swaps' },
     { label: 'Ocorrencias abertas', value: stats.incidents_abertos, color: 'border-red-500', text: 'text-red-600', link: '/incidents?status=aberto' },
     { label: 'Em andamento', value: stats.incidents_em_andamento, color: 'border-yellow-500', text: 'text-yellow-600', link: '/incidents?status=em_andamento' },
@@ -77,7 +77,7 @@ export function Dashboard() {
               className={`bg-white rounded-lg shadow p-5 border-l-4 ${c.color} hover:shadow-md transition-shadow block`}>
               <p className="text-sm text-gray-500">{c.label}</p>
               <p className={`text-3xl font-bold mt-1 ${c.text}`}>{c.value}</p>
-              <p className="text-xs text-blue-500 hover:underline mt-2">Ver</p>
+              <p className="text-xs text-brand-600 hover:underline mt-2">Ver</p>
             </a>
           ))}
         </div>

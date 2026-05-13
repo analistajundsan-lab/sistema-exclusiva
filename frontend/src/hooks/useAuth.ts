@@ -3,7 +3,7 @@ import api from '../api/client'
 import { useAuthStore } from '../store/auth'
 
 export function useAuth() {
-  const { token, role, setAuth, logout } = useAuthStore()
+  const { token, role, setAuth, setUserProfile, logout } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -15,6 +15,13 @@ export function useAuth() {
       const payload = JSON.parse(atob(res.data.access_token.split('.')[1]))
       setAuth(res.data.access_token, payload.role || 'operator', res.data.refresh_token)
       const me = await api.get('/auth/me')
+      setUserProfile({
+        id: me.data.id,
+        name: me.data.name,
+        display_name: me.data.display_name,
+        photo_url: me.data.photo_url,
+        unit: me.data.unit,
+      })
       return { ok: true, mustChangePassword: !!me.data.must_change_password }
     } catch {
       setError('CPF ou senha invalidos')

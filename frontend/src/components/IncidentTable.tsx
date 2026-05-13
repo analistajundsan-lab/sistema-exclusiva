@@ -1,4 +1,4 @@
-import { Incident, IncidentStatus } from '../hooks/useIncidents'
+﻿import { Incident, IncidentStatus } from '../hooks/useIncidents'
 
 interface Props {
   incidents: Incident[]
@@ -60,7 +60,7 @@ export function IncidentTable({ incidents, total, page, totalPages, onPageChange
                 </td>
                 <td className="px-4 py-2 border">
                   <div className="flex gap-2">
-                    {onEdit && <button onClick={() => onEdit(i)} className="text-blue-600 hover:underline text-xs">Editar</button>}
+                    {onEdit && <button onClick={() => onEdit(i)} className="text-brand-600 hover:underline text-xs">Editar</button>}
                     {onDelete && <button onClick={() => onDelete(i.id)} className="text-red-600 hover:underline text-xs">Deletar</button>}
                   </div>
                 </td>

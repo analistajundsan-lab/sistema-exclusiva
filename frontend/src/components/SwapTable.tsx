@@ -1,4 +1,4 @@
-import { Swap } from '../hooks/useSwaps'
+﻿import { Swap } from '../hooks/useSwaps'
 
 interface Props {
   swaps: Swap[]
@@ -44,7 +44,7 @@ export function SwapTable({ swaps, total, page, totalPages, onPageChange, onDele
                   <div className="flex flex-wrap gap-2">
                     {onCopy && <button onClick={() => onCopy(s)} className="text-green-700 hover:underline text-xs">Copiar texto</button>}
                     {onWhatsApp && <button onClick={() => onWhatsApp(s)} className="text-green-600 hover:underline text-xs font-semibold">Abrir WhatsApp</button>}
-                    {onEdit && <button onClick={() => onEdit(s)} className="text-blue-600 hover:underline text-xs">Editar</button>}
+                    {onEdit && <button onClick={() => onEdit(s)} className="text-brand-600 hover:underline text-xs">Editar</button>}
                     {onDelete && <button onClick={() => onDelete(s.id)} className="text-red-600 hover:underline text-xs">Deletar</button>}
                   </div>
                 </td>

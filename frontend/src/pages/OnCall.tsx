@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { ScheduleFilters, ScheduleLine, useSchedule } from '../hooks/useSchedule'
 import { useSwaps } from '../hooks/useSwaps'
@@ -8,21 +8,30 @@ import { useAuthStore } from '../store/auth'
 const units = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
 export function OnCall() {
+  const userUnit = useAuthStore(s => s.userUnit)
+  const role = useAuthStore(s => s.role)
+
   const [filters, setFilters] = useState<ScheduleFilters>({
     schedule_date: DEFAULT_OPERATION_DATE,
-    unit: 'Caieiras',
+    unit: userUnit || 'Caieiras',
     status: 'pendente',
   })
+  const [autoMode, setAutoMode] = useState(true)
+
+  const pendingFilters = useMemo(() => ({
+    ...filters,
+    ...(autoMode ? { start_in_minutes: '40' } : {}),
+  }), [filters, autoMode])
+
   const historyFilters = useMemo(() => ({
     schedule_date: filters.schedule_date,
     unit: filters.unit,
     status: 'confirmada',
   }), [filters.schedule_date, filters.unit])
 
-  const pending = useSchedule(filters)
+  const pending = useSchedule(pendingFilters)
   const history = useSchedule(historyFilters)
   const swaps = useSwaps({ unit: filters.unit })
-  const role = useAuthStore(s => s.role)
   const canManageLines = role === 'admin' || role === 'supervisor'
   const [swapLine, setSwapLine] = useState<ScheduleLine | null>(null)
   const [swapForm, setSwapForm] = useState({ vehicle_in: '', reason: '' })
@@ -34,7 +43,7 @@ export function OnCall() {
 
   const handleFilter = (event: React.FormEvent) => {
     event.preventDefault()
-    pending.applyFilters(filters)
+    pending.applyFilters(pendingFilters)
     history.applyFilters(historyFilters)
   }
 
@@ -86,7 +95,7 @@ export function OnCall() {
       } else {
         await history.undoConfirmLine(statusLine.line.id, statusReason)
       }
-      await pending.refetch(filters, 0)
+      await pending.refetch(pendingFilters, 0)
       await history.refetch(historyFilters, 0)
       setActionMessage(statusLine.action === 'cancel' ? 'Linha cancelada.' : 'Confirmação desfeita.')
       setStatusLine(null)
@@ -96,6 +105,18 @@ export function OnCall() {
     }
   }
 
+  const handleSendWhatsApp = async () => {
+    try {
+      const res = await history.fetchWhatsappText(filters.schedule_date || '', filters.unit || '')
+      await navigator.clipboard?.writeText(res.text)
+      window.open(`https://wa.me/?text=${encodeURIComponent(res.text)}`, '_blank', 'noopener,noreferrer')
+    } catch {
+      alert('Erro ao gerar texto de confirmação.')
+    }
+  }
+
+  const allConfirmed = !pending.loading && pending.lines.length === 0 && history.lines.length > 0
+
   return (
     <Layout>
       <div className="space-y-4">
@@ -104,7 +125,7 @@ export function OnCall() {
           <p className="text-sm text-gray-500">Confirme as linhas da unidade e acompanhe o historico do dia.</p>
         </div>
 
-        <form onSubmit={handleFilter} className="bg-white rounded-lg shadow p-3 grid grid-cols-1 md:grid-cols-[180px_240px_auto] gap-2 items-end">
+        <form onSubmit={handleFilter} className="bg-white rounded-lg shadow p-3 grid grid-cols-1 md:grid-cols-[180px_240px_auto_auto] gap-2 items-end">
           <label className="text-xs text-gray-500">
             Data
             <input type="date" value={filters.schedule_date || ''} onChange={e => setFilters(s => ({ ...s, schedule_date: e.target.value }))}
@@ -117,7 +138,19 @@ export function OnCall() {
               {units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
             </select>
           </label>
-          <button type="submit" className="bg-blue-700 text-white px-4 py-2 rounded text-sm hover:bg-blue-800">
+          <label className="text-xs text-gray-500 flex flex-col justify-end">
+            <span className="mb-1">Próximas 40 min</span>
+            <button
+              type="button"
+              onClick={() => setAutoMode(m => !m)}
+              className={`relative inline-flex h-9 w-16 items-center rounded border text-xs font-medium transition-colors focus:outline-none ${autoMode ? 'bg-brand-700 border-brand-700 text-white' : 'bg-gray-100 border-gray-300 text-gray-600'}`}
+            >
+              <span className={`absolute left-1 transition-all ${autoMode ? 'translate-x-7' : 'translate-x-0'} inline-block w-6 h-6 rounded bg-white shadow`} />
+              <span className={`pl-2 transition-opacity ${autoMode ? 'opacity-0' : 'opacity-100'}`}>Não</span>
+              <span className={`pl-1 transition-opacity ${autoMode ? 'opacity-100' : 'opacity-0'}`}>Sim</span>
+            </button>
+          </label>
+          <button type="submit" className="bg-brand-700 text-white px-4 py-2 rounded text-sm hover:bg-brand-800 self-end">
             Atualizar painel
           </button>
         </form>
@@ -138,12 +171,31 @@ export function OnCall() {
         {actionError && <p className="bg-red-50 text-red-700 border border-red-200 rounded px-3 py-2 text-sm">{actionError}</p>}
         {!navigator.onLine && <p className="bg-yellow-50 text-yellow-800 border border-yellow-200 rounded px-3 py-2 text-sm">Sem conexao no momento. O painel continua aberto, mas as confirmacoes dependem da rede.</p>}
 
+        {/* Banner de todas confirmadas */}
+        {allConfirmed && (
+          <div className="bg-green-50 border border-green-300 rounded-lg px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-green-800 font-semibold">Todas as linhas foram confirmadas!</p>
+              <p className="text-green-700 text-sm">Envie o resumo de confirmação pelo WhatsApp.</p>
+            </div>
+            <button
+              onClick={handleSendWhatsApp}
+              className="bg-green-600 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-green-700 whitespace-nowrap"
+            >
+              Enviar confirmação por WhatsApp
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4">
           <section className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b flex justify-between">
+            <div className="px-4 py-3 border-b flex justify-between items-start">
               <div>
                 <h2 className="font-semibold text-gray-800">Linhas pendentes</h2>
-                <p className="text-xs text-gray-500">Ao confirmar, a linha sai deste painel e vai para o historico.</p>
+                <p className="text-xs text-gray-500">
+                  {autoMode ? 'Mostrando linhas que iniciam nos próximos 40 min.' : 'Todas as linhas pendentes da unidade.'}
+                  {' '}Ao confirmar, a linha vai para o historico.
+                </p>
               </div>
               <span className="text-sm font-semibold text-yellow-700">{pending.total} pendentes</span>
             </div>
@@ -151,7 +203,11 @@ export function OnCall() {
               {pending.loading && <p className="text-sm text-gray-500">Carregando linhas...</p>}
               {pending.error && <p className="text-sm text-red-600">{pending.error}</p>}
               {pending.lines.length === 0 && !pending.loading && (
-                <p className="text-sm text-gray-400 text-center py-8">Nenhuma linha pendente para esta unidade.</p>
+                <p className="text-sm text-gray-400 text-center py-8">
+                  {autoMode
+                    ? 'Nenhuma linha iniciando nos próximos 40 min.'
+                    : 'Nenhuma linha pendente para esta unidade.'}
+                </p>
               )}
               {pending.lines.map(line => (
                 <article key={line.id} className="border rounded-lg p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -196,7 +252,7 @@ export function OnCall() {
                   <p className="text-xs text-green-700">Prefixo {line.prefix_code} · {line.driver_name}</p>
                   {line.confirmed_at && <p className="text-xs text-gray-500 mt-1">Confirmada: {new Date(line.confirmed_at).toLocaleString('pt-BR')}</p>}
                   <button onClick={() => setSwapLine(line)}
-                    className="mt-2 w-full bg-blue-700 text-white px-3 py-2 rounded text-xs font-semibold hover:bg-blue-800">
+                    className="mt-2 w-full bg-brand-700 text-white px-3 py-2 rounded text-xs font-semibold hover:bg-brand-800">
                     Trocar carro
                   </button>
                   {canManageLines && (
@@ -252,7 +308,7 @@ export function OnCall() {
               </label>
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={() => setStatusLine(null)} className="border px-4 py-2 rounded text-sm">Voltar</button>
-                <button type="submit" className="bg-blue-700 text-white px-4 py-2 rounded text-sm">Confirmar</button>
+                <button type="submit" className="bg-brand-700 text-white px-4 py-2 rounded text-sm">Confirmar</button>
               </div>
             </form>
           </div>

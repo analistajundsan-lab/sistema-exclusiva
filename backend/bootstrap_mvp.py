@@ -24,6 +24,9 @@ def migrate_existing_sqlite() -> None:
         ensure_column("users", "must_change_password", "must_change_password BOOLEAN DEFAULT 0")
         ensure_column("users", "can_delete_history", "can_delete_history BOOLEAN DEFAULT 0")
         ensure_column("users", "password_changed_at", "password_changed_at DATETIME")
+        ensure_column("users", "unit", "unit VARCHAR(80)")
+        ensure_column("users", "display_name", "display_name VARCHAR(255)")
+        ensure_column("users", "photo_url", "photo_url TEXT")
     if "audit_logs" in tables:
         ensure_column("audit_logs", "deleted_at", "deleted_at DATETIME")
         ensure_column("audit_logs", "deleted_by", "deleted_by INTEGER")

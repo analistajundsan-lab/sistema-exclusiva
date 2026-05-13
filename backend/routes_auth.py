@@ -5,7 +5,7 @@ import hashlib
 import re
 from typing import List
 from models import User, get_db
-from schemas import LoginRequest, PasswordChange, TokenResponse, UserCreate, UserResponse
+from schemas import LoginRequest, PasswordChange, TokenResponse, UserCreate, UserResponse, UserProfileUpdate, UserAdminUpdate
 from auth import hash_password, verify_password, create_tokens, get_current_user, require_role
 from config import settings
 from rate_limit import rate_limit, get_remaining_requests
@@ -203,6 +203,23 @@ async def change_password(
     return {"message": "Senha alterada com sucesso"}
 
 
+@router.patch("/profile", response_model=UserResponse)
+async def update_profile(
+    body: UserProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Usuário atualiza seu próprio perfil (display_name, foto)."""
+    if body.display_name is not None:
+        current_user.display_name = body.display_name
+    if body.photo_url is not None:
+        current_user.photo_url = body.photo_url
+    db.add(AuditLog(user_id=current_user.id, action="UPDATE_PROFILE", resource="user", resource_id=current_user.id))
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
 # ── Admin: gestão de usuários ─────────────────────────────────────────────────
 
 @router.get("/users", response_model=List[UserResponse])
@@ -267,6 +284,43 @@ async def change_history_permission(
 
     user.can_delete_history = can_delete_history
     db.add(AuditLog(user_id=current_user.id, action="CHANGE_HISTORY_PERMISSION", resource="user", resource_id=user_id))
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+async def admin_update_user(
+    user_id: int,
+    body: UserAdminUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    """Admin atualiza qualquer campo de um usuário (nome, email, unidade, role, status)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    if body.name is not None:
+        user.name = body.name
+    if body.email is not None:
+        user.email = body.email
+    if body.unit is not None:
+        user.unit = body.unit
+    if body.role is not None:
+        user.role = body.role
+    if body.is_active is not None:
+        if not body.is_active and user.id == current_user.id:
+            raise HTTPException(status_code=400, detail="Não é possível desativar o próprio usuário")
+        user.is_active = body.is_active
+    if body.can_delete_history is not None:
+        if body.can_delete_history and user.cpf_hash != hash_cpf(VINICIUS_CPF):
+            raise HTTPException(status_code=422, detail="Histórico pode ser apagado apenas pelo perfil Vinicius")
+        user.can_delete_history = body.can_delete_history
+    if body.must_change_password is not None:
+        user.must_change_password = body.must_change_password
+
+    db.add(AuditLog(user_id=current_user.id, action="ADMIN_UPDATE_USER", resource="user", resource_id=user_id))
     db.commit()
     db.refresh(user)
     return user

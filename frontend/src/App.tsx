@@ -8,7 +8,8 @@ import { Users } from "./pages/Users";
 import { Schedule } from "./pages/Schedule";
 import { OnCall } from "./pages/OnCall";
 import { Audit } from "./pages/Audit";
-import { ChangePassword } from "./pages/ChangePassword";
+import { ChangePassword } from "./pages/ChangePassword"
+import { Profile } from "./pages/Profile";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
         <Route path="/swaps" element={<ProtectedRoute><Swaps /></ProtectedRoute>} />
         <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

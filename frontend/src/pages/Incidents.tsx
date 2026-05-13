@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Layout } from '../components/Layout'
 import { IncidentTable } from '../components/IncidentTable'
 import { IncidentForm } from '../components/IncidentForm'
@@ -52,7 +52,7 @@ export function Incidents() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-800">Ocorrências</h1>
         <button onClick={() => setModal('create')}
-          className="bg-blue-700 text-white px-4 py-2 rounded text-sm hover:bg-blue-800">
+          className="bg-brand-700 text-white px-4 py-2 rounded text-sm hover:bg-brand-800">
           + Nova Ocorrência
         </button>
       </div>
@@ -91,7 +91,7 @@ export function Incidents() {
             <option value="fechado">Fechado</option>
           </select>
         </div>
-        <button type="submit" className="bg-blue-700 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-800">
+        <button type="submit" className="bg-brand-700 text-white px-3 py-1.5 rounded text-sm hover:bg-brand-800">
           Buscar
         </button>
         <button type="button" onClick={handleReset} className="border px-3 py-1.5 rounded text-sm hover:bg-gray-50">

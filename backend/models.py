@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, Enum, func, create_engine
+from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, Enum, Text, func, create_engine
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 import enum
@@ -35,6 +35,9 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     must_change_password = Column(Boolean, default=False)
     can_delete_history = Column(Boolean, default=False)
+    unit = Column(String(80))
+    display_name = Column(String(255))
+    photo_url = Column(Text)
     password_changed_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
