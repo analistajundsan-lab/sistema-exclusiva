@@ -70,8 +70,7 @@ function paramsOf(config: InternalAxiosRequestConfig) {
 }
 
 function pathOf(config: InternalAxiosRequestConfig) {
-  const base = config.baseURL || window.location.origin
-  return new URL(config.url || '/', base).pathname
+  return config.url || '/'
 }
 
 function ok<T>(config: InternalAxiosRequestConfig, data: T, status = 200): AxiosResponse<T> {
