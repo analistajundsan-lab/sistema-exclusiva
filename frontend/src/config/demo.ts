@@ -1,1 +1,1 @@
-export const DEFAULT_OPERATION_DATE = '2026-04-13'
+export const DEFAULT_OPERATION_DATE = new Date().toISOString().slice(0, 10)

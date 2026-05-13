@@ -28,6 +28,7 @@ export function OnCall() {
   const [swapForm, setSwapForm] = useState({ vehicle_in: '', reason: '' })
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [lastSwapText, setLastSwapText] = useState<string | null>(null)
   const [statusLine, setStatusLine] = useState<{ line: ScheduleLine; action: 'cancel' | 'undo' } | null>(null)
   const [statusReason, setStatusReason] = useState('')
 
@@ -62,8 +63,11 @@ export function OnCall() {
         reason: swapForm.reason,
         lines_covered: `${swapLine.direction} - ${swapLine.line_code}`,
       } as any)
-      if (created.whatsapp_text) await navigator.clipboard?.writeText(created.whatsapp_text)
-      setActionMessage('Troca registrada e texto do WhatsApp copiado.')
+      if (created.whatsapp_text) {
+        await navigator.clipboard?.writeText(created.whatsapp_text)
+        setLastSwapText(created.whatsapp_text)
+      }
+      setActionMessage('Troca registrada. Texto copiado — clique em Abrir WhatsApp para enviar.')
       setSwapLine(null)
       setSwapForm({ vehicle_in: '', reason: '' })
     } catch (e: any) {
@@ -118,7 +122,19 @@ export function OnCall() {
           </button>
         </form>
 
-        {actionMessage && <p className="bg-green-50 text-green-700 border border-green-200 rounded px-3 py-2 text-sm">{actionMessage}</p>}
+        {actionMessage && (
+          <div className="bg-green-50 border border-green-200 rounded px-3 py-2 flex flex-wrap items-center gap-3">
+            <p className="text-green-700 text-sm flex-1">{actionMessage}</p>
+            {lastSwapText && (
+              <button
+                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(lastSwapText)}`, '_blank', 'noopener,noreferrer')}
+                className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-green-700 whitespace-nowrap"
+              >
+                Abrir WhatsApp
+              </button>
+            )}
+          </div>
+        )}
         {actionError && <p className="bg-red-50 text-red-700 border border-red-200 rounded px-3 py-2 text-sm">{actionError}</p>}
         {!navigator.onLine && <p className="bg-yellow-50 text-yellow-800 border border-yellow-200 rounded px-3 py-2 text-sm">Sem conexao no momento. O painel continua aberto, mas as confirmacoes dependem da rede.</p>}
 

@@ -41,6 +41,11 @@ export function Swaps() {
     )
   }
 
+  const handleWhatsApp = (swap: Swap) => {
+    const text = swap.whatsapp_text || `Troca operacional confirmada\n\nCarro substituido: ${swap.vehicle_out}\nCarro substituto: ${swap.vehicle_in}\n\nLinha(s): ${swap.lines_covered || '-'}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     applyFilters({ ...search })
@@ -100,6 +105,7 @@ export function Swaps() {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onCopy={handleCopy}
+            onWhatsApp={handleWhatsApp}
           />
         </div>
       )}

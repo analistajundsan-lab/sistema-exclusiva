@@ -9,9 +9,10 @@ interface Props {
   onDelete?: (id: number) => void
   onEdit?: (swap: Swap) => void
   onCopy?: (swap: Swap) => void
+  onWhatsApp?: (swap: Swap) => void
 }
 
-export function SwapTable({ swaps, total, page, totalPages, onPageChange, onDelete, onEdit, onCopy }: Props) {
+export function SwapTable({ swaps, total, page, totalPages, onPageChange, onDelete, onEdit, onCopy, onWhatsApp }: Props) {
   return (
     <div>
       <div className="overflow-x-auto">
@@ -41,7 +42,8 @@ export function SwapTable({ swaps, total, page, totalPages, onPageChange, onDele
                 <td className="px-4 py-2 border text-xs text-gray-500">{new Date(s.created_at).toLocaleString('pt-BR')}</td>
                 <td className="px-4 py-2 border">
                   <div className="flex flex-wrap gap-2">
-                    {onCopy && <button onClick={() => onCopy(s)} className="text-green-700 hover:underline text-xs">Copiar WhatsApp</button>}
+                    {onCopy && <button onClick={() => onCopy(s)} className="text-green-700 hover:underline text-xs">Copiar texto</button>}
+                    {onWhatsApp && <button onClick={() => onWhatsApp(s)} className="text-green-600 hover:underline text-xs font-semibold">Abrir WhatsApp</button>}
                     {onEdit && <button onClick={() => onEdit(s)} className="text-blue-600 hover:underline text-xs">Editar</button>}
                     {onDelete && <button onClick={() => onDelete(s.id)} className="text-red-600 hover:underline text-xs">Deletar</button>}
                   </div>
