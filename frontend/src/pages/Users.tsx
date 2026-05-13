@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
 import { formatCpf } from '../utils/cpf'
+import { Users as UsersIcon, Plus, UserCheck, UserX, Shield } from 'lucide-react'
 
 interface User {
   id: number
@@ -190,11 +191,15 @@ export function Users() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-800">Gestão de Usuários</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <UsersIcon size={22} className="text-purple-600 dark:text-purple-400" />
+          Gestão de Usuários
+        </h1>
         <button onClick={openCreate}
-          className="bg-purple-700 text-white px-4 py-2 rounded text-sm hover:bg-purple-800">
-          + Novo Usuário
+          className="flex items-center gap-2 bg-purple-700 hover:bg-purple-800 dark:bg-purple-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all">
+          <Plus size={16} />
+          Novo Usuário
         </button>
       </div>
 

@@ -3,6 +3,7 @@ module.exports = {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -14,7 +15,7 @@ module.exports = {
           400: '#45a37a',
           500: '#228860',
           600: '#0f6e4a',
-          700: '#00341b', // COR PRIMÁRIA — verde Exclusiva
+          700: '#00341b',
           800: '#003219',
           900: '#002112',
           950: '#000f08',
@@ -22,10 +23,21 @@ module.exports = {
         accent: {
           300: '#ffd166',
           400: '#ffbe33',
-          500: '#f29b00', // LARANJA/ÂMBAR — CTA Exclusiva
+          500: '#f29b00',
           600: '#d98700',
           700: '#b86f00',
         },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      boxShadow: {
+        'card': '0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08)',
+        'card-md': '0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.08)',
+        'card-lg': '0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08)',
+      },
+      animation: {
+        'pulse-dot': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
     },
   },

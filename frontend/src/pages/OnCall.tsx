@@ -4,6 +4,10 @@ import { ScheduleFilters, ScheduleLine, useSchedule } from '../hooks/useSchedule
 import { useSwaps } from '../hooks/useSwaps'
 import { DEFAULT_OPERATION_DATE } from '../config/demo'
 import { useAuthStore } from '../store/auth'
+import {
+  CheckCircle2, ArrowLeftRight, X, MessageCircle, Clock,
+  Bus, MapPin, User, ChevronRight, Filter,
+} from 'lucide-react'
 
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
@@ -137,59 +141,91 @@ export function OnCall() {
   return (
     <Layout>
       <div className="space-y-4">
+        {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Confirmação de Escala</h1>
-          <p className="text-sm text-gray-500">Confirme as linhas e registre trocas. As trocas ficam no painel lateral para copiar e enviar no WhatsApp.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <Bus size={22} className="text-brand-600 dark:text-brand-400" />
+            Confirmação de Escala
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Confirme as linhas e registre trocas. As trocas ficam no painel lateral para copiar e enviar no WhatsApp.
+          </p>
         </div>
 
         {/* Filtros */}
-        <form onSubmit={handleFilter} className="bg-white rounded-lg shadow p-3 grid grid-cols-1 md:grid-cols-[180px_240px_auto_auto] gap-2 items-end">
-          <label className="text-xs text-gray-500">
+        <form
+          onSubmit={handleFilter}
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 grid grid-cols-1 md:grid-cols-[180px_240px_auto_auto] gap-3 items-end"
+        >
+          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Data
-            <input type="date" value={filters.schedule_date || ''} onChange={e => setFilters(s => ({ ...s, schedule_date: e.target.value }))}
-              className="mt-1 border rounded px-2 py-2 text-sm w-full" />
+            <input
+              type="date"
+              value={filters.schedule_date || ''}
+              onChange={e => setFilters(s => ({ ...s, schedule_date: e.target.value }))}
+              className="mt-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-normal"
+            />
           </label>
-          <label className="text-xs text-gray-500">
+          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Unidade
-            <select value={filters.unit || ''} onChange={e => setFilters(s => ({ ...s, unit: e.target.value }))}
-              className="mt-1 border rounded px-2 py-2 text-sm w-full">
+            <select
+              value={filters.unit || ''}
+              onChange={e => setFilters(s => ({ ...s, unit: e.target.value }))}
+              className="mt-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-normal"
+            >
               {(role === 'admin' ? ALL_UNITS : availableUnits).map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </label>
-          <label className="text-xs text-gray-500 flex flex-col justify-end">
-            <span className="mb-1">Próximas 40 min</span>
+          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide flex flex-col justify-end">
+            <span className="mb-1.5">Próximas 40 min</span>
             <button
               type="button"
               onClick={() => setAutoMode(m => !m)}
-              className={`relative inline-flex h-9 w-16 items-center rounded border text-xs font-medium transition-colors focus:outline-none ${autoMode ? 'bg-brand-700 border-brand-700 text-white' : 'bg-gray-100 border-gray-300 text-gray-600'}`}
+              className={`relative inline-flex h-10 w-16 items-center rounded-xl text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 ${autoMode ? 'bg-brand-700 dark:bg-brand-600 border-brand-700' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'} border`}
             >
-              <span className={`absolute left-1 transition-all ${autoMode ? 'translate-x-7' : 'translate-x-0'} inline-block w-6 h-6 rounded bg-white shadow`} />
-              <span className={`pl-2 transition-opacity ${autoMode ? 'opacity-0' : 'opacity-100'}`}>Não</span>
-              <span className={`pl-1 transition-opacity ${autoMode ? 'opacity-100' : 'opacity-0'}`}>Sim</span>
+              <span className={`absolute left-1 transition-all duration-200 ${autoMode ? 'translate-x-7' : 'translate-x-0'} inline-block w-6 h-6 rounded-lg bg-white shadow`} />
+              <span className={`pl-2 transition-opacity text-gray-600 ${autoMode ? 'opacity-0' : 'opacity-100'}`}>Não</span>
+              <span className={`pl-1 transition-opacity text-white ${autoMode ? 'opacity-100' : 'opacity-0'}`}>Sim</span>
             </button>
           </label>
-          <button type="submit" className="bg-brand-700 text-white px-4 py-2 rounded text-sm hover:bg-brand-800 self-end">
+          <button
+            type="submit"
+            className="flex items-center justify-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all self-end"
+          >
+            <Filter size={14} />
             Atualizar
           </button>
         </form>
 
         {/* Mensagens */}
         {actionMessage && (
-          <div className="bg-green-50 border border-green-200 rounded px-3 py-2">
-            <p className="text-green-700 text-sm">{actionMessage}</p>
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-green-600 dark:text-green-400 shrink-0" />
+            <p className="text-green-700 dark:text-green-300 text-sm">{actionMessage}</p>
           </div>
         )}
-        {actionError && <p className="bg-red-50 text-red-700 border border-red-200 rounded px-3 py-2 text-sm">{actionError}</p>}
+        {actionError && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 flex items-center gap-2">
+            <X size={16} className="text-red-500 shrink-0" />
+            <p className="text-red-700 dark:text-red-300 text-sm">{actionError}</p>
+          </div>
+        )}
 
         {/* Banner todas confirmadas */}
         {allConfirmed && (
-          <div className="bg-green-50 border border-green-300 rounded-lg px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <p className="text-green-800 font-semibold">Todas as linhas foram confirmadas!</p>
-              <p className="text-green-700 text-sm">Envie o resumo de confirmação pelo WhatsApp.</p>
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 size={22} className="text-green-600 dark:text-green-400 shrink-0" />
+              <div>
+                <p className="text-green-800 dark:text-green-300 font-semibold">Todas as linhas foram confirmadas!</p>
+                <p className="text-green-700 dark:text-green-400 text-sm">Envie o resumo de confirmação pelo WhatsApp.</p>
+              </div>
             </div>
-            <button onClick={handleSendWhatsApp}
-              className="bg-green-600 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-green-700 whitespace-nowrap">
+            <button
+              onClick={handleSendWhatsApp}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap"
+            >
+              <MessageCircle size={15} />
               Enviar por WhatsApp
             </button>
           </div>
@@ -197,82 +233,147 @@ export function OnCall() {
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
           {/* Linhas pendentes */}
-          <section className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b flex justify-between items-center">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
               <div>
-                <h2 className="font-semibold text-gray-800">Linhas pendentes</h2>
-                <p className="text-xs text-gray-500">
+                <h2 className="font-bold text-gray-900 dark:text-gray-100">Linhas pendentes</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {autoMode ? 'Iniciando nos próximos 40 min.' : 'Todas as pendentes da unidade.'}
                 </p>
               </div>
-              <span className="text-sm font-semibold text-yellow-700">{pending.total} pendentes</span>
-            </div>
-            <div className="p-3 grid gap-3">
-              {pending.loading && <p className="text-sm text-gray-500">Carregando linhas...</p>}
-              {pending.error && <p className="text-sm text-red-600">{pending.error}</p>}
-              {pending.lines.length === 0 && !pending.loading && (
-                <p className="text-sm text-gray-400 text-center py-8">
-                  {autoMode ? 'Nenhuma linha iniciando nos próximos 40 min.' : 'Nenhuma linha pendente.'}
-                </p>
+              {pending.total > 0 ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500" />
+                  </span>
+                  <span className="rounded-full px-3 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300">
+                    {pending.total} pendentes
+                  </span>
+                </div>
+              ) : (
+                <span className="rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                  {pending.total} pendentes
+                </span>
               )}
+            </div>
+
+            <div className="p-4 grid gap-3">
+              {pending.loading && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">Carregando linhas...</p>
+              )}
+              {pending.error && (
+                <p className="text-sm text-red-600 dark:text-red-400">{pending.error}</p>
+              )}
+              {pending.lines.length === 0 && !pending.loading && (
+                <div className="text-center py-10">
+                  <Bus size={28} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                  <p className="text-sm text-gray-400 dark:text-gray-500">
+                    {autoMode ? 'Nenhuma linha iniciando nos próximos 40 min.' : 'Nenhuma linha pendente.'}
+                  </p>
+                </div>
+              )}
+
               {pending.lines.map(line => (
-                <article key={line.id} className="border rounded-lg p-4">
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-sm font-semibold">{line.start_time} – {line.end_time}</span>
-                    <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">{line.direction}</span>
-                    <span className="font-mono text-sm font-bold">Linha {line.line_code}</span>
+                <article
+                  key={line.id}
+                  className="border border-gray-100 dark:border-gray-700 rounded-2xl p-4 hover:shadow-sm transition-shadow bg-gray-50/50 dark:bg-gray-700/30"
+                >
+                  {/* Topo do card */}
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300">
+                      <Clock size={11} />
+                      {line.start_time} – {line.end_time}
+                    </span>
+                    <span className="rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                      {line.direction}
+                    </span>
+                    <span className="flex items-center gap-1 font-mono text-xs font-bold text-brand-700 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 px-2.5 py-1 rounded-full">
+                      <Bus size={10} /> {line.line_code}
+                    </span>
                   </div>
-                  <p className="font-semibold text-gray-800">{line.client_name} · Prefixo {line.prefix_code}</p>
-                  <p className="text-sm text-gray-500">{line.route_name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Motorista: {line.driver_name}</p>
+
+                  {/* Dados da linha */}
+                  <div className="mb-3">
+                    <p className="font-bold text-gray-900 dark:text-gray-100 text-sm">
+                      {line.client_name}
+                      <span className="ml-2 text-xs font-normal text-gray-400 dark:text-gray-500">
+                        Prefixo {line.prefix_code}
+                      </span>
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1">
+                      <MapPin size={11} className="shrink-0" />
+                      {line.route_name}
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1">
+                      <User size={11} className="shrink-0" />
+                      {line.driver_name}
+                    </p>
+                  </div>
 
                   {/* Botões de ação */}
                   {swapOpenId !== line.id ? (
-                    <div className="flex gap-2 mt-3">
-                      <button onClick={() => handleConfirm(line.id)}
-                        className="flex-1 bg-green-700 text-white px-4 py-2.5 rounded text-sm font-semibold hover:bg-green-800">
-                        Confirmar linha
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleConfirm(line.id)}
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                      >
+                        <CheckCircle2 size={15} />
+                        Confirmar
                       </button>
-                      <button onClick={() => openSwap(line)}
-                        className="flex-1 border border-brand-600 text-brand-700 px-4 py-2.5 rounded text-sm font-semibold hover:bg-brand-50">
+                      <button
+                        onClick={() => openSwap(line)}
+                        className="flex-1 flex items-center justify-center gap-1.5 border-2 border-accent-500 text-accent-600 dark:text-accent-400 dark:border-accent-500 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-all"
+                      >
+                        <ArrowLeftRight size={15} />
                         Trocar
                       </button>
                       {canManageLines && (
-                        <button onClick={() => setStatusLine({ line, action: 'cancel' })}
-                          className="border border-red-200 text-red-600 px-3 py-2.5 rounded text-sm hover:bg-red-50">
-                          Cancelar
+                        <button
+                          onClick={() => setStatusLine({ line, action: 'cancel' })}
+                          className="flex items-center justify-center border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 px-3 py-2.5 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                          title="Cancelar linha"
+                        >
+                          <X size={15} />
                         </button>
                       )}
                     </div>
                   ) : (
-                    // Formulário de troca inline
-                    <div className="mt-3 bg-brand-50 border border-brand-200 rounded-lg p-3 space-y-2">
-                      <p className="text-xs font-semibold text-brand-700">Prefixo substituto</p>
+                    /* Formulário de troca inline */
+                    <div className="mt-1 bg-amber-50 dark:bg-amber-900/20 border-2 border-accent-500/60 dark:border-accent-500/40 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ArrowLeftRight size={14} className="text-accent-600 dark:text-accent-400" />
+                        <p className="text-xs font-bold text-accent-700 dark:text-accent-300 uppercase tracking-wide">
+                          Prefixo substituto
+                        </p>
+                      </div>
                       <div className="flex gap-2">
                         <input
                           autoFocus
                           value={swapVehicle}
                           onChange={e => setSwapVehicle(e.target.value)}
                           placeholder="Ex: 4521"
-                          className="flex-1 border rounded px-3 py-2 text-sm"
+                          className="flex-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         />
                         <button
                           onClick={() => handleCreateSwap(line)}
                           disabled={swapSaving || !swapVehicle.trim()}
-                          className="bg-brand-700 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-brand-800 disabled:opacity-50 whitespace-nowrap"
+                          className="bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 whitespace-nowrap"
                         >
                           {swapSaving ? 'Salvando...' : 'Salvar troca'}
                         </button>
-                        <button onClick={() => setSwapOpenId(null)}
-                          className="border px-3 py-2 rounded text-sm text-gray-600 hover:bg-gray-50">
-                          ✕
+                        <button
+                          onClick={() => setSwapOpenId(null)}
+                          className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 px-3 py-2.5 rounded-xl text-sm transition-all"
+                        >
+                          <X size={15} />
                         </button>
                       </div>
                       <input
                         value={swapReason}
                         onChange={e => setSwapReason(e.target.value)}
                         placeholder="Motivo (opcional)"
-                        className="w-full border rounded px-3 py-2 text-sm"
+                        className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   )}
@@ -282,40 +383,59 @@ export function OnCall() {
           </section>
 
           {/* Painel lateral de trocas */}
-          <aside className="bg-white rounded-lg shadow">
-            <div className="px-4 py-3 border-b">
-              <h2 className="font-semibold text-gray-800">Trocas registradas</h2>
-              <p className="text-xs text-gray-500">Copie o texto e envie no WhatsApp.</p>
+          <aside className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <ArrowLeftRight size={16} className="text-brand-600 dark:text-brand-400" />
+                Trocas registradas
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Copie o texto e envie no WhatsApp.</p>
             </div>
             <div className="p-3 space-y-2">
-              {swapsList.loading && <p className="text-sm text-gray-400 py-4 text-center">Carregando...</p>}
+              {swapsList.loading && (
+                <p className="text-sm text-gray-400 dark:text-gray-500 py-6 text-center">Carregando...</p>
+              )}
               {!swapsList.loading && swapsList.swaps.length === 0 && (
-                <p className="text-sm text-gray-400 py-6 text-center">Nenhuma troca registrada.</p>
+                <div className="text-center py-8">
+                  <MessageCircle size={24} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                  <p className="text-sm text-gray-400 dark:text-gray-500">Nenhuma troca registrada.</p>
+                </div>
               )}
               {swapsList.swaps.map(swap => (
-                <div key={swap.id} className="border border-brand-100 bg-brand-50 rounded p-3">
-                  <div className="flex justify-between items-start gap-2 mb-1">
-                    <div>
-                      <p className="text-sm font-semibold text-brand-800">
-                        {swap.vehicle_out} → {swap.vehicle_in}
+                <div
+                  key={swap.id}
+                  className="border border-brand-100 dark:border-brand-900/40 bg-brand-50 dark:bg-brand-900/20 rounded-xl p-3 hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
+                >
+                  <div className="mb-2">
+                    <p className="text-sm font-bold text-brand-800 dark:text-brand-300 flex items-center gap-1.5">
+                      <span className="font-mono">{swap.vehicle_out}</span>
+                      <ChevronRight size={13} />
+                      <span className="font-mono">{swap.vehicle_in}</span>
+                    </p>
+                    {swap.lines_covered && (
+                      <p className="text-xs text-brand-600 dark:text-brand-400 mt-0.5 flex items-center gap-1">
+                        <Bus size={10} /> {swap.lines_covered}
                       </p>
-                      {swap.lines_covered && <p className="text-xs text-brand-600">{swap.lines_covered}</p>}
-                      {swap.reason && <p className="text-xs text-gray-500 mt-0.5">{swap.reason}</p>}
-                      <p className="text-xs text-gray-400 mt-1">
-                        {new Date(swap.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
+                    )}
+                    {swap.reason && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{swap.reason}</p>
+                    )}
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1">
+                      <Clock size={10} />
+                      {new Date(swap.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
                   {swap.whatsapp_text && (
                     <button
                       onClick={() => handleCopySwap(swap.whatsapp_text!, swap.id)}
-                      className={`mt-2 w-full px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+                      className={`flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                         copiedId === swap.id
-                          ? 'bg-green-600 text-white'
-                          : 'bg-brand-700 text-white hover:bg-brand-800'
+                          ? 'bg-green-600 dark:bg-green-700 text-white'
+                          : 'bg-brand-700 dark:bg-brand-600 hover:bg-brand-800 dark:hover:bg-brand-500 text-white'
                       }`}
                     >
-                      {copiedId === swap.id ? '✓ Copiado!' : 'Copiar texto WhatsApp'}
+                      <MessageCircle size={12} />
+                      {copiedId === swap.id ? 'Copiado!' : 'Copiar texto WhatsApp'}
                     </button>
                   )}
                 </div>
@@ -326,20 +446,56 @@ export function OnCall() {
 
         {/* Modal cancelar linha */}
         {statusLine && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <form onSubmit={handleStatusChange} className="bg-white rounded-lg shadow-xl p-5 w-full max-w-md">
-              <h2 className="text-lg font-semibold text-gray-800 mb-1">Cancelar linha</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Linha {statusLine.line.line_code} · Prefixo {statusLine.line.prefix_code}
-              </p>
-              <label className="block text-sm text-gray-600 mb-4">
-                Motivo
-                <input value={statusReason} onChange={e => setStatusReason(e.target.value)}
-                  className="mt-1 w-full border rounded px-3 py-2" placeholder="Informe o motivo" />
-              </label>
-              <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setStatusLine(null)} className="border px-4 py-2 rounded text-sm">Voltar</button>
-                <button type="submit" className="bg-red-600 text-white px-4 py-2 rounded text-sm">Cancelar linha</button>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <form
+              onSubmit={handleStatusChange}
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              {/* Modal header */}
+              <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-white">
+                  <X size={18} />
+                  <h2 className="text-base font-bold">Cancelar linha</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStatusLine(null)}
+                  className="text-red-200 hover:text-white transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal body */}
+              <div className="p-6">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 flex items-center gap-2">
+                  <Bus size={14} className="shrink-0 text-brand-500" />
+                  Linha {statusLine.line.line_code} · Prefixo {statusLine.line.prefix_code}
+                </p>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                  Motivo
+                </label>
+                <input
+                  value={statusReason}
+                  onChange={e => setStatusReason(e.target.value)}
+                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full mb-5"
+                  placeholder="Informe o motivo"
+                />
+                <div className="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setStatusLine(null)}
+                    className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-all"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all"
+                  >
+                    Cancelar linha
+                  </button>
+                </div>
               </div>
             </form>
           </div>
