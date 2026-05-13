@@ -21,6 +21,7 @@ export function useAuth() {
         display_name: me.data.display_name,
         photo_url: me.data.photo_url,
         unit: me.data.unit,
+        units: me.data.units,
       })
       return { ok: true, mustChangePassword: !!me.data.must_change_password }
     } catch {

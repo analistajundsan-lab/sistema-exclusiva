@@ -8,9 +8,13 @@ from config import settings
 Base = declarative_base()
 
 class UserRole(str, enum.Enum):
-    OPERATOR = "operator"
-    SUPERVISOR = "supervisor"
+    OPERATOR = "operator"      # legado
+    SUPERVISOR = "supervisor"  # legado
     ADMIN = "admin"
+    PLANTONISTA = "plantonista"
+    ANALISTA = "analista"
+    GERENTE = "gerente"
+    SUPERVISAO = "supervisao"
 
 class IncidentStatus(str, enum.Enum):
     ABERTO = "aberto"
@@ -36,6 +40,7 @@ class User(Base):
     must_change_password = Column(Boolean, default=False)
     can_delete_history = Column(Boolean, default=False)
     unit = Column(String(80))
+    units = Column(Text)
     display_name = Column(String(255))
     photo_url = Column(Text)
     password_changed_at = Column(DateTime)

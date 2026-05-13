@@ -174,6 +174,8 @@ async def count_schedule_lines(
     driver_name: Optional[str] = None,
     prefix_code: Optional[str] = None,
     status: Optional[ScheduleLineStatus] = None,
+    start_time_gte: Optional[str] = None,
+    start_time_lt: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -187,6 +189,10 @@ async def count_schedule_lines(
         prefix_code,
         status,
     )
+    if start_time_gte:
+        query = query.filter(ScheduleLine.start_time >= start_time_gte)
+    if start_time_lt:
+        query = query.filter(ScheduleLine.start_time < start_time_lt)
     return {"total": query.count()}
 
 

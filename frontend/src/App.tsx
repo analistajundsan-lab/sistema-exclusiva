@@ -17,11 +17,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+const ADMIN_ROLES = ['admin']
+const MANAGER_ROLES = ['admin', 'gerente', 'supervisao', 'supervisor']
+
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
   if (!token) return <Navigate to="/login" replace />;
-  if (role !== 'admin') return <Navigate to="/" replace />;
+  if (!ADMIN_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
+  return <>{children}</>;
+}
+
+function ManagerRoute({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.role);
+  if (!token) return <Navigate to="/login" replace />;
+  if (!MANAGER_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
   return <>{children}</>;
 }
 
@@ -31,15 +42,15 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
+        <Route path="/" element={<AdminRoute><Dashboard /></AdminRoute>} />
+        <Route path="/schedule" element={<ManagerRoute><Schedule /></ManagerRoute>} />
         <Route path="/on-call" element={<ProtectedRoute><OnCall /></ProtectedRoute>} />
-        <Route path="/audit" element={<AdminRoute><Audit /></AdminRoute>} />
+        <Route path="/audit" element={<ManagerRoute><Audit /></ManagerRoute>} />
         <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
         <Route path="/swaps" element={<ProtectedRoute><Swaps /></ProtectedRoute>} />
         <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/on-call" replace />} />
       </Routes>
     </BrowserRouter>
   );

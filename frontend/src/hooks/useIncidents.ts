@@ -33,11 +33,10 @@ export function useIncidents(initialFilters?: IncidentFilters) {
   const [filters, setFilters] = useState<IncidentFilters>(initialFilters || {})
 
   const buildParams = (f: IncidentFilters, skip: number) => {
-    const p: Record<string, string> = { skip: String(skip), limit: String(PAGE_SIZE) }
+    const p: Record<string, string> = { skip: String(skip), limit: String(PAGE_SIZE), today: 'true' }
     if (f.prefix_code) p.prefix_code = f.prefix_code
     if (f.line) p.line = f.line
     if (f.incident_type) p.incident_type = f.incident_type
-    if (f.status) p.status = f.status
     return p
   }
 

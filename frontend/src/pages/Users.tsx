@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
 import { formatCpf } from '../utils/cpf'
@@ -7,21 +7,41 @@ interface User {
   id: number
   name: string
   email: string
-  role: 'operator' | 'supervisor' | 'admin'
+  role: string
   unit?: string
+  units?: string
   is_active: boolean
   must_change_password: boolean
   can_delete_history: boolean
   created_at: string
 }
 
-const roleBadge = {
-  operator: 'bg-gray-100 text-gray-700',
-  supervisor: 'bg-brand-100 text-brand-700',
+const ROLES = [
+  { value: 'plantonista', label: 'Plantonista' },
+  { value: 'analista', label: 'Analista' },
+  { value: 'gerente', label: 'Gerente' },
+  { value: 'supervisao', label: 'Supervisão' },
+  { value: 'admin', label: 'Admin' },
+  // legados (não exibidos no select de criação, mas mantidos na listagem)
+  { value: 'operator', label: 'Operador (legado)' },
+  { value: 'supervisor', label: 'Supervisor (legado)' },
+]
+
+const ROLE_LABEL: Record<string, string> = Object.fromEntries(ROLES.map(r => [r.value, r.label]))
+
+const ROLE_BADGE: Record<string, string> = {
   admin: 'bg-purple-100 text-purple-700',
+  gerente: 'bg-brand-100 text-brand-700',
+  supervisao: 'bg-blue-100 text-blue-700',
+  analista: 'bg-amber-100 text-amber-800',
+  plantonista: 'bg-gray-100 text-gray-700',
+  operator: 'bg-gray-100 text-gray-500',
+  supervisor: 'bg-gray-100 text-gray-500',
 }
 
 const UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
+
+const MULTI_UNIT_ROLES = ['plantonista', 'analista']
 
 type ModalMode = 'create' | 'edit'
 
@@ -37,8 +57,9 @@ export function Users() {
     email: '',
     name: '',
     password: '',
-    role: 'operator',
+    role: 'plantonista',
     unit: '',
+    units: [] as string[],
     must_change_password: true,
   })
   const [saving, setSaving] = useState(false)
@@ -50,7 +71,7 @@ export function Users() {
       const res = await api.get('/auth/users')
       setUsers(res.data)
     } catch {
-      setError('Erro ao carregar usuários. Verifique se você tem permissão de admin.')
+      setError('Erro ao carregar usuários.')
     } finally {
       setLoading(false)
     }
@@ -58,10 +79,24 @@ export function Users() {
 
   useEffect(() => { load() }, [])
 
+  const isMultiUnit = MULTI_UNIT_ROLES.includes(form.role)
+
+  const toggleUnit = (unit: string) => {
+    setForm(f => ({
+      ...f,
+      units: f.units.includes(unit)
+        ? f.units.filter(u => u !== unit)
+        : [...f.units, unit],
+    }))
+  }
+
+  const parseUnits = (raw?: string): string[] =>
+    raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []
+
   const openCreate = () => {
     setModalMode('create')
     setEditingId(null)
-    setForm({ cpf: '', email: '', name: '', password: '', role: 'operator', unit: '', must_change_password: true })
+    setForm({ cpf: '', email: '', name: '', password: '', role: 'plantonista', unit: '', units: [], must_change_password: true })
     setFormError(null)
     setModal(true)
   }
@@ -69,7 +104,17 @@ export function Users() {
   const openEdit = (u: User) => {
     setModalMode('edit')
     setEditingId(u.id)
-    setForm({ cpf: '', email: u.email, name: u.name, password: '', role: u.role, unit: u.unit || '', must_change_password: u.must_change_password })
+    const parsedUnits = parseUnits(u.units)
+    setForm({
+      cpf: '',
+      email: u.email,
+      name: u.name,
+      password: '',
+      role: u.role,
+      unit: u.unit || '',
+      units: parsedUnits.length > 0 ? parsedUnits : (u.unit ? [u.unit] : []),
+      must_change_password: u.must_change_password,
+    })
     setFormError(null)
     setModal(true)
   }
@@ -81,20 +126,15 @@ export function Users() {
     } catch { alert('Erro ao alterar status do usuário') }
   }
 
-  const handleChangeRole = async (id: number, role: string) => {
-    try {
-      const res = await api.patch(`/auth/users/${id}/role`, null, { params: { role } })
-      setUsers(prev => prev.map(u => u.id === id ? res.data : u))
-    } catch { alert('Erro ao alterar papel do usuário') }
-  }
-
-  const handleHistoryPermission = async (id: number, canDeleteHistory: boolean) => {
-    try {
-      const res = await api.patch(`/auth/users/${id}/history-permission`, null, { params: { can_delete_history: canDeleteHistory } })
-      setUsers(prev => prev.map(u => u.id === id ? res.data : u))
-    } catch (e: any) {
-      alert(e?.response?.data?.detail || 'Erro ao alterar permissao de historico')
+  const buildUnitPayload = () => {
+    if (isMultiUnit) {
+      const joined = form.units.join(',')
+      return {
+        unit: form.units[0] || '',
+        units: joined,
+      }
     }
+    return { unit: form.unit || null, units: null }
   }
 
   const handleCreate = async () => {
@@ -105,9 +145,16 @@ export function Users() {
     setSaving(true)
     setFormError(null)
     try {
-      await api.post('/auth/users', form)
+      await api.post('/auth/users', {
+        cpf: form.cpf,
+        email: form.email,
+        name: form.name,
+        password: form.password,
+        role: form.role,
+        must_change_password: form.must_change_password,
+        ...buildUnitPayload(),
+      })
       setModal(false)
-      setForm({ cpf: '', email: '', name: '', password: '', role: 'operator', unit: '', must_change_password: true })
       await load()
     } catch (e: any) {
       setFormError(e?.response?.data?.detail || 'Erro ao cadastrar usuário')
@@ -124,13 +171,12 @@ export function Users() {
     setSaving(true)
     setFormError(null)
     try {
-      const payload: Record<string, any> = {
+      const res = await api.patch(`/auth/users/${editingId}`, {
         name: form.name,
         email: form.email,
         role: form.role,
-        unit: form.unit || null,
-      }
-      const res = await api.patch(`/auth/users/${editingId}`, payload)
+        ...buildUnitPayload(),
+      })
       setUsers(prev => prev.map(u => u.id === editingId ? res.data : u))
       setModal(false)
     } catch (e: any) {
@@ -140,10 +186,7 @@ export function Users() {
     }
   }
 
-  const handleSubmit = () => {
-    if (modalMode === 'create') handleCreate()
-    else handleEdit()
-  }
+  const handleSubmit = () => modalMode === 'create' ? handleCreate() : handleEdit()
 
   return (
     <Layout>
@@ -164,79 +207,63 @@ export function Users() {
               <tr className="bg-gray-100 text-left">
                 <th className="px-4 py-2 border">Nome</th>
                 <th className="px-4 py-2 border">E-mail</th>
-                <th className="px-4 py-2 border">Unidade</th>
-                <th className="px-4 py-2 border">Papel</th>
+                <th className="px-4 py-2 border">Unidade(s)</th>
+                <th className="px-4 py-2 border">Cargo</th>
                 <th className="px-4 py-2 border">Status</th>
                 <th className="px-4 py-2 border">Senha</th>
-                <th className="px-4 py-2 border">Histórico</th>
-                <th className="px-4 py-2 border">Cadastrado em</th>
+                <th className="px-4 py-2 border">Cadastrado</th>
                 <th className="px-4 py-2 border">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {users.map(u => (
-                <tr key={u.id} className={`hover:bg-gray-50 ${!u.is_active ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-2 border font-medium">{u.name}</td>
-                  <td className="px-4 py-2 border text-gray-600">{u.email}</td>
-                  <td className="px-4 py-2 border text-gray-600">{u.unit || '—'}</td>
-                  <td className="px-4 py-2 border">
-                    <select
-                      value={u.role}
-                      onChange={e => handleChangeRole(u.id, e.target.value)}
-                      className={`text-xs px-2 py-0.5 rounded border font-medium ${roleBadge[u.role]} cursor-pointer`}
-                    >
-                      <option value="operator">Operador</option>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-2 border">
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {u.is_active ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 border">
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.must_change_password ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>
-                      {u.must_change_password ? 'Temporaria' : 'Definida'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 border">
-                    <label className="inline-flex items-center gap-2 text-xs text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={u.can_delete_history}
-                        onChange={e => handleHistoryPermission(u.id, e.target.checked)}
-                      />
-                      Apagar/recuperar
-                    </label>
-                  </td>
-                  <td className="px-4 py-2 border text-xs text-gray-500">
-                    {new Date(u.created_at).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="px-4 py-2 border">
-                    <div className="flex flex-col gap-1">
-                      <button onClick={() => openEdit(u)}
-                        className="text-xs text-brand-600 hover:underline">
-                        Editar
-                      </button>
-                      <button onClick={() => handleToggle(u.id)}
-                        className={`text-xs hover:underline ${u.is_active ? 'text-red-600' : 'text-green-600'}`}>
-                        {u.is_active ? 'Desativar' : 'Ativar'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {users.map(u => {
+                const allUnits = parseUnits(u.units).length > 0
+                  ? parseUnits(u.units).join(', ')
+                  : (u.unit || '—')
+                return (
+                  <tr key={u.id} className={`hover:bg-gray-50 ${!u.is_active ? 'opacity-50' : ''}`}>
+                    <td className="px-4 py-2 border font-medium">{u.name}</td>
+                    <td className="px-4 py-2 border text-gray-600">{u.email}</td>
+                    <td className="px-4 py-2 border text-gray-600 text-xs">{allUnits}</td>
+                    <td className="px-4 py-2 border">
+                      <span className={`text-xs px-2 py-0.5 rounded border font-medium ${ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-600'}`}>
+                        {ROLE_LABEL[u.role] || u.role}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 border">
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {u.is_active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 border">
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.must_change_password ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>
+                        {u.must_change_password ? 'Temporária' : 'Definida'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 border text-xs text-gray-500">
+                      {new Date(u.created_at).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="px-4 py-2 border">
+                      <div className="flex flex-col gap-1">
+                        <button onClick={() => openEdit(u)} className="text-xs text-brand-600 hover:underline">Editar</button>
+                        <button onClick={() => handleToggle(u.id)}
+                          className={`text-xs hover:underline ${u.is_active ? 'text-red-600' : 'text-green-600'}`}>
+                          {u.is_active ? 'Desativar' : 'Ativar'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
-          <p className="px-4 py-2 text-xs text-gray-400 border-t">{users.length} usuário(s) cadastrado(s)</p>
+          <p className="px-4 py-2 text-xs text-gray-400 border-t">{users.length} usuário(s)</p>
         </div>
       )}
 
-      {/* Modal Criar / Editar Usuário */}
       {modal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-4">
               {modalMode === 'create' ? 'Novo Usuário' : 'Editar Usuário'}
             </h2>
@@ -267,22 +294,46 @@ export function Users() {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium mb-1">Papel</label>
-                <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                <label className="block text-sm font-medium mb-1">Cargo</label>
+                <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value, units: [], unit: '' }))}
                   className="w-full border rounded px-3 py-2 text-sm">
-                  <option value="operator">Operador</option>
-                  <option value="supervisor">Supervisor</option>
+                  <option value="plantonista">Plantonista</option>
+                  <option value="analista">Analista</option>
+                  <option value="gerente">Gerente</option>
+                  <option value="supervisao">Supervisão</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Unidade</label>
-                <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
-                  className="w-full border rounded px-3 py-2 text-sm">
-                  <option value="">Sem unidade definida</option>
-                  {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
+
+              {/* Seleção de unidade(s) */}
+              {isMultiUnit ? (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Unidades (pode selecionar mais de uma)</label>
+                  <div className="space-y-2">
+                    {UNITS.map(u => (
+                      <label key={u} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={form.units.includes(u)}
+                          onChange={() => toggleUnit(u)}
+                          className="rounded"
+                        />
+                        <span className="text-sm">{u}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Unidade</label>
+                  <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
+                    className="w-full border rounded px-3 py-2 text-sm">
+                    <option value="">Sem unidade definida</option>
+                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              )}
+
               <div className="flex gap-2 justify-end pt-2">
                 <button onClick={() => { setModal(false); setFormError(null) }}
                   className="px-4 py-2 text-sm border rounded hover:bg-gray-100">Cancelar</button>

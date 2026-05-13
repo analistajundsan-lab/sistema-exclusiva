@@ -6,9 +6,13 @@ import re
 
 
 class UserRole(str, Enum):
-    OPERATOR = "operator"
-    SUPERVISOR = "supervisor"
+    OPERATOR = "operator"      # legado
+    SUPERVISOR = "supervisor"  # legado
     ADMIN = "admin"
+    PLANTONISTA = "plantonista"
+    ANALISTA = "analista"
+    GERENTE = "gerente"
+    SUPERVISAO = "supervisao"
 
 
 class IncidentStatus(str, Enum):
@@ -29,7 +33,9 @@ class UserCreate(BaseModel):
     email: EmailStr
     name: str = Field(..., min_length=3, max_length=255)
     password: str = Field(..., min_length=8)
-    role: UserRole = UserRole.OPERATOR
+    role: UserRole = UserRole.PLANTONISTA
+    unit: Optional[str] = Field(None, max_length=80)
+    units: Optional[str] = None
     must_change_password: bool = False
 
     @field_validator("cpf")
@@ -49,6 +55,7 @@ class UserAdminUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=255)
     email: Optional[EmailStr] = None
     unit: Optional[str] = Field(None, max_length=80)
+    units: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
     can_delete_history: Optional[bool] = None
@@ -66,6 +73,7 @@ class UserResponse(BaseModel):
     must_change_password: bool
     can_delete_history: bool
     unit: Optional[str] = None
+    units: Optional[str] = None
     display_name: Optional[str] = None
     photo_url: Optional[str] = None
     created_at: datetime

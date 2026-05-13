@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from datetime import date as date_type
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-from models import Incident, AuditLog, get_db, IncidentStatus
-from schemas import IncidentCreate, IncidentResponse, IncidentUpdate, CountResponse
+
 from auth import get_current_user, require_role
-from models import User, UserRole
+from models import AuditLog, Incident, IncidentStatus, User, UserRole, get_db
+from schemas import CountResponse, IncidentCreate, IncidentResponse, IncidentUpdate
 from typing import List, Optional
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
@@ -15,6 +18,7 @@ async def count_incidents(
     incident_type: Optional[str] = None,
     line: Optional[str] = None,
     status: Optional[IncidentStatus] = None,
+    today: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -27,6 +31,8 @@ async def count_incidents(
         query = query.filter(Incident.line.ilike(f"%{line}%"))
     if status:
         query = query.filter(Incident.status == status)
+    if today:
+        query = query.filter(func.date(Incident.created_at) == date_type.today())
     return {"total": query.count()}
 
 
@@ -53,6 +59,7 @@ async def list_incidents(
     incident_type: Optional[str] = None,
     line: Optional[str] = None,
     status: Optional[IncidentStatus] = None,
+    today: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -65,6 +72,8 @@ async def list_incidents(
         query = query.filter(Incident.line.ilike(f"%{line}%"))
     if status:
         query = query.filter(Incident.status == status)
+    if today:
+        query = query.filter(func.date(Incident.created_at) == date_type.today())
     return query.offset(skip).limit(limit).all()
 
 

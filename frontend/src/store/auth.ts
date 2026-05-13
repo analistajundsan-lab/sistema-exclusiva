@@ -6,6 +6,7 @@ interface UserProfile {
   display_name: string | null
   photo_url: string | null
   unit: string | null
+  units: string | null
 }
 
 interface AuthState {
@@ -17,9 +18,16 @@ interface AuthState {
   displayName: string | null
   photoUrl: string | null
   userUnit: string | null
+  userUnits: string[] | null
   setAuth: (token: string, role: string, refreshToken?: string) => void
   setUserProfile: (profile: UserProfile) => void
   logout: () => void
+}
+
+const parseUnits = (raw: string | null): string[] | null => {
+  if (!raw) return null
+  const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
+  return parts.length > 0 ? parts : null
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -31,6 +39,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   displayName: localStorage.getItem('displayName'),
   photoUrl: localStorage.getItem('photoUrl'),
   userUnit: localStorage.getItem('userUnit'),
+  userUnits: parseUnits(localStorage.getItem('userUnits')),
   setAuth: (token, role, refreshToken) => {
     localStorage.setItem('token', token)
     localStorage.setItem('role', role)
@@ -43,12 +52,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('displayName', profile.display_name || '')
     localStorage.setItem('photoUrl', profile.photo_url || '')
     localStorage.setItem('userUnit', profile.unit || '')
+    localStorage.setItem('userUnits', profile.units || '')
     set({
       userId: profile.id,
       userName: profile.name,
       displayName: profile.display_name,
       photoUrl: profile.photo_url,
       userUnit: profile.unit,
+      userUnits: parseUnits(profile.units),
     })
   },
   logout: () => {
@@ -60,6 +71,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('displayName')
     localStorage.removeItem('photoUrl')
     localStorage.removeItem('userUnit')
+    localStorage.removeItem('userUnits')
     set({
       token: null,
       refreshToken: null,
@@ -69,6 +81,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       displayName: null,
       photoUrl: null,
       userUnit: null,
+      userUnits: null,
     })
   },
 }))

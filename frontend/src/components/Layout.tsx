@@ -64,13 +64,12 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <div className="mt-3 flex items-center gap-1 overflow-x-auto pb-1">
-          {navLink('/', 'Dashboard')}
-          {navLink('/schedule', 'Escala')}
-          {navLink('/on-call', 'Plantao')}
-          {navLink('/incidents', 'Ocorrencias')}
-          {navLink('/swaps', 'Trocas')}
-          {role === 'admin' && navLink('/audit', 'Auditoria')}
-          {role === 'admin' && navLink('/users', 'Usuarios')}
+          {role === 'admin' && navLink('/', 'Dashboard')}
+          {navLink('/on-call', 'Confirmação')}
+          {navLink('/incidents', 'Ocorrências')}
+          {(role === 'admin' || role === 'gerente' || role === 'supervisao' || role === 'supervisor') && navLink('/schedule', 'Escala')}
+          {(role === 'admin' || role === 'gerente') && navLink('/audit', 'Auditoria')}
+          {role === 'admin' && navLink('/users', 'Usuários')}
         </div>
       </nav>
       <main className="p-3 md:p-6">{children}</main>

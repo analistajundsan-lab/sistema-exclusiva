@@ -17,6 +17,16 @@ def ensure_column(table: str, column: str, ddl: str) -> None:
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
 
 
+def migrate_userrole_enum() -> None:
+    new_values = ["plantonista", "analista", "gerente", "supervisao"]
+    with engine.begin() as conn:
+        for val in new_values:
+            try:
+                conn.execute(text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{val}'"))
+            except Exception:
+                pass
+
+
 def migrate_existing_sqlite() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
@@ -25,8 +35,10 @@ def migrate_existing_sqlite() -> None:
         ensure_column("users", "can_delete_history", "can_delete_history BOOLEAN DEFAULT 0")
         ensure_column("users", "password_changed_at", "password_changed_at DATETIME")
         ensure_column("users", "unit", "unit VARCHAR(80)")
+        ensure_column("users", "units", "units TEXT")
         ensure_column("users", "display_name", "display_name VARCHAR(255)")
         ensure_column("users", "photo_url", "photo_url TEXT")
+    migrate_userrole_enum()
     if "audit_logs" in tables:
         ensure_column("audit_logs", "deleted_at", "deleted_at DATETIME")
         ensure_column("audit_logs", "deleted_by", "deleted_by INTEGER")
