@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION_MINUTES: int = 30
+    JWT_EXPIRATION_MINUTES: int = 480
     API_TITLE: str = "Sistema Exclusiva Operacional"
     API_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"

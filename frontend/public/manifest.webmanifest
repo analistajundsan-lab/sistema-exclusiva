@@ -2,7 +2,7 @@
   "name": "Sistema Exclusiva",
   "short_name": "Exclusiva",
   "description": "Painel operacional de escala, trocas e ocorrencias.",
-  "start_url": "/login",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

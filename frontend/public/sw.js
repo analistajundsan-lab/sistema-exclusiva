@@ -1,5 +1,5 @@
-const CACHE_NAME = "sistema-exclusiva-v1";
-const APP_SHELL = ["/", "/login", "/manifest.webmanifest", "/icon.svg"];
+const CACHE_NAME = "sistema-exclusiva-v2";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
@@ -19,19 +19,40 @@ self.addEventListener("fetch", event => {
   const request = event.request;
   if (request.method !== "GET") return;
 
-  if (request.url.includes("/auth/") || request.url.includes("/schedule/") || request.url.includes("/swaps/")) {
-    event.respondWith(fetch(request).catch(() => caches.match("/")));
+  const url = new URL(request.url);
+
+  // Nunca interceptar chamadas de API — deixa passar direto para a rede
+  if (
+    url.hostname !== self.location.hostname ||
+    url.pathname.startsWith("/auth/") ||
+    url.pathname.startsWith("/schedule/") ||
+    url.pathname.startsWith("/swaps/") ||
+    url.pathname.startsWith("/incidents/") ||
+    url.pathname.startsWith("/users/") ||
+    url.pathname.startsWith("/health")
+  ) {
     return;
   }
 
+  // Para o HTML do app: sempre rede primeiro, cache como fallback
+  if (request.headers.get("accept")?.includes("text/html")) {
+    event.respondWith(
+      fetch(request).catch(() => caches.match("/"))
+    );
+    return;
+  }
+
+  // Para assets estáticos (JS, CSS, imagens): cache primeiro, rede como fallback
   event.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;
       return fetch(request).then(response => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+        }
         return response;
-      }).catch(() => caches.match("/"));
+      });
     })
   );
 });
