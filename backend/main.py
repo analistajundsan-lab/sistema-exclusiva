@@ -70,6 +70,12 @@ async def add_request_id_and_timing(request: Request, call_next):
 @app.on_event("startup")
 async def startup():
     init_redis()
+    try:
+        from bootstrap_mvp import main as bootstrap_main
+        bootstrap_main()
+        logger.info("Bootstrap concluido com sucesso")
+    except Exception as e:
+        logger.error("Bootstrap falhou (nao critico): %s", e)
 
 app.include_router(auth_router)
 app.include_router(incidents_router)

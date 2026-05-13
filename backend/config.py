@@ -21,6 +21,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5174",
         "http://192.168.15.14:5174",
         "http://localhost:3000",
+        "https://sistema-exclusiva-pied.vercel.app",
     ]
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
