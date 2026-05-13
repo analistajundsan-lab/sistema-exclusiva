@@ -26,11 +26,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: localStorage.getItem('token'),
   refreshToken: localStorage.getItem('refreshToken'),
   role: localStorage.getItem('role'),
-  userId: null,
-  userName: null,
-  displayName: null,
-  photoUrl: null,
-  userUnit: null,
+  userId: localStorage.getItem('userId') ? Number(localStorage.getItem('userId')) : null,
+  userName: localStorage.getItem('userName'),
+  displayName: localStorage.getItem('displayName'),
+  photoUrl: localStorage.getItem('photoUrl'),
+  userUnit: localStorage.getItem('userUnit'),
   setAuth: (token, role, refreshToken) => {
     localStorage.setItem('token', token)
     localStorage.setItem('role', role)
@@ -38,6 +38,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token, role, refreshToken: refreshToken || localStorage.getItem('refreshToken') })
   },
   setUserProfile: (profile) => {
+    localStorage.setItem('userId', String(profile.id))
+    localStorage.setItem('userName', profile.name || '')
+    localStorage.setItem('displayName', profile.display_name || '')
+    localStorage.setItem('photoUrl', profile.photo_url || '')
+    localStorage.setItem('userUnit', profile.unit || '')
     set({
       userId: profile.id,
       userName: profile.name,
@@ -50,6 +55,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('role')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('userName')
+    localStorage.removeItem('displayName')
+    localStorage.removeItem('photoUrl')
+    localStorage.removeItem('userUnit')
     set({
       token: null,
       refreshToken: null,
