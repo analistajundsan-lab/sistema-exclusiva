@@ -24,8 +24,21 @@ export function useAuth() {
         units: me.data.units,
       })
       return { ok: true, mustChangePassword: !!me.data.must_change_password }
-    } catch {
-      setError('CPF ou senha invalidos')
+    } catch (err: any) {
+      const status = err?.response?.status
+      const detail = err?.response?.data?.detail
+
+      if (status === 403) {
+        setError('Usuário inativo. Entre em contato com o administrador.')
+      } else if (status === 429) {
+        setError('Muitas tentativas. Aguarde 1 minuto e tente novamente.')
+      } else if (status === 401) {
+        setError('CPF ou senha inválidos.')
+      } else if (!status) {
+        setError('Sem conexão com o servidor. Verifique sua internet.')
+      } else {
+        setError(detail || 'Erro ao fazer login. Tente novamente.')
+      }
       return { ok: false, mustChangePassword: false }
     } finally {
       setLoading(false)
