@@ -1,5 +1,1 @@
-streamlit
-pandas
-gspread
-google-auth
-openpyxl
+-r backend/requirements.txt
