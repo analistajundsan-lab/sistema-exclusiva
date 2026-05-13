@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { formatCpf } from '../utils/cpf'
 
 export function Login() {
   const [cpf, setCpf] = useState('')
@@ -26,8 +27,10 @@ export function Login() {
             <input
               type="text"
               value={cpf}
-              onChange={e => setCpf(e.target.value)}
+              onChange={e => setCpf(formatCpf(e.target.value))}
               placeholder="000.000.000-00"
+              inputMode="numeric"
+              maxLength={14}
               className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />

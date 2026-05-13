@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
+import { formatCpf } from '../utils/cpf'
 
 interface User {
   id: number
@@ -173,8 +174,8 @@ export function Users() {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium mb-1">CPF *</label>
-                <input value={form.cpf} onChange={e => setForm(f => ({ ...f, cpf: e.target.value }))}
-                  className="w-full border rounded px-3 py-2 text-sm" placeholder="000.000.000-00" />
+                <input value={form.cpf} onChange={e => setForm(f => ({ ...f, cpf: formatCpf(e.target.value) }))}
+                  className="w-full border rounded px-3 py-2 text-sm" placeholder="000.000.000-00" inputMode="numeric" maxLength={14} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Nome *</label>
