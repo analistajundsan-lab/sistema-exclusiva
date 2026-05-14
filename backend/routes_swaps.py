@@ -1,19 +1,42 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from models import ScheduleLine, ScheduleLineStatus, Swap, AuditLog, get_db
-from schemas import SwapCreate, SwapResponse, SwapUpdate, CountResponse
-from auth import get_current_user, require_role
-from models import User, UserRole
+from datetime import date
 from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from auth import get_current_user, require_role
+from models import (
+    AuditLog,
+    ScheduleLine,
+    ScheduleLineStatus,
+    Swap,
+    User,
+    UserRole,
+    get_db,
+)
+from schemas import CountResponse, SwapCreate, SwapResponse, SwapUpdate
 
 router = APIRouter(prefix="/swaps", tags=["swaps"])
 
 
-def build_swap_whatsapp_text(
-    vehicle_out: str, vehicle_in: str, lines_covered: Optional[str]
-) -> str:
-    lines = lines_covered or "Linha nao informada"
-    return f"Troca operacional confirmada\n\nCarro substituido: {vehicle_out}\nCarro substituto: {vehicle_in}\n\nLinha(s) atendida(s): {lines}"
+def direction_abbrev(direction: str) -> str:
+    """Converte 'ENTRADA'/'SAIDA' para 'E'/'S'."""
+    if direction and direction.upper().startswith("E"):
+        return "E"
+    if direction and direction.upper().startswith("S"):
+        return "S"
+    return direction or ""
+
+
+def format_lines_covered(direction: str, line_code: str) -> str:
+    """Formata como E/2228 ou S/2265."""
+    abbr = direction_abbrev(direction)
+    return f"{abbr}/{line_code}" if line_code else abbr
+
+
+def build_swap_whatsapp_text(vehicle_in: str, lines_covered: Optional[str]) -> str:
+    lines = lines_covered or "linha nao informada"
+    return f"PREFIXO {vehicle_in} - ATENDERA AS LINHAS : {lines}"
 
 
 @router.get("/count", response_model=CountResponse)
@@ -62,12 +85,11 @@ async def create_swap(
         data["unit"] = schedule_line.unit
         data["client_name"] = schedule_line.client_name
         data["vehicle_out"] = data["vehicle_out"] or schedule_line.prefix_code
-        data["lines_covered"] = (
-            data.get("lines_covered")
-            or f"{schedule_line.direction} - {schedule_line.line_code}"
+        data["lines_covered"] = data.get("lines_covered") or format_lines_covered(
+            schedule_line.direction, schedule_line.line_code
         )
     data["whatsapp_text"] = build_swap_whatsapp_text(
-        data["vehicle_out"], data["vehicle_in"], data.get("lines_covered")
+        data["vehicle_in"], data.get("lines_covered")
     )
     swap = Swap(**data, created_by=current_user.id)
     db.add(swap)
@@ -111,24 +133,47 @@ async def list_swaps(
 @router.get("/whatsapp/text")
 async def swaps_whatsapp_text(
     unit: Optional[str] = None,
+    schedule_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Swap).order_by(Swap.created_at.desc())
+    query = db.query(Swap).order_by(Swap.created_at.asc())
     if unit:
         query = query.filter(Swap.unit == unit)
+    if schedule_date:
+        query = query.filter(Swap.schedule_date == schedule_date)
     swaps = query.all()
-    text = "\n\n".join(
-        swap.whatsapp_text
-        or build_swap_whatsapp_text(
-            swap.vehicle_out, swap.vehicle_in, swap.lines_covered
+
+    if not swaps:
+        return {
+            "total": 0,
+            "text": "Nenhuma troca registrada para os filtros informados.",
+        }
+
+    # Agrupa linhas por vehicle_in (prefixo substituto)
+    groups: dict[str, list[str]] = {}
+    for swap in swaps:
+        key = swap.vehicle_in
+        line = swap.lines_covered or "linha nao informada"
+        groups.setdefault(key, []).append(line)
+
+    date_label = (
+        schedule_date.strftime("%d/%m/%Y")
+        if schedule_date
+        else (
+            swaps[0].schedule_date.strftime("%d/%m/%Y")
+            if swaps[0].schedule_date
+            else ""
         )
-        for swap in swaps
     )
-    return {
-        "total": len(swaps),
-        "text": text or "Nenhuma troca registrada para os filtros informados.",
-    }
+    header = f"TROCAS NA ESCALA DIA {date_label}"
+    body_lines = [
+        f"PREFIXO {vehicle} - ATENDERA AS LINHAS : {' - '.join(lines)}"
+        for vehicle, lines in groups.items()
+    ]
+    text = header + "\n\n" + "\n".join(body_lines)
+
+    return {"total": len(swaps), "text": text}
 
 
 @router.get("/{swap_id}", response_model=SwapResponse)

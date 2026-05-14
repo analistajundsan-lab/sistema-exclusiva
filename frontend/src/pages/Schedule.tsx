@@ -1,40 +1,103 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Pencil, Trash2, Download, X, Check } from 'lucide-react'
 import { Layout } from '../components/Layout'
-import { ScheduleFilters, useSchedule } from '../hooks/useSchedule'
+import { ScheduleLine, ScheduleFilters, useSchedule } from '../hooks/useSchedule'
 import { useAuthStore } from '../store/auth'
 import { DEFAULT_OPERATION_DATE } from '../config/demo'
+import api from '../api/client'
 
-const units = ['', 'Caieiras', 'Jundiai', 'Santana de Parnaiba']
+const UNIT_TABS = ['Caieiras', 'Santana de Parnaiba', 'Jundiai'] as const
+type UnitTab = (typeof UNIT_TABS)[number]
 
-const statusClass = {
-  pendente: 'bg-yellow-100 text-yellow-800',
-  confirmada: 'bg-green-100 text-green-800',
-  alterada: 'bg-brand-100 text-brand-800',
-  cancelada: 'bg-red-100 text-red-800',
+interface EditForm {
+  prefix_code: string
+  driver_name: string
+  start_time: string
+  end_time: string
+  line_code: string
+  direction: string
+  client_name: string
+  route_name: string
+}
+
+function lineToForm(line: ScheduleLine): EditForm {
+  return {
+    prefix_code: line.prefix_code,
+    driver_name: line.driver_name,
+    start_time: line.start_time,
+    end_time: line.end_time,
+    line_code: line.line_code,
+    direction: line.direction,
+    client_name: line.client_name,
+    route_name: line.route_name ?? '',
+  }
 }
 
 export function Schedule() {
-  const [search, setSearch] = useState<ScheduleFilters>({ schedule_date: DEFAULT_OPERATION_DATE })
+  const [activeTab, setActiveTab] = useState<UnitTab>('Caieiras')
+  const [search, setSearch] = useState<ScheduleFilters>({
+    schedule_date: DEFAULT_OPERATION_DATE,
+    unit: 'Caieiras',
+  })
   const [file, setFile] = useState<File | null>(null)
   const [replace, setReplace] = useState(true)
   const [whatsappText, setWhatsappText] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<EditForm | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState<number | null>(null)
+
   const role = useAuthStore(s => s.role)
   const isAdmin = role === 'admin'
+  const isManager = role === 'manager'
+  const canEdit = isAdmin || isManager
+
   const {
-    lines, summary, total, page, totalPages, loading, importing, previewing, error, importMessage, importPreview,
-    setPage, applyFilters, previewImport, importSchedule, fetchWhatsappText
+    lines,
+    summary,
+    total,
+    page,
+    totalPages,
+    loading,
+    importing,
+    previewing,
+    error,
+    importMessage,
+    importPreview,
+    setPage,
+    applyFilters,
+    previewImport,
+    importSchedule,
+    fetchWhatsappText,
+    refetch,
   } = useSchedule(search)
 
   const fallbackWhatsappText = useMemo(() => {
     const date = search.schedule_date || '____'
     const unit = search.unit || 'Unidade selecionada'
     const selected = lines.slice(0, 12)
-    const body = selected.map(line =>
-      `- ${line.start_time} as ${line.end_time} | Linha ${line.line_code} | ${line.direction} | Prefixo ${line.prefix_code} | Motorista: ${line.driver_name}`
-    ).join('\n')
-
+    const body = selected
+      .map(
+        line =>
+          `- ${line.start_time} as ${line.end_time} | Linha ${line.line_code} | ${line.direction} | Prefixo ${line.prefix_code} | Motorista: ${line.driver_name}`,
+      )
+      .join('\n')
     return `ALTERACOES REALIZADAS NA ESCALA\nEntram em vigor a partir do dia: ${date}\n\nUnidade: ${unit}\n\n${body || '- Nenhuma linha filtrada no momento'}`
   }, [lines, search.schedule_date, search.unit])
+
+  // Switch tab: atualiza aba e unit nos filtros, reseta busca texto
+  const handleTabChange = (tab: UnitTab) => {
+    setActiveTab(tab)
+    const next: ScheduleFilters = {
+      ...search,
+      unit: tab,
+      prefix_code: '',
+      line_code: '',
+      driver_name: '',
+    }
+    setSearch(next)
+    applyFilters(next)
+  }
 
   const handleSearch = (event: React.FormEvent) => {
     event.preventDefault()
@@ -49,7 +112,9 @@ export function Schedule() {
       return
     }
     if (replace) {
-      const ok = confirm(`Esta acao substituira todos os registros da escala em ${search.schedule_date}. Continuar?`)
+      const ok = confirm(
+        `Esta acao substituira todos os registros da escala em ${search.schedule_date}. Continuar?`,
+      )
       if (!ok) return
     }
     await importSchedule(file, search.schedule_date, replace)
@@ -67,55 +132,150 @@ export function Schedule() {
     setWhatsappText(result.text)
   }
 
+  const handleEditOpen = (line: ScheduleLine) => {
+    setEditingId(line.id)
+    setEditForm(lineToForm(line))
+  }
+
+  const handleEditCancel = () => {
+    setEditingId(null)
+    setEditForm(null)
+  }
+
+  const handleEditSave = async () => {
+    if (editingId === null || !editForm) return
+    setSaving(true)
+    try {
+      await api.patch(`/schedule/lines/${editingId}`, editForm)
+      setEditingId(null)
+      setEditForm(null)
+      refetch()
+    } catch {
+      alert('Erro ao salvar alteracoes. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    const ok = confirm('Tem certeza? Esta acao nao pode ser desfeita.')
+    if (!ok) return
+    setDeleting(id)
+    try {
+      await api.delete(`/schedule/lines/${id}`)
+      refetch()
+    } catch {
+      alert('Erro ao excluir linha. Tente novamente.')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const handleDownload = () => {
+    const base = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8000'
+    const params = new URLSearchParams()
+    if (search.schedule_date) params.set('schedule_date', search.schedule_date)
+    params.set('unit', activeTab)
+    const token = localStorage.getItem('token')
+    if (token) params.set('token', token)
+    window.open(`${base}/schedule/download?${params.toString()}`, '_blank')
+  }
+
   return (
     <Layout>
       <div className="flex flex-col gap-4">
+        {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Escala operacional</h1>
-            <p className="text-sm text-gray-500">Visualizacao linear das linhas importadas da planilha em blocos.</p>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+              Escala operacional
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Base de linhas de transporte. Admins e gerentes podem editar e excluir linhas.
+            </p>
           </div>
         </div>
 
-        <form onSubmit={handleSearch} className="bg-white rounded-lg shadow p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
-          <label className="text-xs text-gray-500">
+        {/* Filtros */}
+        <form
+          onSubmit={handleSearch}
+          className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end border dark:border-gray-700"
+        >
+          <label className="text-xs text-gray-500 dark:text-gray-400">
             Data
-            <input type="date" value={search.schedule_date || ''} onChange={e => setSearch(s => ({ ...s, schedule_date: e.target.value }))}
-              className="mt-1 border rounded px-2 py-1.5 text-sm w-full" />
+            <input
+              type="date"
+              value={search.schedule_date || ''}
+              onChange={e => setSearch(s => ({ ...s, schedule_date: e.target.value }))}
+              className="mt-1 border dark:border-gray-600 rounded px-2 py-1.5 text-sm w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
           </label>
-          <label className="text-xs text-gray-500">
-            Unidade
-            <select value={search.unit || ''} onChange={e => setSearch(s => ({ ...s, unit: e.target.value }))}
-              className="mt-1 border rounded px-2 py-1.5 text-sm w-full">
-              {units.map(unit => <option key={unit} value={unit}>{unit || 'Todas'}</option>)}
-            </select>
-          </label>
-          <label className="text-xs text-gray-500">
+          <label className="text-xs text-gray-500 dark:text-gray-400">
             Prefixo
-            <input value={search.prefix_code || ''} onChange={e => setSearch(s => ({ ...s, prefix_code: e.target.value }))}
-              className="mt-1 border rounded px-2 py-1.5 text-sm w-full" placeholder="1580" />
+            <input
+              value={search.prefix_code || ''}
+              onChange={e => setSearch(s => ({ ...s, prefix_code: e.target.value }))}
+              className="mt-1 border dark:border-gray-600 rounded px-2 py-1.5 text-sm w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              placeholder="1580"
+            />
           </label>
-          <label className="text-xs text-gray-500">
+          <label className="text-xs text-gray-500 dark:text-gray-400">
             Linha
-            <input value={search.line_code || ''} onChange={e => setSearch(s => ({ ...s, line_code: e.target.value }))}
-              className="mt-1 border rounded px-2 py-1.5 text-sm w-full" placeholder="7368" />
+            <input
+              value={search.line_code || ''}
+              onChange={e => setSearch(s => ({ ...s, line_code: e.target.value }))}
+              className="mt-1 border dark:border-gray-600 rounded px-2 py-1.5 text-sm w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              placeholder="7368"
+            />
           </label>
-          <label className="text-xs text-gray-500">
+          <label className="text-xs text-gray-500 dark:text-gray-400 col-span-2">
             Motorista
-            <input value={search.driver_name || ''} onChange={e => setSearch(s => ({ ...s, driver_name: e.target.value }))}
-              className="mt-1 border rounded px-2 py-1.5 text-sm w-full" placeholder="E N DA SILVA" />
+            <input
+              value={search.driver_name || ''}
+              onChange={e => setSearch(s => ({ ...s, driver_name: e.target.value }))}
+              className="mt-1 border dark:border-gray-600 rounded px-2 py-1.5 text-sm w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              placeholder="E N DA SILVA"
+            />
           </label>
-          <button type="submit" className="bg-brand-700 text-white px-3 py-2 rounded text-sm hover:bg-brand-800">
+          <button
+            type="submit"
+            className="bg-brand-700 text-white px-3 py-2 rounded text-sm hover:bg-brand-800"
+          >
             Buscar
           </button>
         </form>
 
+        {/* Abas de unidade */}
+        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+          {UNIT_TABS.map(tab => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => handleTabChange(tab)}
+              className={`px-4 py-2 text-sm font-medium rounded-t transition-colors ${
+                activeTab === tab
+                  ? 'bg-brand-700 text-white border-b-2 border-brand-700'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Import (só admin) */}
         {isAdmin && (
-          <form onSubmit={handleImport} className="bg-white rounded-lg shadow p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 items-end border-l-4 border-brand-700">
+          <form
+            onSubmit={handleImport}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 items-end border-l-4 border-brand-700 dark:border-gray-700"
+          >
             <div>
-              <h2 className="font-semibold text-gray-800">Importar escala em blocos</h2>
-              <p className="text-xs text-gray-500 mb-2">
-                Envie a planilha .xlsx atual. O sistema converte as abas Jundiai, Caieiras e Santana para linhas operacionais.
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">
+                Importar escala em blocos
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Envie a planilha .xlsx atual. O sistema converte as abas Jundiai, Caieiras e
+                Santana para linhas operacionais.
               </p>
               <input
                 id="schedule-file"
@@ -123,14 +283,17 @@ export function Schedule() {
                 accept=".xlsx,.xlsm"
                 onChange={e => {
                   setFile(e.target.files?.[0] || null)
-                  // A nova selecao exige nova previa.
                   if (e.target.files?.[0]) previewImport(e.target.files[0])
                 }}
-                className="block w-full text-sm border rounded p-2"
+                className="block w-full text-sm border dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} />
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={replace}
+                onChange={e => setReplace(e.target.checked)}
+              />
               Substituir escala desta data
             </label>
             <button
@@ -138,128 +301,383 @@ export function Schedule() {
               disabled={!file || !search.schedule_date || importing || previewing}
               className="bg-brand-700 text-white px-4 py-2 rounded text-sm hover:bg-brand-800 disabled:opacity-50"
             >
-              {previewing ? 'Lendo planilha...' : importing ? 'Importando...' : importPreview ? 'Confirmar importacao' : 'Gerar previa'}
+              {previewing
+                ? 'Lendo planilha...'
+                : importing
+                  ? 'Importando...'
+                  : importPreview
+                    ? 'Confirmar importacao'
+                    : 'Gerar previa'}
             </button>
           </form>
         )}
 
+        {/* Preview da importacao */}
         {isAdmin && importPreview && (
-          <section className="bg-brand-50 border border-brand-200 rounded-lg p-4">
+          <section className="bg-brand-50 dark:bg-gray-700 border border-brand-200 dark:border-gray-600 rounded-lg p-4">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-brand-900">Previa da importacao</h2>
-                <p className="text-sm text-brand-800">{importPreview.total} linhas encontradas na planilha.</p>
+                <h2 className="font-semibold text-brand-900 dark:text-gray-100">
+                  Previa da importacao
+                </h2>
+                <p className="text-sm text-brand-800 dark:text-gray-300">
+                  {importPreview.total} linhas encontradas na planilha.
+                </p>
                 <div className="flex flex-wrap gap-2 mt-3">
                   {importPreview.units.map(unit => (
-                    <span key={unit.unit} className="bg-white border border-brand-200 rounded px-3 py-1 text-sm text-brand-900">
+                    <span
+                      key={unit.unit}
+                      className="bg-white dark:bg-gray-600 border border-brand-200 dark:border-gray-500 rounded px-3 py-1 text-sm text-brand-900 dark:text-gray-100"
+                    >
                       {unit.unit}: {unit.total}
                     </span>
                   ))}
                 </div>
               </div>
               <div className="min-w-64">
-                <h3 className="text-sm font-semibold text-brand-900 mb-1">Principais clientes</h3>
-                <ul className="text-xs text-brand-800 space-y-1">
+                <h3 className="text-sm font-semibold text-brand-900 dark:text-gray-100 mb-1">
+                  Principais clientes
+                </h3>
+                <ul className="text-xs text-brand-800 dark:text-gray-300 space-y-1">
                   {importPreview.clients.slice(0, 5).map(client => (
-                    <li key={client.client_name}>{client.client_name}: {client.total}</li>
+                    <li key={client.client_name}>
+                      {client.client_name}: {client.total}
+                    </li>
                   ))}
                 </ul>
               </div>
             </div>
             {importPreview.warnings.length > 0 && (
-              <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded p-3">
-                <h3 className="text-sm font-semibold text-yellow-800">Avisos</h3>
-                <ul className="text-xs text-yellow-800 list-disc pl-5">
-                  {importPreview.warnings.map(warning => <li key={warning}>{warning}</li>)}
+              <div className="mt-3 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded p-3">
+                <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
+                  Avisos
+                </h3>
+                <ul className="text-xs text-yellow-800 dark:text-yellow-300 list-disc pl-5">
+                  {importPreview.warnings.map(warning => (
+                    <li key={warning}>{warning}</li>
+                  ))}
                 </ul>
               </div>
             )}
           </section>
         )}
 
-        {importMessage && <p className="bg-green-50 text-green-700 border border-green-200 rounded px-3 py-2 text-sm">{importMessage}</p>}
+        {importMessage && (
+          <p className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700 rounded px-3 py-2 text-sm">
+            {importMessage}
+          </p>
+        )}
 
+        {/* Conteudo principal */}
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
-          <section className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-4 py-3 border-b flex justify-between text-sm text-gray-600">
-              <span>{total} linhas encontradas</span>
-              {loading && <span>Carregando...</span>}
+          {/* Tabela */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden border dark:border-gray-700">
+            <div className="px-4 py-3 border-b dark:border-gray-700 flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
+              <span>
+                {total} linhas em{' '}
+                <strong className="text-gray-800 dark:text-gray-200">{activeTab}</strong>
+                {loading && ' · Carregando...'}
+              </span>
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="flex items-center gap-1.5 bg-green-700 text-white px-3 py-1.5 rounded text-xs hover:bg-green-800 transition-colors"
+              >
+                <Download size={14} />
+                Baixar XLSX
+              </button>
             </div>
-            {error && <p className="text-red-600 text-sm p-4">{error}</p>}
+
+            {error && (
+              <p className="text-red-600 dark:text-red-400 text-sm p-4">{error}</p>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  <tr className="bg-gray-100 text-left">
-                    <th className="px-3 py-2 border">Horario</th>
-                    <th className="px-3 py-2 border">Unidade</th>
-                    <th className="px-3 py-2 border">Prefixo</th>
-                    <th className="px-3 py-2 border">Linha</th>
-                    <th className="px-3 py-2 border">Sentido</th>
-                    <th className="px-3 py-2 border">Cliente</th>
-                    <th className="px-3 py-2 border">Motorista</th>
-                    <th className="px-3 py-2 border">Rota</th>
-                    <th className="px-3 py-2 border">Status</th>
+                  <tr className="bg-gray-100 dark:bg-gray-700 text-left">
+                    <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                      Horario
+                    </th>
+                    <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">
+                      Prefixo
+                    </th>
+                    <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">
+                      Linha
+                    </th>
+                    <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">
+                      Sentido
+                    </th>
+                    <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">
+                      Cliente
+                    </th>
+                    <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">
+                      Motorista
+                    </th>
+                    <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">
+                      Rota
+                    </th>
+                    {canEdit && (
+                      <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">
+                        Acoes
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {lines.length === 0 && (
-                    <tr><td colSpan={9} className="text-center py-8 text-gray-400">Nenhuma linha importada para os filtros atuais</td></tr>
-                  )}
-                  {lines.map(line => (
-                    <tr key={line.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 border font-mono">{line.start_time} - {line.end_time}</td>
-                      <td className="px-3 py-2 border">{line.unit}</td>
-                      <td className="px-3 py-2 border font-mono font-semibold">{line.prefix_code}</td>
-                      <td className="px-3 py-2 border font-mono">{line.line_code}</td>
-                      <td className="px-3 py-2 border">{line.direction}</td>
-                      <td className="px-3 py-2 border">{line.client_name}</td>
-                      <td className="px-3 py-2 border">{line.driver_name}</td>
-                      <td className="px-3 py-2 border text-gray-600">{line.route_name}</td>
-                      <td className="px-3 py-2 border">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusClass[line.status]}`}>{line.status}</span>
+                    <tr>
+                      <td
+                        colSpan={canEdit ? 8 : 7}
+                        className="text-center py-8 text-gray-400 dark:text-gray-500"
+                      >
+                        Nenhuma linha importada para os filtros atuais
                       </td>
                     </tr>
-                  ))}
+                  )}
+                  {lines.map(line =>
+                    editingId === line.id && editForm ? (
+                      /* Linha em modo edicao inline */
+                      <tr key={line.id} className="bg-brand-50 dark:bg-gray-700">
+                        <td className="px-2 py-1 border dark:border-gray-600">
+                          <div className="flex gap-1">
+                            <input
+                              type="time"
+                              value={editForm.start_time}
+                              onChange={e =>
+                                setEditForm(f => f && { ...f, start_time: e.target.value })
+                              }
+                              className="border dark:border-gray-500 rounded px-1 py-0.5 text-xs w-20 bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                            />
+                            <span className="text-gray-400 self-center">-</span>
+                            <input
+                              type="time"
+                              value={editForm.end_time}
+                              onChange={e =>
+                                setEditForm(f => f && { ...f, end_time: e.target.value })
+                              }
+                              className="border dark:border-gray-500 rounded px-1 py-0.5 text-xs w-20 bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                            />
+                          </div>
+                        </td>
+                        <td className="px-2 py-1 border dark:border-gray-600">
+                          <input
+                            value={editForm.prefix_code}
+                            onChange={e =>
+                              setEditForm(f => f && { ...f, prefix_code: e.target.value })
+                            }
+                            className="border dark:border-gray-500 rounded px-1 py-0.5 text-xs w-full bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                          />
+                        </td>
+                        <td className="px-2 py-1 border dark:border-gray-600">
+                          <input
+                            value={editForm.line_code}
+                            onChange={e =>
+                              setEditForm(f => f && { ...f, line_code: e.target.value })
+                            }
+                            className="border dark:border-gray-500 rounded px-1 py-0.5 text-xs w-full bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                          />
+                        </td>
+                        <td className="px-2 py-1 border dark:border-gray-600">
+                          <select
+                            value={editForm.direction}
+                            onChange={e =>
+                              setEditForm(f => f && { ...f, direction: e.target.value })
+                            }
+                            className="border dark:border-gray-500 rounded px-1 py-0.5 text-xs w-full bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                          >
+                            <option value="ENTRADA">ENTRADA</option>
+                            <option value="SAIDA">SAIDA</option>
+                          </select>
+                        </td>
+                        <td className="px-2 py-1 border dark:border-gray-600">
+                          <input
+                            value={editForm.client_name}
+                            onChange={e =>
+                              setEditForm(f => f && { ...f, client_name: e.target.value })
+                            }
+                            className="border dark:border-gray-500 rounded px-1 py-0.5 text-xs w-full bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                          />
+                        </td>
+                        <td className="px-2 py-1 border dark:border-gray-600">
+                          <input
+                            value={editForm.driver_name}
+                            onChange={e =>
+                              setEditForm(f => f && { ...f, driver_name: e.target.value })
+                            }
+                            className="border dark:border-gray-500 rounded px-1 py-0.5 text-xs w-full bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                          />
+                        </td>
+                        <td className="px-2 py-1 border dark:border-gray-600">
+                          <input
+                            value={editForm.route_name}
+                            onChange={e =>
+                              setEditForm(f => f && { ...f, route_name: e.target.value })
+                            }
+                            className="border dark:border-gray-500 rounded px-1 py-0.5 text-xs w-full bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                          />
+                        </td>
+                        <td className="px-2 py-1 border dark:border-gray-600">
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={handleEditSave}
+                              disabled={saving}
+                              title="Salvar"
+                              className="p-1 rounded bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-700 disabled:opacity-50"
+                            >
+                              <Check size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleEditCancel}
+                              title="Cancelar"
+                              className="p-1 rounded bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      /* Linha normal */
+                      <tr
+                        key={line.id}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                      >
+                        <td className="px-3 py-2 border dark:border-gray-700 font-mono text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                          {line.start_time} - {line.end_time}
+                        </td>
+                        <td className="px-3 py-2 border dark:border-gray-700 font-mono font-semibold text-gray-900 dark:text-gray-100">
+                          {line.prefix_code}
+                        </td>
+                        <td className="px-3 py-2 border dark:border-gray-700 font-mono text-gray-900 dark:text-gray-100">
+                          {line.line_code}
+                        </td>
+                        <td className="px-3 py-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
+                          {line.direction}
+                        </td>
+                        <td className="px-3 py-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
+                          {line.client_name}
+                        </td>
+                        <td className="px-3 py-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
+                          {line.driver_name}
+                        </td>
+                        <td className="px-3 py-2 border dark:border-gray-700 text-gray-600 dark:text-gray-400">
+                          {line.route_name}
+                        </td>
+                        {canEdit && (
+                          <td className="px-3 py-2 border dark:border-gray-700">
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleEditOpen(line)}
+                                title="Editar"
+                                className="p-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(line.id)}
+                                disabled={deleting === line.id}
+                                title="Excluir"
+                                className="p-1 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50 text-sm text-gray-600">
-              <span>Pagina {page + 1} de {Math.max(totalPages, 1)}</span>
+
+            {/* Paginacao */}
+            <div className="flex items-center justify-between px-4 py-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-600 dark:text-gray-400">
+              <span>
+                Pagina {page + 1} de {Math.max(totalPages, 1)}
+              </span>
               <div className="flex gap-1">
-                <button disabled={page === 0} onClick={() => setPage(page - 1)} className="px-3 py-1 rounded border disabled:opacity-40 hover:bg-white">Anterior</button>
-                <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} className="px-3 py-1 rounded border disabled:opacity-40 hover:bg-white">Proxima</button>
+                <button
+                  disabled={page === 0}
+                  onClick={() => setPage(page - 1)}
+                  className="px-3 py-1 rounded border dark:border-gray-600 disabled:opacity-40 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  Anterior
+                </button>
+                <button
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage(page + 1)}
+                  className="px-3 py-1 rounded border dark:border-gray-600 disabled:opacity-40 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  Proxima
+                </button>
               </div>
             </div>
           </section>
 
+          {/* Painel lateral */}
           <aside className="space-y-4">
-            <section className="bg-white rounded-lg shadow p-4">
-              <h2 className="font-semibold text-gray-800 mb-3">Resumo por unidade</h2>
+            <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border dark:border-gray-700">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">
+                Resumo por unidade
+              </h2>
               <div className="space-y-2">
-                {summary.length === 0 && <p className="text-sm text-gray-400">Sem dados para resumir.</p>}
+                {summary.length === 0 && (
+                  <p className="text-sm text-gray-400 dark:text-gray-500">
+                    Sem dados para resumir.
+                  </p>
+                )}
                 {summary.map(item => (
-                  <div key={item.unit} className="border rounded p-3">
-                    <div className="flex justify-between font-semibold">
+                  <div
+                    key={item.unit}
+                    className="border dark:border-gray-700 rounded p-3 bg-gray-50 dark:bg-gray-700/50"
+                  >
+                    <div className="flex justify-between font-semibold text-gray-800 dark:text-gray-100">
                       <span>{item.unit}</span>
                       <span>{item.total}</span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Entrada {item.entrada} · Saida {item.saida}</p>
-                    <p className="text-xs text-gray-500">Pendentes {item.pending} · Alteradas {item.changed}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Entrada {item.entrada} · Saida {item.saida}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Pendentes {item.pending} · Alteradas {item.changed}
+                    </p>
                   </div>
                 ))}
               </div>
             </section>
 
-            <section className="bg-white rounded-lg shadow p-4">
-              <h2 className="font-semibold text-gray-800 mb-2">Texto para WhatsApp</h2>
-              <p className="text-xs text-gray-500 mb-2">Selecione uma unidade no filtro para gerar o texto oficial daquela unidade.</p>
-              <textarea readOnly value={whatsappText || fallbackWhatsappText} className="w-full h-56 border rounded p-2 text-xs text-gray-700" />
-              <button type="button" onClick={handleGenerateWhatsapp}
-                className="mt-2 w-full bg-brand-700 text-white px-3 py-2 rounded text-sm hover:bg-brand-800">
+            <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border dark:border-gray-700">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                Texto para WhatsApp
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Selecione uma unidade no filtro para gerar o texto oficial daquela unidade.
+              </p>
+              <textarea
+                readOnly
+                value={whatsappText || fallbackWhatsappText}
+                className="w-full h-56 border dark:border-gray-600 rounded p-2 text-xs text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700"
+              />
+              <button
+                type="button"
+                onClick={handleGenerateWhatsapp}
+                className="mt-2 w-full bg-brand-700 text-white px-3 py-2 rounded text-sm hover:bg-brand-800"
+              >
                 Gerar por unidade
               </button>
-              <button type="button" onClick={() => navigator.clipboard?.writeText(whatsappText || fallbackWhatsappText)}
-                className="mt-2 w-full bg-green-700 text-white px-3 py-2 rounded text-sm hover:bg-green-800">
+              <button
+                type="button"
+                onClick={() =>
+                  navigator.clipboard?.writeText(whatsappText || fallbackWhatsappText)
+                }
+                className="mt-2 w-full bg-green-700 text-white px-3 py-2 rounded text-sm hover:bg-green-800"
+              >
                 Copiar para WhatsApp
               </button>
             </section>

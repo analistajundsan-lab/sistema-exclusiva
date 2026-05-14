@@ -1,8 +1,11 @@
 from collections import Counter
 from datetime import date, datetime, timezone
+from io import BytesIO
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
@@ -482,4 +485,91 @@ async def schedule_whatsapp_text(
         unit=unit,
         total=len(lines),
         text="\n".join(header + body),
+    )
+
+
+@router.delete("/lines/{line_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_schedule_line(
+    line_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_role(UserRole.ADMIN, UserRole.GERENTE, UserRole.SUPERVISAO)
+    ),
+):
+    line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="DELETE",
+            resource="schedule_line",
+            resource_id=line.id,
+            details=f"Linha {line.line_code} excluida; prefixo={line.prefix_code}; unidade={line.unit}",
+        )
+    )
+    db.delete(line)
+    db.commit()
+
+
+@router.get("/download")
+async def download_schedule(
+    schedule_date: date,
+    unit: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_role(UserRole.ADMIN, UserRole.GERENTE, UserRole.SUPERVISAO)
+    ),
+):
+    """Gera planilha XLSX no formato linear (aba ATUALIZAR) com os dados atuais."""
+    query = db.query(ScheduleLine).filter(ScheduleLine.schedule_date == schedule_date)
+    if unit:
+        query = query.filter(ScheduleLine.unit == unit)
+    lines = query.order_by(
+        ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
+    ).all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "ATUALIZAR"
+    ws.append(
+        [
+            "PREFIXO",
+            "MOTORISTA",
+            "LINHA",
+            "SENTIDO",
+            "CLIENTE",
+            "ROTA",
+            "INICIO",
+            "FIM",
+            "UNIDADE",
+        ]
+    )
+
+    for line in lines:
+        ws.append(
+            [
+                line.prefix_code,
+                line.driver_name,
+                line.line_code,
+                line.direction,
+                line.client_name,
+                line.route_name,
+                line.start_time,
+                line.end_time,
+                line.unit,
+            ]
+        )
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    date_str = schedule_date.strftime("%d-%m-%Y")
+    filename = f"ESCALA GERAL {date_str} ATUALIZADA.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

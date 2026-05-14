@@ -128,11 +128,28 @@ export function OnCall() {
 
   const handleSendWhatsApp = async () => {
     try {
-      const res = await pending.fetchWhatsappText(filters.schedule_date || '', filters.unit || '')
-      await navigator.clipboard?.writeText(res.text)
-      window.open(`https://wa.me/?text=${encodeURIComponent(res.text)}`, '_blank', 'noopener,noreferrer')
+      const params = new URLSearchParams()
+      if (filters.unit) params.set('unit', filters.unit)
+      if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
+      const res = await (await import('../api/client')).default.get(`/swaps/whatsapp/text?${params}`)
+      const text = res.data.text as string
+      await navigator.clipboard?.writeText(text)
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
     } catch {
-      alert('Erro ao gerar texto de confirmação.')
+      alert('Erro ao gerar texto de trocas.')
+    }
+  }
+
+  const handleCopyAllSwaps = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (filters.unit) params.set('unit', filters.unit)
+      if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
+      const res = await (await import('../api/client')).default.get(`/swaps/whatsapp/text?${params}`)
+      await navigator.clipboard.writeText(res.data.text)
+      setActionMessage('Texto copiado! Cole no WhatsApp.')
+    } catch {
+      alert('Erro ao copiar trocas.')
     }
   }
 
@@ -389,7 +406,16 @@ export function OnCall() {
                 <ArrowLeftRight size={16} className="text-brand-600 dark:text-brand-400" />
                 Trocas registradas
               </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Copie o texto e envie no WhatsApp.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Copie o texto consolidado e envie no WhatsApp.</p>
+              {swapsList.swaps.length > 0 && (
+                <button
+                  onClick={handleCopyAllSwaps}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+                >
+                  <MessageCircle size={12} />
+                  Copiar todas as trocas (WhatsApp)
+                </button>
+              )}
             </div>
             <div className="p-3 space-y-2">
               {swapsList.loading && (

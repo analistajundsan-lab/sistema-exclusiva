@@ -66,6 +66,7 @@ def upsert_admin(
     cpf_hash = hash_cpf(cpf)
     user = db.query(User).filter(User.cpf_hash == cpf_hash).first()
     if not user:
+        # Apenas na CRIAÇÃO define senha temporária e força troca
         user = User(
             cpf_hash=cpf_hash,
             email=email,
@@ -73,17 +74,16 @@ def upsert_admin(
             password_hash=hash_password(TEMP_PASSWORD),
             role=UserRole.ADMIN,
             is_active=True,
+            must_change_password=True,
         )
         db.add(user)
         db.flush()
+    # Em deploys subsequentes: atualiza só metadados — NUNCA reseta senha
     user.email = email
     user.name = name
     user.role = UserRole.ADMIN
     user.is_active = True
-    user.password_hash = hash_password(TEMP_PASSWORD)
-    user.must_change_password = True
     user.can_delete_history = can_delete_history
-    user.password_changed_at = None
     db.add(
         AuditLog(
             user_id=user.id,
