@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fundo verde sólido (cobre 100% para maskable) -->
+  <rect width="512" height="512" fill="#00341b"/>
+  <!-- Corpo do ônibus (centrado na área segura) -->
+  <rect x="96" y="196" width="320" height="140" rx="18" fill="white" opacity="0.95"/>
+  <!-- Faixa âmbar -->
+  <rect x="96" y="236" width="320" height="38" fill="#f29b00"/>
+  <!-- Janelas -->
+  <rect x="120" y="206" width="44" height="28" rx="4" fill="#00341b" opacity="0.5"/>
+  <rect x="178" y="206" width="44" height="28" rx="4" fill="#00341b" opacity="0.5"/>
+  <rect x="236" y="206" width="44" height="28" rx="4" fill="#00341b" opacity="0.5"/>
+  <rect x="294" y="206" width="44" height="28" rx="4" fill="#00341b" opacity="0.5"/>
+  <!-- Rodas -->
+  <circle cx="160" cy="336" r="24" fill="#1a1a1a"/>
+  <circle cx="160" cy="336" r="12" fill="#888"/>
+  <circle cx="352" cy="336" r="24" fill="#1a1a1a"/>
+  <circle cx="352" cy="336" r="12" fill="#888"/>
+  <!-- Texto EXCLUSIVA na faixa -->
+  <text x="256" y="262" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" font-weight="bold" fill="#00341b">EXCLUSIVA</text>
+</svg>

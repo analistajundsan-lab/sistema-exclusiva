@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="32" fill="#00341b"/>
+  <rect x="24" y="66" width="144" height="72" rx="10" fill="white" opacity="0.95"/>
+  <rect x="24" y="86" width="144" height="22" fill="#f29b00"/>
+  <rect x="34" y="70" width="22" height="14" rx="3" fill="#003a1e" opacity="0.6"/>
+  <rect x="62" y="70" width="22" height="14" rx="3" fill="#003a1e" opacity="0.6"/>
+  <rect x="90" y="70" width="22" height="14" rx="3" fill="#003a1e" opacity="0.6"/>
+  <rect x="118" y="70" width="22" height="14" rx="3" fill="#003a1e" opacity="0.6"/>
+  <circle cx="54" cy="138" r="14" fill="#1a1a1a"/>
+  <circle cx="54" cy="138" r="7" fill="#666"/>
+  <circle cx="138" cy="138" r="14" fill="#1a1a1a"/>
+  <circle cx="138" cy="138" r="7" fill="#666"/>
+  <text x="96" y="100" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#00341b">EXCLUSIVA</text>
+</svg>

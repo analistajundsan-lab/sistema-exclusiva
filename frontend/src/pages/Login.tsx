@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { formatCpf } from '../utils/cpf'
 import { Eye, EyeOff, User, Lock, Building2, AlertCircle } from 'lucide-react'
+import { BusIntro } from '../components/BusIntro'
 
 export function Login() {
   const [cpf, setCpf] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [animDone, setAnimDone] = useState(false)
   const { login, loading, error } = useAuth()
   const navigate = useNavigate()
 
@@ -18,7 +20,9 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <>
+      <BusIntro onDone={() => setAnimDone(true)} />
+      <div className="min-h-screen flex" style={{ visibility: animDone ? 'visible' : 'hidden' }}>
       {/* Left panel — hidden on mobile */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-brand-900 to-brand-700 flex-col items-center justify-center p-12 relative overflow-hidden">
         {/* Decorative circles */}
@@ -155,5 +159,6 @@ export function Login() {
         </div>
       </div>
     </div>
+    </>
   )
 }
