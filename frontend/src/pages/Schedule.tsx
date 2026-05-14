@@ -34,10 +34,23 @@ function lineToForm(line: ScheduleLine): EditForm {
 }
 
 export function Schedule() {
-  const [activeTab, setActiveTab] = useState<UnitTab>('Caieiras')
-  const [search, setSearch] = useState<ScheduleFilters>({
-    schedule_date: DEFAULT_OPERATION_DATE,
-    unit: 'Caieiras',
+  const [activeTab, setActiveTab] = useState<UnitTab>(() => {
+    const s = useAuthStore.getState()
+    const r = s.role
+    const u = s.userUnit
+    const readOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
+    if (readOnly && u && (UNIT_TABS as readonly string[]).includes(u)) return u as UnitTab
+    return 'Caieiras'
+  })
+  const [search, setSearch] = useState<ScheduleFilters>(() => {
+    const s = useAuthStore.getState()
+    const r = s.role
+    const u = s.userUnit
+    const readOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
+    return {
+      schedule_date: DEFAULT_OPERATION_DATE,
+      unit: (readOnly && u) ? u : 'Caieiras',
+    }
   })
   const [file, setFile] = useState<File | null>(null)
   const [replace, setReplace] = useState(true)
@@ -48,9 +61,11 @@ export function Schedule() {
   const [deleting, setDeleting] = useState<number | null>(null)
 
   const role = useAuthStore(s => s.role)
+  const unit = useAuthStore(s => s.userUnit)
   const isAdmin = role === 'admin'
-  const isManager = role === 'manager'
-  const canEdit = isAdmin || isManager
+  const canEdit = role === 'admin' || role === 'gerente'
+  const isReadOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(role || '')
+  const lockedUnit = isReadOnly && unit ? unit : null
 
   const {
     lines,
@@ -68,7 +83,6 @@ export function Schedule() {
     applyFilters,
     previewImport,
     importSchedule,
-    fetchWhatsappText,
     refetch,
   } = useSchedule(search)
 
@@ -121,15 +135,6 @@ export function Schedule() {
     setFile(null)
     const input = document.getElementById('schedule-file') as HTMLInputElement | null
     if (input) input.value = ''
-  }
-
-  const handleGenerateWhatsapp = async () => {
-    if (!search.schedule_date || !search.unit) {
-      setWhatsappText(fallbackWhatsappText)
-      return
-    }
-    const result = await fetchWhatsappText(search.schedule_date, search.unit, false)
-    setWhatsappText(result.text)
   }
 
   const handleEditOpen = (line: ScheduleLine) => {
@@ -245,23 +250,32 @@ export function Schedule() {
           </button>
         </form>
 
-        {/* Abas de unidade */}
-        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-          {UNIT_TABS.map(tab => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => handleTabChange(tab)}
-              className={`px-4 py-2 text-sm font-medium rounded-t transition-colors ${
-                activeTab === tab
-                  ? 'bg-brand-700 text-white border-b-2 border-brand-700'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+        {/* Abas de unidade - só mostra se pode trocar */}
+        {!lockedUnit && (
+          <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+            {UNIT_TABS.map(tab => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => handleTabChange(tab)}
+                className={`px-4 py-2 text-sm font-medium rounded-t transition-colors ${
+                  activeTab === tab
+                    ? 'bg-brand-700 text-white border-b-2 border-brand-700'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        )}
+        {lockedUnit && (
+          <div className="border-b border-gray-200 dark:border-gray-700 pb-2">
+            <span className="text-sm font-medium text-brand-700 dark:text-brand-400 px-2">
+              Unidade: {lockedUnit}
+            </span>
+          </div>
+        )}
 
         {/* Import (só admin) */}
         {isAdmin && (
@@ -657,7 +671,7 @@ export function Schedule() {
                 Texto para WhatsApp
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Selecione uma unidade no filtro para gerar o texto oficial daquela unidade.
+                Texto gerado automaticamente com as linhas da aba selecionada.
               </p>
               <textarea
                 readOnly
@@ -666,19 +680,13 @@ export function Schedule() {
               />
               <button
                 type="button"
-                onClick={handleGenerateWhatsapp}
-                className="mt-2 w-full bg-brand-700 text-white px-3 py-2 rounded text-sm hover:bg-brand-800"
-              >
-                Gerar por unidade
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  navigator.clipboard?.writeText(whatsappText || fallbackWhatsappText)
-                }
+                onClick={() => {
+                  const text = whatsappText || fallbackWhatsappText
+                  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank')
+                }}
                 className="mt-2 w-full bg-green-700 text-white px-3 py-2 rounded text-sm hover:bg-green-800"
               >
-                Copiar para WhatsApp
+                Enviar para WhatsApp
               </button>
             </section>
           </aside>

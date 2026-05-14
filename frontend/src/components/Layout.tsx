@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardCheck, AlertTriangle,
   Calendar, Shield, Users, LogOut, Sun, Moon,
-  User, ChevronRight, Bus, type LucideIcon,
+  User, ChevronRight, Bus, Search, type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthStore } from '../store/auth'
@@ -20,8 +20,9 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { to: '/on-call', label: 'Confirmação', icon: ClipboardCheck },
   { to: '/incidents', label: 'Ocorrências', icon: AlertTriangle },
-  { to: '/schedule', label: 'Escala', icon: Calendar, roles: ['admin', 'gerente', 'supervisao', 'supervisor'] },
-  { to: '/audit', label: 'Auditoria', icon: Shield, roles: ['admin', 'gerente'] },
+  { to: '/schedule', label: 'Escala', icon: Calendar, roles: ['admin', 'gerente', 'supervisao', 'supervisor', 'plantonista', 'analista'] },
+  { to: '/consulta', label: 'Consulta', icon: Search },
+  { to: '/audit', label: 'Auditoria', icon: Shield, roles: ['admin'] },
   { to: '/users', label: 'Usuários', icon: Users, roles: ['admin'] },
 ]
 

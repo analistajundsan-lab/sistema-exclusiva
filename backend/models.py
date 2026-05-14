@@ -72,6 +72,7 @@ class Incident(Base):
     description = Column(String(500))
     line = Column(String(50), index=True)
     direction = Column(String(50))
+    victim_status = Column(String(20))
     status = Column(
         Enum(IncidentStatus), default=IncidentStatus.ABERTO, nullable=False, index=True
     )

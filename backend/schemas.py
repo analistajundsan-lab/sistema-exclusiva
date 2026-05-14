@@ -111,6 +111,7 @@ class IncidentCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     line: Optional[str] = None
     direction: Optional[str] = None
+    victim_status: Optional[str] = None
     status: IncidentStatus = IncidentStatus.ABERTO
 
 
@@ -120,6 +121,7 @@ class IncidentUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     line: Optional[str] = None
     direction: Optional[str] = None
+    victim_status: Optional[str] = None
     status: Optional[IncidentStatus] = None
 
 
@@ -132,6 +134,7 @@ class IncidentResponse(BaseModel):
     description: Optional[str] = None
     line: Optional[str] = None
     direction: Optional[str] = None
+    victim_status: Optional[str] = None
     status: IncidentStatus = IncidentStatus.ABERTO
     created_by: int
     created_at: datetime

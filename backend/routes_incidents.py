@@ -67,6 +67,7 @@ async def list_incidents(
     line: Optional[str] = None,
     status: Optional[IncidentStatus] = None,
     today: bool = Query(False),
+    incident_date: Optional[date_type] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -81,6 +82,8 @@ async def list_incidents(
         query = query.filter(Incident.status == status)
     if today:
         query = query.filter(func.date(Incident.created_at) == date_type.today())
+    if incident_date:
+        query = query.filter(func.date(Incident.created_at) == incident_date)
     return query.offset(skip).limit(limit).all()
 
 

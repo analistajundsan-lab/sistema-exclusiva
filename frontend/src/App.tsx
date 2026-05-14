@@ -8,6 +8,7 @@ import { Users } from "./pages/Users";
 import { Schedule } from "./pages/Schedule";
 import { OnCall } from "./pages/OnCall";
 import { Audit } from "./pages/Audit";
+import { Consulta } from "./pages/Consulta";
 import { ChangePassword } from "./pages/ChangePassword"
 import { Profile } from "./pages/Profile";
 
@@ -43,9 +44,10 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
         <Route path="/" element={<AdminRoute><Dashboard /></AdminRoute>} />
-        <Route path="/schedule" element={<ManagerRoute><Schedule /></ManagerRoute>} />
+        <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
         <Route path="/on-call" element={<ProtectedRoute><OnCall /></ProtectedRoute>} />
-        <Route path="/audit" element={<ManagerRoute><Audit /></ManagerRoute>} />
+        <Route path="/audit" element={<AdminRoute><Audit /></AdminRoute>} />
+        <Route path="/consulta" element={<ProtectedRoute><Consulta /></ProtectedRoute>} />
         <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
         <Route path="/swaps" element={<ProtectedRoute><Swaps /></ProtectedRoute>} />
         <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />

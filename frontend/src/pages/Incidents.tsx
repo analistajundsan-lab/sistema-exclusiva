@@ -6,7 +6,7 @@ import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight } f
 export function Incidents() {
   const { incidents, loading, error, total, page, totalPages, setPage, createIncident } = useIncidents()
   const [modal, setModal] = useState(false)
-  const [form, setForm] = useState({ prefix_code: '', incident_type: '', line: '', direction: '', description: '' })
+  const [form, setForm] = useState({ prefix_code: '', incident_type: '', line: '', direction: '', description: '', victim_status: '' })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -23,7 +23,7 @@ export function Incidents() {
     try {
       await createIncident({ ...form, status: 'aberto' } as any)
       setModal(false)
-      setForm({ prefix_code: '', incident_type: '', line: '', direction: '', description: '' })
+      setForm({ prefix_code: '', incident_type: '', line: '', direction: '', description: '', victim_status: '' })
     } catch (e: any) {
       setFormError(e?.response?.data?.detail || 'Erro ao registrar ocorrência.')
     } finally {
@@ -254,6 +254,24 @@ export function Incidents() {
                     />
                   </div>
                 </div>
+
+                {form.incident_type === 'Acidente' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                      Vítimas *
+                    </label>
+                    <select
+                      name="victim_status"
+                      value={form.victim_status}
+                      onChange={handle}
+                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                    >
+                      <option value="">Selecione...</option>
+                      <option value="com_vitimas">Com vítimas</option>
+                      <option value="sem_vitimas">Sem vítimas</option>
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
