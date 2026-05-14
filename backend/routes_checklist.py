@@ -50,12 +50,14 @@ async def create_checklist(
     )
     db.add(checklist)
     db.flush()
-    db.add(AuditLog(
-        user_id=current_user.id,
-        action="CREATE",
-        resource="checklist",
-        resource_id=checklist.id,
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="CREATE",
+            resource="checklist",
+            resource_id=checklist.id,
+        )
+    )
     db.commit()
     db.refresh(checklist)
     return _to_response(checklist)
