@@ -19,7 +19,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 const ADMIN_ROLES = ['admin']
-const MANAGER_ROLES = ['admin', 'gerente', 'supervisao', 'supervisor']
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -29,13 +28,6 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function ManagerRoute({ children }: { children: React.ReactNode }) {
-  const token = useAuthStore((s) => s.token);
-  const role = useAuthStore((s) => s.role);
-  if (!token) return <Navigate to="/login" replace />;
-  if (!MANAGER_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
-  return <>{children}</>;
-}
 
 export default function App() {
   return (

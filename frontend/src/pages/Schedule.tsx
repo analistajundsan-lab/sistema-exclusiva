@@ -54,7 +54,7 @@ export function Schedule() {
   })
   const [file, setFile] = useState<File | null>(null)
   const [replace, setReplace] = useState(true)
-  const [whatsappText, setWhatsappText] = useState('')
+  const [whatsappText] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
