@@ -11,6 +11,8 @@ import { Audit } from "./pages/Audit";
 import { Consulta } from "./pages/Consulta";
 import { ChangePassword } from "./pages/ChangePassword"
 import { Profile } from "./pages/Profile";
+import { ChecklistConsulta } from "./pages/ChecklistConsulta";
+import { ChecklistNovo } from "./pages/ChecklistNovo";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -44,6 +46,8 @@ export default function App() {
         <Route path="/swaps" element={<ProtectedRoute><Swaps /></ProtectedRoute>} />
         <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/checklist" element={<ProtectedRoute><ChecklistConsulta /></ProtectedRoute>} />
+        <Route path="/checklist/novo" element={<ProtectedRoute><ChecklistNovo /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/on-call" replace />} />
       </Routes>
     </BrowserRouter>

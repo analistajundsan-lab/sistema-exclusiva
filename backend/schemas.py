@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 import re
 
@@ -271,3 +271,70 @@ class ScheduleWhatsappResponse(BaseModel):
     unit: str
     total: int
     text: str
+
+
+class ChecklistCreate(BaseModel):
+    garagem: str
+    prefixo: str = Field(..., min_length=1, max_length=20)
+    tipo: str  # AVULSO | MENSAL
+
+    camera_frontal: Optional[str] = None
+    camera_lateral_esq: Optional[str] = None
+    camera_lateral_dir: Optional[str] = None
+    camera_fadiga: Optional[str] = None
+    camera_ip_motorista: Optional[str] = None
+    camera_salao: Optional[str] = None
+
+    tem_leitor_embarque: Optional[bool] = None
+    ar_condicionado: Optional[bool] = None
+
+    licenciamento: Optional[List[str]] = None
+    licenciamento_outro: Optional[str] = None
+    checklist_colocado: Optional[List[str]] = None
+    cartao_artesp: Optional[str] = None
+
+    qr_code: Optional[bool] = None
+    adesivo_leitor: Optional[bool] = None
+    placa_senha_wifi: Optional[bool] = None
+
+    wifi_status: Optional[List[str]] = None
+    wifi_outro: Optional[str] = None
+
+    observacoes: Optional[str] = None
+    evidencias: Optional[List[str]] = None
+
+
+class ChecklistResponse(BaseModel):
+    id: int
+    auditor_id: int
+    auditor_name: str
+    garagem: str
+    prefixo: str
+    tipo: str
+
+    camera_frontal: Optional[str] = None
+    camera_lateral_esq: Optional[str] = None
+    camera_lateral_dir: Optional[str] = None
+    camera_fadiga: Optional[str] = None
+    camera_ip_motorista: Optional[str] = None
+    camera_salao: Optional[str] = None
+
+    tem_leitor_embarque: Optional[bool] = None
+    ar_condicionado: Optional[bool] = None
+
+    licenciamento: Optional[List[str]] = None
+    licenciamento_outro: Optional[str] = None
+    checklist_colocado: Optional[List[str]] = None
+    cartao_artesp: Optional[str] = None
+
+    qr_code: Optional[bool] = None
+    adesivo_leitor: Optional[bool] = None
+    placa_senha_wifi: Optional[bool] = None
+
+    wifi_status: Optional[List[str]] = None
+    wifi_outro: Optional[str] = None
+
+    observacoes: Optional[str] = None
+    evidencias: Optional[List[str]] = None
+
+    created_at: datetime

@@ -144,6 +144,50 @@ class AuditLog(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
 
+class VehicleChecklist(Base):
+    __tablename__ = "vehicle_checklists"
+
+    id = Column(Integer, primary_key=True, index=True)
+    auditor_id = Column(Integer, nullable=False, index=True)
+    auditor_name = Column(String(255), nullable=False)
+    garagem = Column(String(80), nullable=False, index=True)
+    prefixo = Column(String(20), nullable=False, index=True)
+    tipo = Column(String(20), nullable=False)  # AVULSO | MENSAL
+
+    # Câmeras (MENSAL)
+    camera_frontal = Column(String(30))
+    camera_lateral_esq = Column(String(30))
+    camera_lateral_dir = Column(String(30))
+    camera_fadiga = Column(String(30))
+    camera_ip_motorista = Column(String(30))
+    camera_salao = Column(String(30))
+
+    # Acessórios básicos (MENSAL)
+    tem_leitor_embarque = Column(Boolean)
+    ar_condicionado = Column(Boolean)
+
+    # Documentos (MENSAL) — arrays armazenados como JSON em Text
+    licenciamento = Column(Text)
+    licenciamento_outro = Column(String(100))
+    checklist_colocado = Column(Text)
+    cartao_artesp = Column(String(50))
+
+    # Materiais gráficos (MENSAL)
+    qr_code = Column(Boolean)
+    adesivo_leitor = Column(Boolean)
+    placa_senha_wifi = Column(Boolean)
+
+    # Wi-Fi (AVULSO e MENSAL)
+    wifi_status = Column(Text)
+    wifi_outro = Column(String(255))
+
+    observacoes = Column(Text)
+    evidencias = Column(Text)  # JSON array de base64
+
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
