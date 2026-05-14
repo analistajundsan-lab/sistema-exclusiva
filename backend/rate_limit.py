@@ -15,7 +15,7 @@ def init_redis():
             port=settings.REDIS_PORT,
             db=0,
             decode_responses=True,
-            socket_connect_timeout=5
+            socket_connect_timeout=5,
         )
         redis_client.ping()
         print("[OK] Redis connected successfully")
@@ -29,14 +29,16 @@ def get_redis_client() -> Optional[redis.Redis]:
     return redis_client
 
 
-async def rate_limit(identifier: str, max_requests: int = 100, window_seconds: int = 60) -> bool:
+async def rate_limit(
+    identifier: str, max_requests: int = 100, window_seconds: int = 60
+) -> bool:
     """
     Check rate limit for identifier (IP, user_id, etc).
     Returns True if allowed, False if rate limited.
     """
     if not redis_client:
         return True  # Allow if Redis unavailable
-    
+
     key = f"ratelimit:{identifier}"
     try:
         current = redis_client.incr(key)
@@ -52,7 +54,7 @@ async def get_remaining_requests(identifier: str, max_requests: int = 100) -> in
     """Get remaining requests for identifier."""
     if not redis_client:
         return max_requests
-    
+
     key = f"ratelimit:{identifier}"
     try:
         current = redis_client.get(key)

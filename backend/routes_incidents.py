@@ -45,7 +45,14 @@ async def create_incident(
     incident = Incident(**body.model_dump(), created_by=current_user.id)
     db.add(incident)
     db.flush()
-    db.add(AuditLog(user_id=current_user.id, action="CREATE", resource="incident", resource_id=incident.id))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="CREATE",
+            resource="incident",
+            resource_id=incident.id,
+        )
+    )
     db.commit()
     db.refresh(incident)
     return incident
@@ -85,7 +92,9 @@ async def get_incident(
 ):
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not incident:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada"
+        )
     return incident
 
 
@@ -98,13 +107,24 @@ async def update_incident(
 ):
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not incident:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada"
+        )
     if current_user.role != UserRole.ADMIN and incident.created_by != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão"
+        )
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(incident, field, value)
-    db.add(AuditLog(user_id=current_user.id, action="UPDATE", resource="incident", resource_id=incident_id))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="UPDATE",
+            resource="incident",
+            resource_id=incident_id,
+        )
+    )
     db.commit()
     db.refresh(incident)
     return incident
@@ -118,7 +138,16 @@ async def delete_incident(
 ):
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not incident:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada")
-    db.add(AuditLog(user_id=current_user.id, action="DELETE", resource="incident", resource_id=incident_id))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada"
+        )
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="DELETE",
+            resource="incident",
+            resource_id=incident_id,
+        )
+    )
     db.delete(incident)
     db.commit()

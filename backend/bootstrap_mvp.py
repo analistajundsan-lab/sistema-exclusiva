@@ -22,7 +22,9 @@ def migrate_userrole_enum() -> None:
     with engine.begin() as conn:
         for val in new_values:
             try:
-                conn.execute(text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{val}'"))
+                conn.execute(
+                    text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{val}'")
+                )
             except Exception:
                 pass
 
@@ -31,8 +33,12 @@ def migrate_existing_sqlite() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     if "users" in tables:
-        ensure_column("users", "must_change_password", "must_change_password BOOLEAN DEFAULT 0")
-        ensure_column("users", "can_delete_history", "can_delete_history BOOLEAN DEFAULT 0")
+        ensure_column(
+            "users", "must_change_password", "must_change_password BOOLEAN DEFAULT 0"
+        )
+        ensure_column(
+            "users", "can_delete_history", "can_delete_history BOOLEAN DEFAULT 0"
+        )
         ensure_column("users", "password_changed_at", "password_changed_at DATETIME")
         ensure_column("users", "unit", "unit VARCHAR(80)")
         ensure_column("users", "units", "units TEXT")
@@ -78,7 +84,15 @@ def upsert_admin(
     user.must_change_password = True
     user.can_delete_history = can_delete_history
     user.password_changed_at = None
-    db.add(AuditLog(user_id=user.id, action="BOOTSTRAP_ADMIN", resource="user", resource_id=user.id, details=name))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="BOOTSTRAP_ADMIN",
+            resource="user",
+            resource_id=user.id,
+            details=name,
+        )
+    )
 
 
 def main() -> None:
@@ -87,12 +101,20 @@ def main() -> None:
     try:
         for user in db.query(User).filter(User.must_change_password.is_(None)).all():
             user.must_change_password = False
-        upsert_admin(db, "22692036824", "jerusa@exclusivaturismo.com.br", "Jerusa", False)
-        upsert_admin(db, "41637531842", "vinicius@exclusivaturismo.com.br", "Vinicius", True)
+        upsert_admin(
+            db, "22692036824", "jerusa@exclusivaturismo.com.br", "Jerusa", False
+        )
+        upsert_admin(
+            db, "41637531842", "vinicius@exclusivaturismo.com.br", "Vinicius", True
+        )
         vinicius_hash = hash_cpf("41637531842")
-        db.query(User).filter(User.cpf_hash != vinicius_hash).update({User.can_delete_history: False})
+        db.query(User).filter(User.cpf_hash != vinicius_hash).update(
+            {User.can_delete_history: False}
+        )
         db.commit()
-        print(f"Admins atualizados. Senha temporaria: {TEMP_PASSWORD}. {datetime.now(timezone.utc).isoformat()}")
+        print(
+            f"Admins atualizados. Senha temporaria: {TEMP_PASSWORD}. {datetime.now(timezone.utc).isoformat()}"
+        )
     finally:
         db.close()
 

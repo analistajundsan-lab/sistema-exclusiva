@@ -15,7 +15,9 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return _bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    return _bcrypt.checkpw(
+        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+    )
 
 
 def create_tokens(user: User) -> tuple[str, str]:
@@ -32,8 +34,12 @@ def create_tokens(user: User) -> tuple[str, str]:
         "exp": now + timedelta(days=7),
     }
 
-    access_token = jwt.encode(access_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-    refresh_token = jwt.encode(refresh_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    access_token = jwt.encode(
+        access_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
+    refresh_token = jwt.encode(
+        refresh_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
 
     return access_token, refresh_token
 
@@ -45,7 +51,9 @@ async def get_current_user(
 ) -> User:
     try:
         payload = jwt.decode(
-            credentials.credentials, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            credentials.credentials,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
         )
         if payload.get("type") not in (None, "access"):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -72,6 +80,7 @@ async def get_current_user(
 
 def require_role(*roles: UserRole):
     """Retorna função de dependência que exige um dos papéis listados."""
+
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:
             raise HTTPException(

@@ -1,10 +1,13 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, model_validator
 
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/sistema_exclusiva"
+    DATABASE_URL: str = (
+        "postgresql://postgres:postgres@localhost:5432/sistema_exclusiva"
+    )
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
@@ -33,14 +36,19 @@ class Settings(BaseSettings):
             value = value.strip()
             if value.startswith("["):
                 import json
+
                 return json.loads(value)
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
     @model_validator(mode="after")
     def reject_default_secret_in_production(self):
-        if self.ENVIRONMENT == "production" and self.JWT_SECRET_KEY == "your-secret-key-change-in-production":
+        if (
+            self.ENVIRONMENT == "production"
+            and self.JWT_SECRET_KEY == "your-secret-key-change-in-production"
+        ):
             raise ValueError("JWT_SECRET_KEY precisa ser definido em producao")
         return self
+
 
 settings = Settings()

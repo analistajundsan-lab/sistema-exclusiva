@@ -29,19 +29,27 @@ MAX_IMPORT_BYTES = 8 * 1024 * 1024
 
 async def parse_upload_file(file: UploadFile):
     if not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=422, detail="Envie uma planilha .xlsx sem macros")
+        raise HTTPException(
+            status_code=422, detail="Envie uma planilha .xlsx sem macros"
+        )
 
     content = await file.read()
     if len(content) > MAX_IMPORT_BYTES:
-        raise HTTPException(status_code=413, detail="Arquivo muito grande. Limite atual: 8 MB")
+        raise HTTPException(
+            status_code=413, detail="Arquivo muito grande. Limite atual: 8 MB"
+        )
 
     try:
         parsed_lines = parse_schedule_workbook(content)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail="Nao foi possivel ler a planilha enviada") from exc
+        raise HTTPException(
+            status_code=422, detail="Nao foi possivel ler a planilha enviada"
+        ) from exc
 
     if not parsed_lines:
-        raise HTTPException(status_code=422, detail="Nenhuma linha de escala encontrada na planilha")
+        raise HTTPException(
+            status_code=422, detail="Nenhuma linha de escala encontrada na planilha"
+        )
 
     return parsed_lines
 
@@ -115,7 +123,11 @@ def apply_filters(
     return query
 
 
-@router.post("/import", response_model=ScheduleImportResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/import",
+    response_model=ScheduleImportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def import_schedule(
     schedule_date: date,
     replace: bool = True,
@@ -127,7 +139,9 @@ async def import_schedule(
 
     try:
         if replace:
-            db.query(ScheduleLine).filter(ScheduleLine.schedule_date == schedule_date).delete()
+            db.query(ScheduleLine).filter(
+                ScheduleLine.schedule_date == schedule_date
+            ).delete()
 
         for parsed in parsed_lines:
             db.add(
@@ -162,7 +176,9 @@ async def import_schedule(
         db.rollback()
         raise
 
-    return ScheduleImportResponse(imported=len(parsed_lines), replaced=replace, schedule_date=schedule_date)
+    return ScheduleImportResponse(
+        imported=len(parsed_lines), replaced=replace, schedule_date=schedule_date
+    )
 
 
 @router.get("/lines/count", response_model=CountResponse)
@@ -223,10 +239,11 @@ async def list_schedule_lines(
     )
     if start_in_minutes is not None:
         from datetime import timedelta
+
         now = datetime.now()
         cutoff = now + timedelta(minutes=start_in_minutes)
-        now_str = now.strftime('%H:%M')
-        cutoff_str = cutoff.strftime('%H:%M')
+        now_str = now.strftime("%H:%M")
+        cutoff_str = cutoff.strftime("%H:%M")
         # Filtra apenas linhas de hoje que iniciam no intervalo [agora, agora+N min]
         query = query.filter(
             ScheduleLine.schedule_date == now.date(),
@@ -234,7 +251,9 @@ async def list_schedule_lines(
             ScheduleLine.start_time <= cutoff_str,
         )
     return (
-        query.order_by(ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code)
+        query.order_by(
+            ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
+        )
         .offset(skip)
         .limit(limit)
         .all()
@@ -288,7 +307,9 @@ async def confirm_schedule_line(
     if not line:
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
     if line.status == ScheduleLineStatus.CANCELADA:
-        raise HTTPException(status_code=422, detail="Linha cancelada nao pode ser confirmada")
+        raise HTTPException(
+            status_code=422, detail="Linha cancelada nao pode ser confirmada"
+        )
 
     line.status = ScheduleLineStatus.CONFIRMADA
     line.confirmed_by = current_user.id
@@ -318,7 +339,9 @@ async def undo_confirm_schedule_line(
     if not line:
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
     if line.status != ScheduleLineStatus.CONFIRMADA:
-        raise HTTPException(status_code=422, detail="Apenas linha confirmada pode ser reaberta")
+        raise HTTPException(
+            status_code=422, detail="Apenas linha confirmada pode ser reaberta"
+        )
 
     reason = body.reason if body else None
     line.status = ScheduleLineStatus.PENDENTE
@@ -352,7 +375,9 @@ async def cancel_schedule_line(
     reason = body.reason if body else None
     line.status = ScheduleLineStatus.CANCELADA
     if reason:
-        line.notes = reason if not line.notes else f"{line.notes} | Cancelamento: {reason}"
+        line.notes = (
+            reason if not line.notes else f"{line.notes} | Cancelamento: {reason}"
+        )
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -383,10 +408,18 @@ async def schedule_summary(
             func.count(ScheduleLine.id),
             func.sum(case((ScheduleLine.direction == "ENTRADA", 1), else_=0)),
             func.sum(case((ScheduleLine.direction == "SAIDA", 1), else_=0)),
-            func.sum(case((ScheduleLine.status == ScheduleLineStatus.PENDENTE, 1), else_=0)),
-            func.sum(case((ScheduleLine.status == ScheduleLineStatus.CONFIRMADA, 1), else_=0)),
-            func.sum(case((ScheduleLine.status == ScheduleLineStatus.ALTERADA, 1), else_=0)),
-            func.sum(case((ScheduleLine.status == ScheduleLineStatus.CANCELADA, 1), else_=0)),
+            func.sum(
+                case((ScheduleLine.status == ScheduleLineStatus.PENDENTE, 1), else_=0)
+            ),
+            func.sum(
+                case((ScheduleLine.status == ScheduleLineStatus.CONFIRMADA, 1), else_=0)
+            ),
+            func.sum(
+                case((ScheduleLine.status == ScheduleLineStatus.ALTERADA, 1), else_=0)
+            ),
+            func.sum(
+                case((ScheduleLine.status == ScheduleLineStatus.CANCELADA, 1), else_=0)
+            ),
         )
         .group_by(ScheduleLine.unit)
         .order_by(ScheduleLine.unit)
@@ -421,7 +454,11 @@ async def schedule_whatsapp_text(
         ScheduleLine.unit == unit,
     )
     if only_changes:
-        query = query.filter(ScheduleLine.status.in_([ScheduleLineStatus.ALTERADA, ScheduleLineStatus.CANCELADA]))
+        query = query.filter(
+            ScheduleLine.status.in_(
+                [ScheduleLineStatus.ALTERADA, ScheduleLineStatus.CANCELADA]
+            )
+        )
 
     lines = query.order_by(ScheduleLine.start_time, ScheduleLine.line_code).all()
     header = [

@@ -1,4 +1,15 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, Enum, Text, func, create_engine
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    Text,
+    func,
+    create_engine,
+)
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 import enum
@@ -7,8 +18,9 @@ from config import settings
 
 Base = declarative_base()
 
+
 class UserRole(str, enum.Enum):
-    OPERATOR = "operator"      # legado
+    OPERATOR = "operator"  # legado
     SUPERVISOR = "supervisor"  # legado
     ADMIN = "admin"
     PLANTONISTA = "plantonista"
@@ -16,10 +28,12 @@ class UserRole(str, enum.Enum):
     GERENTE = "gerente"
     SUPERVISAO = "supervisao"
 
+
 class IncidentStatus(str, enum.Enum):
     ABERTO = "aberto"
     EM_ANDAMENTO = "em_andamento"
     FECHADO = "fechado"
+
 
 class ScheduleLineStatus(str, enum.Enum):
     PENDENTE = "pendente"
@@ -27,9 +41,10 @@ class ScheduleLineStatus(str, enum.Enum):
     ALTERADA = "alterada"
     CANCELADA = "cancelada"
 
+
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     cpf_hash = Column(String(255), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, index=True)
@@ -47,23 +62,27 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+
 class Incident(Base):
     __tablename__ = "incidents"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     prefix_code = Column(String(10), nullable=False, index=True)
     incident_type = Column(String(50), nullable=False)
     description = Column(String(500))
     line = Column(String(50), index=True)
     direction = Column(String(50))
-    status = Column(Enum(IncidentStatus), default=IncidentStatus.ABERTO, nullable=False, index=True)
+    status = Column(
+        Enum(IncidentStatus), default=IncidentStatus.ABERTO, nullable=False, index=True
+    )
     created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+
 class Swap(Base):
     __tablename__ = "swaps"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     schedule_line_id = Column(Integer, index=True)
     schedule_date = Column(Date, index=True)
@@ -77,6 +96,7 @@ class Swap(Base):
     created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
 
 class ScheduleLine(Base):
     __tablename__ = "schedule_lines"
@@ -92,7 +112,12 @@ class ScheduleLine(Base):
     route_name = Column(String(255))
     start_time = Column(String(5), nullable=False, index=True)
     end_time = Column(String(5), nullable=False)
-    status = Column(Enum(ScheduleLineStatus), default=ScheduleLineStatus.PENDENTE, nullable=False, index=True)
+    status = Column(
+        Enum(ScheduleLineStatus),
+        default=ScheduleLineStatus.PENDENTE,
+        nullable=False,
+        index=True,
+    )
     notes = Column(String(500))
     confirmed_by = Column(Integer)
     confirmed_at = Column(DateTime)
@@ -103,9 +128,10 @@ class ScheduleLine(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
     action = Column(String(50), nullable=False, index=True)
@@ -116,8 +142,10 @@ class AuditLog(Base):
     deleted_by = Column(Integer, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
+
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db():
     db = SessionLocal()

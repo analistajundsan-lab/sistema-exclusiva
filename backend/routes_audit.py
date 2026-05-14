@@ -11,7 +11,13 @@ from schemas import AuditLogResponse, CountResponse
 router = APIRouter(prefix="/audit", tags=["audit"])
 
 
-def apply_filters(query, resource: Optional[str], resource_id: Optional[int], action: Optional[str], include_deleted: bool):
+def apply_filters(
+    query,
+    resource: Optional[str],
+    resource_id: Optional[int],
+    action: Optional[str],
+    include_deleted: bool,
+):
     if not include_deleted:
         query = query.filter(AuditLog.deleted_at.is_(None))
     if resource:
@@ -33,8 +39,12 @@ async def count_audit_logs(
     current_user: User = Depends(get_current_user),
 ):
     if include_deleted and not current_user.can_delete_history:
-        raise HTTPException(status_code=403, detail="Sem permissao para ver historico apagado")
-    query = apply_filters(db.query(AuditLog), resource, resource_id, action, include_deleted)
+        raise HTTPException(
+            status_code=403, detail="Sem permissao para ver historico apagado"
+        )
+    query = apply_filters(
+        db.query(AuditLog), resource, resource_id, action, include_deleted
+    )
     return {"total": query.count()}
 
 
@@ -50,8 +60,12 @@ async def list_audit_logs(
     current_user: User = Depends(get_current_user),
 ):
     if include_deleted and not current_user.can_delete_history:
-        raise HTTPException(status_code=403, detail="Sem permissao para ver historico apagado")
-    query = apply_filters(db.query(AuditLog), resource, resource_id, action, include_deleted)
+        raise HTTPException(
+            status_code=403, detail="Sem permissao para ver historico apagado"
+        )
+    query = apply_filters(
+        db.query(AuditLog), resource, resource_id, action, include_deleted
+    )
     return query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
 
 
@@ -62,13 +76,22 @@ async def delete_audit_log(
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.can_delete_history:
-        raise HTTPException(status_code=403, detail="Apenas usuario autorizado pode apagar historico")
+        raise HTTPException(
+            status_code=403, detail="Apenas usuario autorizado pode apagar historico"
+        )
     log = db.query(AuditLog).filter(AuditLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Historico nao encontrado")
     log.deleted_at = datetime.now(timezone.utc)
     log.deleted_by = current_user.id
-    db.add(AuditLog(user_id=current_user.id, action="SOFT_DELETE", resource="audit_log", resource_id=log.id))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="SOFT_DELETE",
+            resource="audit_log",
+            resource_id=log.id,
+        )
+    )
     db.commit()
     return {"message": "Historico apagado logicamente por 30 dias"}
 
@@ -80,7 +103,9 @@ async def restore_audit_log(
     current_user: User = Depends(get_current_user),
 ):
     if not current_user.can_delete_history:
-        raise HTTPException(status_code=403, detail="Apenas usuario autorizado pode recuperar historico")
+        raise HTTPException(
+            status_code=403, detail="Apenas usuario autorizado pode recuperar historico"
+        )
     log = db.query(AuditLog).filter(AuditLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Historico nao encontrado")
@@ -90,9 +115,18 @@ async def restore_audit_log(
     if deleted_at.tzinfo is None:
         deleted_at = deleted_at.replace(tzinfo=timezone.utc)
     if deleted_at < datetime.now(timezone.utc) - timedelta(days=30):
-        raise HTTPException(status_code=422, detail="Prazo de recuperacao de 30 dias expirado")
+        raise HTTPException(
+            status_code=422, detail="Prazo de recuperacao de 30 dias expirado"
+        )
     log.deleted_at = None
     log.deleted_by = None
-    db.add(AuditLog(user_id=current_user.id, action="RESTORE", resource="audit_log", resource_id=log.id))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="RESTORE",
+            resource="audit_log",
+            resource_id=log.id,
+        )
+    )
     db.commit()
     return {"message": "Historico recuperado"}

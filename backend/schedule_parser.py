@@ -105,7 +105,9 @@ def parse_linear_sheet(worksheet) -> Iterable[ParsedScheduleLine]:
         end_time = clean_time_text(row[7] if len(row) > 7 else "")
         unit = unit_from_sheet(safe_str(row[8] if len(row) > 8 else unit))
 
-        if not any([prefix_code, driver_name, line_code, client_name, start_time, end_time]):
+        if not any(
+            [prefix_code, driver_name, line_code, client_name, start_time, end_time]
+        ):
             continue
         if not start_time or not end_time:
             continue
@@ -148,9 +150,21 @@ def parse_block_sheet(worksheet) -> Iterable[ParsedScheduleLine]:
                 if not parsed_time:
                     continue
 
-                client_original = rows[row_index + 1][col_index] if col_index < len(rows[row_index + 1]) else ""
-                line_original = rows[row_index + 2][col_index] if col_index < len(rows[row_index + 2]) else ""
-                route_original = rows[row_index + 3][col_index] if col_index < len(rows[row_index + 3]) else ""
+                client_original = (
+                    rows[row_index + 1][col_index]
+                    if col_index < len(rows[row_index + 1])
+                    else ""
+                )
+                line_original = (
+                    rows[row_index + 2][col_index]
+                    if col_index < len(rows[row_index + 2])
+                    else ""
+                )
+                route_original = (
+                    rows[row_index + 3][col_index]
+                    if col_index < len(rows[row_index + 3])
+                    else ""
+                )
 
                 out.append(
                     ParsedScheduleLine(

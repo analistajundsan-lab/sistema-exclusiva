@@ -6,7 +6,7 @@ import re
 
 
 class UserRole(str, Enum):
-    OPERATOR = "operator"      # legado
+    OPERATOR = "operator"  # legado
     SUPERVISOR = "supervisor"  # legado
     ADMIN = "admin"
     PLANTONISTA = "plantonista"
@@ -50,6 +50,7 @@ class UserCreate(BaseModel):
 class UserProfileUpdate(BaseModel):
     display_name: Optional[str] = Field(None, max_length=255)
     photo_url: Optional[str] = None
+
 
 class UserAdminUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=255)
