@@ -432,3 +432,23 @@ async def admin_update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/admin/reset-test-data")
+async def reset_test_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    """Remove todos os dados operacionais de teste mantendo usuarios e senhas."""
+    from models import Incident, Swap, ScheduleLine, AuditLog, VehicleChecklist
+
+    db.query(VehicleChecklist).delete()
+    db.query(AuditLog).delete()
+    db.query(Swap).delete()
+    db.query(Incident).delete()
+    db.query(ScheduleLine).delete()
+    db.commit()
+    return {
+        "ok": True,
+        "message": "Dados operacionais removidos. Usuarios e senhas mantidos.",
+    }
