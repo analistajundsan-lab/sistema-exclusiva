@@ -384,8 +384,8 @@ def test_swap_can_be_created_from_confirmed_schedule_line(admin_token, operator_
     data = response.json()
     assert data["schedule_line_id"] == line_id
     assert data["unit"] == "Caieiras"
-    assert "Carro substituido: 1580" in data["whatsapp_text"]
-    assert "Carro substituto: 1590" in data["whatsapp_text"]
+    assert "PREFIXO 1590" in data["whatsapp_text"]
+    assert "ATENDERA AS LINHAS" in data["whatsapp_text"]
 
 
 def test_swap_requires_confirmed_schedule_line(admin_token, operator_token):
