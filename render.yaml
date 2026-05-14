@@ -1,36 +1,21 @@
-﻿# render.yaml â€” Deploy gratuito no Render.com
-# Docs: https://render.com/docs/blueprint-spec
-#
-# COMO USAR:
-# 1. Acesse https://render.com e crie conta gratuita
-# 2. New > Blueprint > Conecte o repositÃ³rio GitHub
-# 3. Render lÃª este arquivo e cria os serviÃ§os automaticamente
-# 4. Configure as variÃ¡veis de ambiente no dashboard do Render
-
 services:
-  # â”€â”€ Backend FastAPI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   - type: web
     name: exclusiva-backend
-    runtime: python
-    plan: free            # 750h/mÃªs grÃ¡tis â€” suficiente para uso contÃ­nuo
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
-        sync: false       # Preencher manualmente: URL do Neon.tech
-      - key: REDIS_URL
-        sync: false       # Preencher: URL do Upstash Redis
+        sync: false
       - key: JWT_SECRET_KEY
-        generateValue: true   # Render gera automaticamente
-      - key: JWT_ALGORITHM
-        value: HS256
-      - key: JWT_EXPIRATION_MINUTES
-        value: "60"
+        sync: false
+      - key: ENVIRONMENT
+        value: production
       - key: ALLOWED_ORIGINS
-        sync: false       # Ex: https://sistema-exclusiva.vercel.app
+        value: '["https://sistema-exclusiva-pied.vercel.app"]'
       - key: LOG_LEVEL
         value: INFO
-      - key: PYTHONPATH
-        value: /opt/render/project/src/backend
+      - key: EXPOSE_METRICS
+        value: "false"
