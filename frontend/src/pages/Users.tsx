@@ -206,18 +206,18 @@ export function Users() {
       {error && <p className="text-red-600 text-sm mb-3 bg-red-50 p-3 rounded">{error}</p>}
 
       {loading ? <p className="text-gray-500 py-8 text-center">Carregando...</p> : (
-        <div className="bg-white rounded-lg shadow overflow-hidden overflow-x-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-100 text-left">
-                <th className="px-4 py-2 border">Nome</th>
-                <th className="px-4 py-2 border">E-mail</th>
-                <th className="px-4 py-2 border">Unidade(s)</th>
-                <th className="px-4 py-2 border">Cargo</th>
-                <th className="px-4 py-2 border">Status</th>
-                <th className="px-4 py-2 border">Senha</th>
-                <th className="px-4 py-2 border">Cadastrado</th>
-                <th className="px-4 py-2 border">Ações</th>
+              <tr className="bg-gray-100 dark:bg-gray-700 text-left">
+                <th className="px-4 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">Nome</th>
+                <th className="px-4 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">E-mail</th>
+                <th className="px-4 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">Unidade(s)</th>
+                <th className="px-4 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">Cargo</th>
+                <th className="px-4 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">Status</th>
+                <th className="px-4 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">Senha</th>
+                <th className="px-4 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">Cadastrado</th>
+                <th className="px-4 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -226,33 +226,33 @@ export function Users() {
                   ? parseUnits(u.units).join(', ')
                   : (u.unit || '—')
                 return (
-                  <tr key={u.id} className={`hover:bg-gray-50 ${!u.is_active ? 'opacity-50' : ''}`}>
-                    <td className="px-4 py-2 border font-medium">{u.name}</td>
-                    <td className="px-4 py-2 border text-gray-600">{u.email}</td>
-                    <td className="px-4 py-2 border text-gray-600 text-xs">{allUnits}</td>
-                    <td className="px-4 py-2 border">
+                  <tr key={u.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${!u.is_active ? 'opacity-50' : ''}`}>
+                    <td className="px-4 py-2 border dark:border-gray-600 font-medium text-gray-900 dark:text-gray-100">{u.name}</td>
+                    <td className="px-4 py-2 border dark:border-gray-600 text-gray-600 dark:text-gray-300">{u.email}</td>
+                    <td className="px-4 py-2 border dark:border-gray-600 text-gray-600 dark:text-gray-300 text-xs">{allUnits}</td>
+                    <td className="px-4 py-2 border dark:border-gray-600">
                       <span className={`text-xs px-2 py-0.5 rounded border font-medium ${ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-600'}`}>
                         {ROLE_LABEL[u.role] || u.role}
                       </span>
                     </td>
-                    <td className="px-4 py-2 border">
+                    <td className="px-4 py-2 border dark:border-gray-600">
                       <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {u.is_active ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
-                    <td className="px-4 py-2 border">
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.must_change_password ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>
+                    <td className="px-4 py-2 border dark:border-gray-600">
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.must_change_password ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200'}`}>
                         {u.must_change_password ? 'Temporária' : 'Definida'}
                       </span>
                     </td>
-                    <td className="px-4 py-2 border text-xs text-gray-500">
+                    <td className="px-4 py-2 border dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
                       {new Date(u.created_at).toLocaleDateString('pt-BR')}
                     </td>
-                    <td className="px-4 py-2 border">
+                    <td className="px-4 py-2 border dark:border-gray-600">
                       <div className="flex flex-col gap-1">
-                        <button onClick={() => openEdit(u)} className="text-xs text-brand-600 hover:underline">Editar</button>
+                        <button onClick={() => openEdit(u)} className="text-xs text-brand-600 dark:text-brand-400 hover:underline">Editar</button>
                         <button onClick={() => handleToggle(u.id)}
-                          className={`text-xs hover:underline ${u.is_active ? 'text-red-600' : 'text-green-600'}`}>
+                          className={`text-xs hover:underline ${u.is_active ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                           {u.is_active ? 'Desativar' : 'Ativar'}
                         </button>
                       </div>
@@ -262,7 +262,7 @@ export function Users() {
               })}
             </tbody>
           </table>
-          <p className="px-4 py-2 text-xs text-gray-400 border-t">{users.length} usuário(s)</p>
+          <p className="px-4 py-2 text-xs text-gray-400 dark:text-gray-500 border-t dark:border-gray-700">{users.length} usuário(s)</p>
         </div>
       )}
 
