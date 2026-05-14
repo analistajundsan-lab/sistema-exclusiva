@@ -391,9 +391,18 @@ async def admin_update_user(
     if body.name is not None:
         user.name = body.name
     if body.email is not None:
+        conflict = (
+            db.query(User)
+            .filter(User.email == body.email, User.id != user_id)
+            .first()
+        )
+        if conflict:
+            raise HTTPException(status_code=400, detail="E-mail já está em uso por outro usuário")
         user.email = body.email
     if body.unit is not None:
         user.unit = body.unit
+    if body.units is not None:
+        user.units = body.units
     if body.role is not None:
         user.role = body.role
     if body.is_active is not None:
