@@ -1,4 +1,4 @@
-const CACHE_NAME = "sistema-exclusiva-v2";
+const CACHE_NAME = "sistema-exclusiva-v3";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", event => {
