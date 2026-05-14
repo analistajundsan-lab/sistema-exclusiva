@@ -12,14 +12,20 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   </React.StrictMode>
 );
 
+function forceLogoutAndReload() {
+  // Limpa toda a sessão do usuário para que ele precise logar novamente
+  // após uma nova versão do app ser deployada
+  const keys = ['token', 'refreshToken', 'role', 'userId', 'userName', 'displayName', 'photoUrl', 'userUnit', 'userUnits'];
+  keys.forEach(k => localStorage.removeItem(k));
+  window.location.href = '/login';
+}
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").then(registration => {
-      // Quando o SW atualizar e enviar SW_UPDATED, recarrega a página para
-      // garantir que todos os analistas vejam o bundle mais recente
       navigator.serviceWorker.addEventListener("message", event => {
         if (event.data?.type === "SW_UPDATED") {
-          window.location.reload();
+          forceLogoutAndReload();
         }
       });
 
@@ -28,7 +34,7 @@ if ("serviceWorker" in navigator) {
         if (!newWorker) return;
         newWorker.addEventListener("statechange", () => {
           if (newWorker.state === "activated") {
-            window.location.reload();
+            forceLogoutAndReload();
           }
         });
       });

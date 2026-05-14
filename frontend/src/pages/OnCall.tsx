@@ -4,6 +4,7 @@ import { ScheduleFilters, ScheduleLine, useSchedule } from '../hooks/useSchedule
 import { useSwaps } from '../hooks/useSwaps'
 import { DEFAULT_OPERATION_DATE } from '../config/demo'
 import { useAuthStore } from '../store/auth'
+import client from '../api/client'
 import {
   CheckCircle2, ArrowLeftRight, X, MessageCircle, Clock,
   Bus, MapPin, User, ChevronRight, Filter,
@@ -131,7 +132,7 @@ export function OnCall() {
       const params = new URLSearchParams()
       if (filters.unit) params.set('unit', filters.unit)
       if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
-      const res = await (await import('../api/client')).default.get(`/swaps/whatsapp/text?${params}`)
+      const res = await client.get(`/swaps/whatsapp/text?${params}`)
       const text = res.data.text as string
       await navigator.clipboard?.writeText(text)
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
@@ -145,7 +146,7 @@ export function OnCall() {
       const params = new URLSearchParams()
       if (filters.unit) params.set('unit', filters.unit)
       if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
-      const res = await (await import('../api/client')).default.get(`/swaps/whatsapp/text?${params}`)
+      const res = await client.get(`/swaps/whatsapp/text?${params}`)
       await navigator.clipboard.writeText(res.data.text)
       setActionMessage('Texto copiado! Cole no WhatsApp.')
     } catch {
