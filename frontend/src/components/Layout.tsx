@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardCheck, AlertTriangle,
   Calendar, Shield, Users, LogOut, Sun, Moon,
-  User, ChevronRight, Bus,
+  User, ChevronRight, Bus, type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthStore } from '../store/auth'
@@ -12,7 +12,7 @@ import { useThemeStore } from '../store/theme'
 interface NavItem {
   to: string
   label: string
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: LucideIcon
   roles?: string[]
 }
 
