@@ -241,18 +241,35 @@ async def list_schedule_lines(
         status,
     )
     if start_in_minutes is not None:
-        from datetime import timedelta
+        from datetime import timedelta, timezone
+        from sqlalchemy import and_, or_
 
-        now = datetime.now()
-        cutoff = now + timedelta(minutes=start_in_minutes)
-        now_str = now.strftime("%H:%M")
-        cutoff_str = cutoff.strftime("%H:%M")
-        # Filtra apenas linhas de hoje que iniciam no intervalo [agora, agora+N min]
-        query = query.filter(
-            ScheduleLine.schedule_date == now.date(),
-            ScheduleLine.start_time >= now_str,
-            ScheduleLine.start_time <= cutoff_str,
-        )
+        BRT = timezone(timedelta(hours=-3))
+        now_brt = datetime.now(BRT)
+        cutoff_brt = now_brt + timedelta(minutes=start_in_minutes)
+        now_str = now_brt.strftime("%H:%M")
+        cutoff_str = cutoff_brt.strftime("%H:%M")
+
+        if now_brt.date() == cutoff_brt.date():
+            query = query.filter(
+                ScheduleLine.schedule_date == now_brt.date(),
+                ScheduleLine.start_time >= now_str,
+                ScheduleLine.start_time <= cutoff_str,
+            )
+        else:
+            # Janela cruza meia-noite: une linhas de hoje (>= now) e amanhã (<= cutoff)
+            query = query.filter(
+                or_(
+                    and_(
+                        ScheduleLine.schedule_date == now_brt.date(),
+                        ScheduleLine.start_time >= now_str,
+                    ),
+                    and_(
+                        ScheduleLine.schedule_date == cutoff_brt.date(),
+                        ScheduleLine.start_time <= cutoff_str,
+                    ),
+                )
+            )
     return (
         query.order_by(
             ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
