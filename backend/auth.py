@@ -49,7 +49,9 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    raw_token = credentials.credentials if credentials else request.query_params.get("token")
+    raw_token = (
+        credentials.credentials if credentials else request.query_params.get("token")
+    )
     if not raw_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 

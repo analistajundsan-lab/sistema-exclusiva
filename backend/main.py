@@ -35,6 +35,7 @@ if settings.EXPOSE_METRICS:
     metrics_app = make_asgi_app()
     app.mount("/metrics", metrics_app)
 
+
 @app.middleware("http")
 async def add_metrics(request: Request, call_next):
     return await metrics_middleware(request, call_next)
