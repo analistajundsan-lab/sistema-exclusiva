@@ -80,6 +80,12 @@ async def me(current_user: User = Depends(get_current_user)):
 
 @router.post("/register", response_model=UserResponse)
 async def register(request: UserCreate, req: Request, db: Session = Depends(get_db)):
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cadastro publico desabilitado em producao",
+        )
+
     client_ip = get_client_ip(req)
 
     if not await rate_limit(

@@ -9,7 +9,12 @@ from openpyxl import Workbook
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from auth import get_current_user, require_role
+from auth import (
+    apply_user_unit_scope,
+    ensure_unit_access,
+    get_current_user,
+    require_role,
+)
 from models import (
     AuditLog,
     ScheduleImport,
@@ -167,6 +172,12 @@ def apply_filters(
     return query
 
 
+def safe_xlsx_text(value):
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
+
+
 @router.post(
     "/import",
     response_model=ScheduleImportResponse,
@@ -286,6 +297,7 @@ async def count_schedule_lines(
         status,
     )
     query = apply_schedule_date_scope(db, query, schedule_date)
+    query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
     if start_time_gte:
         query = query.filter(ScheduleLine.start_time >= start_time_gte)
     if start_time_lt:
@@ -319,6 +331,7 @@ async def list_schedule_lines(
         status,
     )
     query = apply_schedule_date_scope(db, query, schedule_date)
+    query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
     if start_in_minutes is not None:
         from datetime import timedelta, timezone
         from sqlalchemy import and_, or_
@@ -369,6 +382,7 @@ async def update_schedule_line(
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
 
     changes = []
     update_data = body.model_dump(exclude_unset=True)
@@ -405,6 +419,7 @@ async def confirm_schedule_line(
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
     if line.status == ScheduleLineStatus.CANCELADA:
         raise HTTPException(
             status_code=422, detail="Linha cancelada nao pode ser confirmada"
@@ -437,6 +452,7 @@ async def undo_confirm_schedule_line(
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
     if line.status != ScheduleLineStatus.CONFIRMADA:
         raise HTTPException(
             status_code=422, detail="Apenas linha confirmada pode ser reaberta"
@@ -470,6 +486,7 @@ async def cancel_schedule_line(
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
 
     reason = body.reason if body else None
     line.status = ScheduleLineStatus.CANCELADA
@@ -499,6 +516,7 @@ async def schedule_summary(
 ):
     query = db.query(ScheduleLine)
     query = apply_schedule_date_scope(db, query, schedule_date)
+    query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
 
     rows = (
         query.with_entities(
@@ -550,6 +568,7 @@ async def schedule_whatsapp_text(
     query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date).filter(
         ScheduleLine.unit == unit,
     )
+    ensure_unit_access(current_user, unit)
     if only_changes:
         query = query.filter(
             ScheduleLine.status.in_(
@@ -593,6 +612,7 @@ async def delete_schedule_line(
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -617,7 +637,9 @@ async def download_schedule(
 ):
     """Gera planilha XLSX no formato linear (aba ATUALIZAR) com os dados atuais."""
     query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date)
+    query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
     if unit:
+        ensure_unit_access(current_user, unit)
         query = query.filter(ScheduleLine.unit == unit)
     lines = query.order_by(
         ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
@@ -643,15 +665,15 @@ async def download_schedule(
     for line in lines:
         ws.append(
             [
-                line.prefix_code,
-                line.driver_name,
-                line.line_code,
-                line.direction,
-                line.client_name,
-                line.route_name,
+                safe_xlsx_text(line.prefix_code),
+                safe_xlsx_text(line.driver_name),
+                safe_xlsx_text(line.line_code),
+                safe_xlsx_text(line.direction),
+                safe_xlsx_text(line.client_name),
+                safe_xlsx_text(line.route_name),
                 line.start_time,
                 line.end_time,
-                line.unit,
+                safe_xlsx_text(line.unit),
             ]
         )
 

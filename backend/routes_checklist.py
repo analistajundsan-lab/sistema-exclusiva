@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
-from models import AuditLog, User, UserRole, VehicleChecklist, get_db
+from auth import apply_user_unit_scope, ensure_unit_access, get_current_user
+from models import AuditLog, User, VehicleChecklist, get_db
 from schemas import ChecklistCreate, ChecklistResponse
 
 router = APIRouter(prefix="/checklist", tags=["checklist"])
@@ -35,6 +35,7 @@ async def create_checklist(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    ensure_unit_access(current_user, body.garagem)
     data = body.model_dump()
     for field in JSON_FIELDS:
         val = data.get(field)
@@ -76,13 +77,12 @@ async def list_checklists(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(VehicleChecklist).order_by(VehicleChecklist.created_at.desc())
-
-    if current_user.role == UserRole.ANALISTA:
-        query = query.filter(VehicleChecklist.garagem == current_user.unit)
+    query = apply_user_unit_scope(query, VehicleChecklist.garagem, current_user)
 
     if prefixo:
         query = query.filter(VehicleChecklist.prefixo.ilike(f"%{prefixo}%"))
     if garagem:
+        ensure_unit_access(current_user, garagem)
         query = query.filter(VehicleChecklist.garagem == garagem)
     if tipo:
         query = query.filter(VehicleChecklist.tipo == tipo)
@@ -102,7 +102,6 @@ async def get_checklist(
 ):
     c = db.query(VehicleChecklist).filter(VehicleChecklist.id == checklist_id).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Checklist não encontrado")
-    if current_user.role == UserRole.ANALISTA and c.garagem != current_user.unit:
-        raise HTTPException(status_code=403, detail="Sem permissão")
+        raise HTTPException(status_code=404, detail="Checklist nao encontrado")
+    ensure_unit_access(current_user, c.garagem)
     return _to_response(c)

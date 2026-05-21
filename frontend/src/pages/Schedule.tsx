@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pencil, Trash2, Download, X, Check } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { ScheduleLine, ScheduleFilters, useSchedule } from '../hooks/useSchedule'
@@ -72,7 +72,8 @@ export function Schedule() {
   })
   const [file, setFile] = useState<File | null>(null)
   const [replace, setReplace] = useState(true)
-  const [whatsappText] = useState('')
+  const [whatsappText, setWhatsappText] = useState('')
+  const [whatsappLoading, setWhatsappLoading] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
@@ -101,6 +102,7 @@ export function Schedule() {
     applyFilters,
     previewImport,
     importSchedule,
+    fetchWhatsappText,
     refetch,
   } = useSchedule(search)
 
@@ -108,18 +110,25 @@ export function Schedule() {
     localStorage.setItem(SCHEDULE_FILTERS_KEY, JSON.stringify(search))
   }, [search])
 
-  const fallbackWhatsappText = useMemo(() => {
-    const date = search.schedule_date || '____'
-    const unit = search.unit || 'Unidade selecionada'
-    const selected = lines.slice(0, 12)
-    const body = selected
-      .map(
-        line =>
-          `- ${line.start_time} as ${line.end_time} | Linha ${line.line_code} | ${line.direction} | Prefixo ${line.prefix_code} | Motorista: ${line.driver_name}`,
-      )
-      .join('\n')
-    return `ALTERACOES REALIZADAS NA ESCALA\nEntram em vigor a partir do dia: ${date}\n\nUnidade: ${unit}\n\n${body || '- Nenhuma linha filtrada no momento'}`
-  }, [lines, search.schedule_date, search.unit])
+  useEffect(() => {
+    if (!search.schedule_date || !activeTab) {
+      setWhatsappText('')
+      return
+    }
+    let cancelled = false
+    setWhatsappLoading(true)
+    fetchWhatsappText(search.schedule_date, activeTab)
+      .then(res => {
+        if (!cancelled) setWhatsappText(res.text)
+      })
+      .catch(() => {
+        if (!cancelled) setWhatsappText('Nao foi possivel gerar o texto oficial no momento.')
+      })
+      .finally(() => {
+        if (!cancelled) setWhatsappLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [activeTab, fetchWhatsappText, search.schedule_date])
 
   // Switch tab: atualiza aba e unit nos filtros, reseta busca texto
   const handleTabChange = (tab: UnitTab) => {
@@ -198,14 +207,29 @@ export function Schedule() {
     }
   }
 
-  const handleDownload = () => {
-    const base = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8000'
+  const handleDownload = async () => {
     const params = new URLSearchParams()
     if (search.schedule_date) params.set('schedule_date', search.schedule_date)
     params.set('unit', activeTab)
-    const token = localStorage.getItem('token')
-    if (token) params.set('token', token)
-    window.open(`${base}/schedule/download?${params.toString()}`, '_blank')
+    try {
+      const res = await api.get(`/schedule/download?${params.toString()}`, {
+        responseType: 'blob',
+      })
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const date = search.schedule_date?.split('-').reverse().join('-') || 'escala'
+      link.href = url
+      link.download = `ESCALA GERAL ${date} ATUALIZADA.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Erro ao baixar a escala. Verifique sua permissao e tente novamente.')
+    }
   }
 
   return (
@@ -694,19 +718,21 @@ export function Schedule() {
                 Texto para WhatsApp
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Texto gerado automaticamente com as linhas da aba selecionada.
+                {whatsappLoading ? 'Gerando texto oficial...' : 'Texto oficial gerado pelo backend para a aba selecionada.'}
               </p>
               <textarea
                 readOnly
-                value={whatsappText || fallbackWhatsappText}
+                value={whatsappText}
                 className="w-full h-56 border dark:border-gray-600 rounded p-2 text-xs text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700"
               />
               <button
                 type="button"
                 onClick={() => {
-                  const text = whatsappText || fallbackWhatsappText
+                  const text = whatsappText
+                  if (!text) return
                   window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank')
                 }}
+                disabled={!whatsappText || whatsappLoading}
                 className="mt-2 w-full bg-green-700 text-white px-3 py-2 rounded text-sm hover:bg-green-800"
               >
                 Enviar para WhatsApp

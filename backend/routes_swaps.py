@@ -4,7 +4,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from auth import get_current_user, require_role
+from auth import (
+    apply_user_unit_scope,
+    ensure_unit_access,
+    get_current_user,
+    require_role,
+)
 from models import (
     AuditLog,
     ScheduleLine,
@@ -47,6 +52,7 @@ async def count_swaps(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Swap)
+    query = apply_user_unit_scope(query, Swap.unit, current_user)
     if vehicle_out:
         query = query.filter(Swap.vehicle_out.ilike(f"%{vehicle_out}%"))
     if vehicle_in:
@@ -76,6 +82,7 @@ async def create_swap(
             raise HTTPException(
                 status_code=404, detail="Linha de escala nao encontrada"
             )
+        ensure_unit_access(current_user, schedule_line.unit)
         if schedule_line.status != ScheduleLineStatus.CONFIRMADA:
             raise HTTPException(
                 status_code=422,
@@ -119,6 +126,7 @@ async def list_swaps(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Swap).order_by(Swap.created_at.desc())
+    query = apply_user_unit_scope(query, Swap.unit, current_user)
     if vehicle_out:
         query = query.filter(Swap.vehicle_out.ilike(f"%{vehicle_out}%"))
     if vehicle_in:
@@ -138,7 +146,9 @@ async def swaps_whatsapp_text(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Swap).order_by(Swap.created_at.asc())
+    query = apply_user_unit_scope(query, Swap.unit, current_user)
     if unit:
+        ensure_unit_access(current_user, unit)
         query = query.filter(Swap.unit == unit)
     if schedule_date:
         query = query.filter(Swap.schedule_date == schedule_date)
@@ -187,6 +197,7 @@ async def get_swap(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Troca não encontrada"
         )
+    ensure_unit_access(current_user, swap.unit)
     return swap
 
 
@@ -202,6 +213,7 @@ async def update_swap(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Troca não encontrada"
         )
+    ensure_unit_access(current_user, swap.unit)
     if current_user.role != UserRole.ADMIN and swap.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão"
@@ -213,6 +225,7 @@ async def update_swap(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(swap, field, value)
+    ensure_unit_access(current_user, swap.unit)
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -237,6 +250,7 @@ async def delete_swap(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Troca não encontrada"
         )
+    ensure_unit_access(current_user, swap.unit)
     db.add(
         AuditLog(
             user_id=current_user.id,

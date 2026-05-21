@@ -26,8 +26,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "https://sistema-exclusiva-pied.vercel.app",
     ]
-    # Regex para cobrir preview deploys do Vercel automaticamente
-    ALLOWED_ORIGIN_REGEX: str = r"https://sistema-exclusiva.*\.vercel\.app"
+    ALLOWED_ORIGIN_REGEX: str | None = None
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

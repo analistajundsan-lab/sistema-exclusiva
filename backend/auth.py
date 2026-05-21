@@ -9,6 +9,13 @@ from models import User, UserRole, get_db
 
 security = HTTPBearer(auto_error=False)
 
+UNRESTRICTED_UNIT_ROLES = {
+    UserRole.ADMIN,
+    UserRole.GERENTE,
+    UserRole.SUPERVISAO,
+    UserRole.SUPERVISOR,
+}
+
 
 def hash_password(password: str) -> str:
     return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
@@ -44,14 +51,52 @@ def create_tokens(user: User) -> tuple[str, str]:
     return access_token, refresh_token
 
 
+def user_allowed_units(user: User) -> list[str] | None:
+    if user.role in UNRESTRICTED_UNIT_ROLES:
+        return None
+
+    units: list[str] = []
+    if user.units:
+        units.extend(item.strip() for item in user.units.split(",") if item.strip())
+    if user.unit and user.unit.strip() not in units:
+        units.append(user.unit.strip())
+    return units
+
+
+def ensure_unit_access(user: User, unit: str | None) -> None:
+    allowed_units = user_allowed_units(user)
+    if allowed_units is None:
+        return
+    if not allowed_units:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario sem unidade vinculada",
+        )
+    if unit not in allowed_units:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sem permissao para esta unidade",
+        )
+
+
+def apply_user_unit_scope(query, unit_column, user: User):
+    allowed_units = user_allowed_units(user)
+    if allowed_units is None:
+        return query
+    if not allowed_units:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario sem unidade vinculada",
+        )
+    return query.filter(unit_column.in_(allowed_units))
+
+
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    raw_token = (
-        credentials.credentials if credentials else request.query_params.get("token")
-    )
+    raw_token = credentials.credentials if credentials else None
     if not raw_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 

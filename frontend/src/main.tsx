@@ -12,12 +12,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   </React.StrictMode>
 );
 
-function forceLogoutAndReload() {
-  // Limpa toda a sessão do usuário para que ele precise logar novamente
-  // após uma nova versão do app ser deployada
-  const keys = ['token', 'refreshToken', 'role', 'userId', 'userName', 'displayName', 'photoUrl', 'userUnit', 'userUnits'];
-  keys.forEach(k => localStorage.removeItem(k));
-  window.location.href = '/login';
+function notifyAppUpdate() {
+  const shouldReload = window.confirm("Nova versao disponivel. Atualizar agora?");
+  if (shouldReload) window.location.reload();
 }
 
 if ("serviceWorker" in navigator) {
@@ -25,7 +22,7 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").then(registration => {
       navigator.serviceWorker.addEventListener("message", event => {
         if (event.data?.type === "SW_UPDATED") {
-          forceLogoutAndReload();
+          notifyAppUpdate();
         }
       });
 
@@ -33,8 +30,8 @@ if ("serviceWorker" in navigator) {
         const newWorker = registration.installing;
         if (!newWorker) return;
         newWorker.addEventListener("statechange", () => {
-          if (newWorker.state === "activated") {
-            forceLogoutAndReload();
+          if (newWorker.state === "activated" && navigator.serviceWorker.controller) {
+            notifyAppUpdate();
           }
         });
       });

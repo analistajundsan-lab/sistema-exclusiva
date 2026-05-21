@@ -168,12 +168,12 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     return res.data
   }
 
-  const fetchWhatsappText = async (scheduleDate: string, unit: string, onlyChanges = false) => {
+  const fetchWhatsappText = useCallback(async (scheduleDate: string, unit: string, onlyChanges = false) => {
     const res = await api.get<{ text: string; total: number }>('/schedule/whatsapp', {
       params: { schedule_date: scheduleDate, unit, only_changes: onlyChanges },
     })
     return res.data
-  }
+  }, [])
 
   useEffect(() => {
     fetchSchedule(filters, page * PAGE_SIZE)

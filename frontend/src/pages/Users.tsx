@@ -143,6 +143,14 @@ export function Users() {
       setFormError('Preencha todos os campos obrigatórios')
       return
     }
+    if (isMultiUnit && form.units.length === 0) {
+      setFormError('Selecione ao menos uma unidade para este perfil')
+      return
+    }
+    if (!isMultiUnit && form.role !== 'admin' && !form.unit) {
+      setFormError('Selecione a unidade do usuario')
+      return
+    }
     setSaving(true)
     setFormError(null)
     try {
@@ -167,6 +175,14 @@ export function Users() {
   const handleEdit = async () => {
     if (!form.name || !form.email) {
       setFormError('Preencha nome e e-mail')
+      return
+    }
+    if (isMultiUnit && form.units.length === 0) {
+      setFormError('Selecione ao menos uma unidade para este perfil')
+      return
+    }
+    if (!isMultiUnit && form.role !== 'admin' && !form.unit) {
+      setFormError('Selecione a unidade do usuario')
       return
     }
     setSaving(true)

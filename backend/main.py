@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 import time
+from sqlalchemy import text
 from config import settings
-from models import Base, engine
+from models import Base, SessionLocal, engine
 from routes_auth import router as auth_router
 from routes_incidents import router as incidents_router
 from routes_swaps import router as swaps_router
@@ -111,6 +112,14 @@ async def health():
 
 @app.get("/ready")
 async def ready():
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        logger.error("Readiness falhou: %s", exc)
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
+    finally:
+        db.close()
     return {"status": "ready"}
 
 
