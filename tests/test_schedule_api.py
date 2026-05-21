@@ -14,7 +14,6 @@ from auth import hash_password
 from main import app
 from models import Base, ScheduleImport, ScheduleLine, User, UserRole, get_db
 
-
 TEST_DB = "sqlite:///./test_schedule.db"
 engine = create_engine(TEST_DB, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -106,7 +105,13 @@ def test_admin_imports_schedule(admin_token):
     response = client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
 
     assert response.status_code == 201
@@ -127,7 +132,13 @@ def test_admin_previews_schedule_without_saving(admin_token):
     response = client.post(
         "/schedule/import/preview",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
 
     assert response.status_code == 200
@@ -147,7 +158,13 @@ def test_operator_cannot_preview_schedule(operator_token):
     response = client.post(
         "/schedule/import/preview",
         headers={"Authorization": f"Bearer {operator_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
 
     assert response.status_code == 403
@@ -157,7 +174,13 @@ def test_operator_cannot_import_schedule(operator_token):
     response = client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {operator_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
 
     assert response.status_code == 403
@@ -167,7 +190,13 @@ def test_import_rejects_macro_enabled_file(admin_token):
     response = client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsm", build_schedule_file(), "application/vnd.ms-excel.sheet.macroEnabled.12")},
+        files={
+            "file": (
+                "escala.xlsm",
+                build_schedule_file(),
+                "application/vnd.ms-excel.sheet.macroEnabled.12",
+            )
+        },
     )
 
     assert response.status_code == 422
@@ -196,7 +225,13 @@ def test_replace_only_affects_selected_date(admin_token):
     response = client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file("7467"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file("7467"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     assert response.status_code == 201
 
@@ -367,7 +402,13 @@ def test_confirm_schedule_line_moves_to_confirmed_history(admin_token, operator_
     import_response = client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     assert import_response.status_code == 201
 
@@ -404,7 +445,13 @@ def test_confirm_schedule_line_is_idempotent(admin_token, operator_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     line_id = client.get(
         "/schedule/lines?schedule_date=2026-04-13",
@@ -430,7 +477,13 @@ def test_supervisor_can_cancel_line_and_operator_cannot(admin_token, operator_to
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     line_id = client.get(
         "/schedule/lines?schedule_date=2026-04-13",
@@ -458,13 +511,22 @@ def test_admin_can_undo_confirmation(admin_token, operator_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     line_id = client.get(
         "/schedule/lines?schedule_date=2026-04-13",
         headers={"Authorization": f"Bearer {operator_token}"},
     ).json()[0]["id"]
-    client.post(f"/schedule/lines/{line_id}/confirm", headers={"Authorization": f"Bearer {operator_token}"})
+    client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
 
     reopened = client.post(
         f"/schedule/lines/{line_id}/undo-confirm",
@@ -482,7 +544,13 @@ def test_schedule_whatsapp_text_by_unit(admin_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
 
     response = client.get(
@@ -499,7 +567,7 @@ def test_schedule_whatsapp_text_by_unit(admin_token):
     assert "Prefixo 1580" in data["text"]
 
 
-def test_download_xlsx_with_query_token_after_schedule_change(admin_token):
+def test_download_xlsx_with_auth_header_after_schedule_change(admin_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -525,7 +593,8 @@ def test_download_xlsx_with_query_token_after_schedule_change(admin_token):
     assert update.json()["status"] == "alterada"
 
     response = client.get(
-        f"/schedule/download?schedule_date=2026-04-13&unit=Caieiras&token={admin_token}"
+        "/schedule/download?schedule_date=2026-04-13&unit=Caieiras",
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
 
     assert response.status_code == 200
@@ -544,7 +613,13 @@ def test_audit_logs_are_listed(admin_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
 
     response = client.get(
@@ -563,13 +638,22 @@ def test_swap_can_be_created_from_confirmed_schedule_line(admin_token, operator_
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     line_id = client.get(
         "/schedule/lines?schedule_date=2026-04-13",
         headers={"Authorization": f"Bearer {operator_token}"},
     ).json()[0]["id"]
-    client.post(f"/schedule/lines/{line_id}/confirm", headers={"Authorization": f"Bearer {operator_token}"})
+    client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
 
     response = client.post(
         "/swaps/",
@@ -594,7 +678,13 @@ def test_swap_requires_confirmed_schedule_line(admin_token, operator_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("escala.xlsx", build_schedule_file(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     line_id = client.get(
         "/schedule/lines?schedule_date=2026-04-13",

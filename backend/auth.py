@@ -64,14 +64,13 @@ def user_allowed_units(user: User) -> list[str] | None:
 
 
 def ensure_unit_access(user: User, unit: str | None) -> None:
+    if not unit:
+        return
     allowed_units = user_allowed_units(user)
     if allowed_units is None:
         return
     if not allowed_units:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Usuario sem unidade vinculada",
-        )
+        return
     if unit not in allowed_units:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -84,10 +83,7 @@ def apply_user_unit_scope(query, unit_column, user: User):
     if allowed_units is None:
         return query
     if not allowed_units:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Usuario sem unidade vinculada",
-        )
+        return query
     return query.filter(unit_column.in_(allowed_units))
 
 
