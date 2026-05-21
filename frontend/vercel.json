@@ -6,7 +6,7 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "env": {
-    "VITE_API_URL": "/_/backend",
-    "VITE_DEMO_MODE": "true"
+    "VITE_API_URL": "https://exclusiva-backend-bbzf.onrender.com",
+    "VITE_DEMO_MODE": "false"
   }
 }

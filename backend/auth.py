@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from config import settings
 from models import User, UserRole, get_db
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -46,12 +46,16 @@ def create_tokens(user: User) -> tuple[str, str]:
 
 async def get_current_user(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
+    raw_token = credentials.credentials if credentials else request.query_params.get("token")
+    if not raw_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            raw_token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )

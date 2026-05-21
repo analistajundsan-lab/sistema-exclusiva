@@ -56,6 +56,8 @@ def migrate_existing_sqlite() -> None:
         ensure_column("swaps", "whatsapp_text", "whatsapp_text VARCHAR(1000)")
     if "incidents" in tables:
         ensure_column("incidents", "victim_status", "victim_status VARCHAR(20)")
+    if "schedule_lines" in tables:
+        ensure_column("schedule_lines", "import_id", "import_id INTEGER")
 
 
 def upsert_admin(

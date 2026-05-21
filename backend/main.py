@@ -35,16 +35,6 @@ if settings.EXPOSE_METRICS:
     metrics_app = make_asgi_app()
     app.mount("/metrics", metrics_app)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_origin_regex=settings.ALLOWED_ORIGIN_REGEX,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 @app.middleware("http")
 async def add_metrics(request: Request, call_next):
     return await metrics_middleware(request, call_next)
@@ -81,6 +71,16 @@ async def add_request_id_and_timing(request: Request, call_next):
         duration_ms,
     )
     return response
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=settings.ALLOWED_ORIGIN_REGEX,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")

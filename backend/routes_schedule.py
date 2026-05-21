@@ -10,7 +10,15 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from auth import get_current_user, require_role
-from models import AuditLog, ScheduleLine, ScheduleLineStatus, User, UserRole, get_db
+from models import (
+    AuditLog,
+    ScheduleImport,
+    ScheduleLine,
+    ScheduleLineStatus,
+    User,
+    UserRole,
+    get_db,
+)
 from schedule_parser import parse_schedule_workbook
 from schemas import (
     CountResponse,
@@ -54,7 +62,40 @@ async def parse_upload_file(file: UploadFile):
             status_code=422, detail="Nenhuma linha de escala encontrada na planilha"
         )
 
-    return parsed_lines
+    return content, parsed_lines
+
+
+def normalized_filename(file: UploadFile) -> str:
+    return (file.filename or "escala.xlsx").strip()
+
+
+def latest_import_ids_for_date(db: Session, schedule_date: date) -> list[int]:
+    latest_effective_date = (
+        db.query(func.max(ScheduleImport.effective_date))
+        .filter(ScheduleImport.effective_date <= schedule_date)
+        .scalar()
+    )
+    if latest_effective_date is None:
+        return []
+
+    rows = (
+        db.query(ScheduleImport.id)
+        .filter(ScheduleImport.effective_date == latest_effective_date)
+        .all()
+    )
+    return [row[0] for row in rows]
+
+
+def apply_schedule_date_scope(db: Session, query, schedule_date: Optional[date] = None):
+    if not schedule_date:
+        return query
+
+    active_import_ids = latest_import_ids_for_date(db, schedule_date)
+    if active_import_ids:
+        return query.filter(ScheduleLine.import_id.in_(active_import_ids))
+
+    # Compatibilidade com escalas antigas gravadas antes do versionamento.
+    return query.filter(ScheduleLine.schedule_date == schedule_date)
 
 
 def build_import_warnings(parsed_lines) -> list[str]:
@@ -81,7 +122,7 @@ async def preview_schedule_import(
     file: UploadFile = File(...),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    parsed_lines = await parse_upload_file(file)
+    _, parsed_lines = await parse_upload_file(file)
     unit_counts = Counter(line.unit for line in parsed_lines)
     client_counts = Counter(line.client_name or "Sem cliente" for line in parsed_lines)
 
@@ -138,17 +179,52 @@ async def import_schedule(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    parsed_lines = await parse_upload_file(file)
+    content, parsed_lines = await parse_upload_file(file)
+    filename = normalized_filename(file)
 
     try:
         if replace:
-            db.query(ScheduleLine).filter(
-                ScheduleLine.schedule_date == schedule_date
-            ).delete()
+            schedule_import = (
+                db.query(ScheduleImport)
+                .filter(
+                    ScheduleImport.effective_date == schedule_date,
+                    ScheduleImport.filename == filename,
+                )
+                .first()
+            )
+            if schedule_import:
+                db.query(ScheduleLine).filter(
+                    ScheduleLine.import_id == schedule_import.id
+                ).delete()
+            else:
+                schedule_import = ScheduleImport(
+                    effective_date=schedule_date,
+                    filename=filename,
+                    file_size=len(content),
+                    rows_imported=0,
+                    created_by=current_user.id,
+                )
+                db.add(schedule_import)
+                db.flush()
+        else:
+            schedule_import = ScheduleImport(
+                effective_date=schedule_date,
+                filename=filename,
+                file_size=len(content),
+                rows_imported=0,
+                created_by=current_user.id,
+            )
+            db.add(schedule_import)
+            db.flush()
+
+        schedule_import.file_size = len(content)
+        schedule_import.rows_imported = len(parsed_lines)
+        schedule_import.created_by = current_user.id
 
         for parsed in parsed_lines:
             db.add(
                 ScheduleLine(
+                    import_id=schedule_import.id,
                     schedule_date=schedule_date,
                     unit=parsed.unit,
                     prefix_code=parsed.prefix_code,
@@ -171,7 +247,8 @@ async def import_schedule(
                 user_id=current_user.id,
                 action="IMPORT",
                 resource="schedule",
-                details=f"{len(parsed_lines)} linhas importadas para {schedule_date}; arquivo={file.filename}",
+                resource_id=schedule_import.id,
+                details=f"{len(parsed_lines)} linhas importadas para {schedule_date}; arquivo={filename}",
             )
         )
         db.commit()
@@ -200,7 +277,7 @@ async def count_schedule_lines(
 ):
     query = apply_filters(
         db.query(ScheduleLine),
-        schedule_date,
+        None,
         unit,
         client_name,
         line_code,
@@ -208,6 +285,7 @@ async def count_schedule_lines(
         prefix_code,
         status,
     )
+    query = apply_schedule_date_scope(db, query, schedule_date)
     if start_time_gte:
         query = query.filter(ScheduleLine.start_time >= start_time_gte)
     if start_time_lt:
@@ -232,7 +310,7 @@ async def list_schedule_lines(
 ):
     query = apply_filters(
         db.query(ScheduleLine),
-        schedule_date,
+        None,
         unit,
         client_name,
         line_code,
@@ -240,12 +318,13 @@ async def list_schedule_lines(
         prefix_code,
         status,
     )
+    query = apply_schedule_date_scope(db, query, schedule_date)
     if start_in_minutes is not None:
         from datetime import timedelta, timezone
         from sqlalchemy import and_, or_
 
-        BRT = timezone(timedelta(hours=-3))
-        now_brt = datetime.now(BRT)
+        brt = timezone(timedelta(hours=-3))
+        now_brt = datetime.now(brt)
         cutoff_brt = now_brt + timedelta(minutes=start_in_minutes)
         now_str = now_brt.strftime("%H:%M")
         cutoff_str = cutoff_brt.strftime("%H:%M")
@@ -419,8 +498,7 @@ async def schedule_summary(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(ScheduleLine)
-    if schedule_date:
-        query = query.filter(ScheduleLine.schedule_date == schedule_date)
+    query = apply_schedule_date_scope(db, query, schedule_date)
 
     rows = (
         query.with_entities(
@@ -469,8 +547,7 @@ async def schedule_whatsapp_text(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(ScheduleLine).filter(
-        ScheduleLine.schedule_date == schedule_date,
+    query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date).filter(
         ScheduleLine.unit == unit,
     )
     if only_changes:
@@ -539,7 +616,7 @@ async def download_schedule(
     ),
 ):
     """Gera planilha XLSX no formato linear (aba ATUALIZAR) com os dados atuais."""
-    query = db.query(ScheduleLine).filter(ScheduleLine.schedule_date == schedule_date)
+    query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date)
     if unit:
         query = query.filter(ScheduleLine.unit == unit)
     lines = query.order_by(

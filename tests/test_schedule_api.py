@@ -4,6 +4,7 @@ import hashlib
 import re
 
 import pytest
+import openpyxl
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from sqlalchemy import create_engine
@@ -11,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from auth import hash_password
 from main import app
-from models import Base, ScheduleLine, User, UserRole, get_db
+from models import Base, ScheduleImport, ScheduleLine, User, UserRole, get_db
 
 
 TEST_DB = "sqlite:///./test_schedule.db"
@@ -74,13 +75,25 @@ def operator_token():
     return create_token("123.456.789-00", UserRole.OPERATOR)
 
 
-def build_schedule_file(line_code: str = "7368") -> bytes:
+def db_count(model) -> int:
+    db = TestingSessionLocal()
+    try:
+        return db.query(model).count()
+    finally:
+        db.close()
+
+
+def build_schedule_file(
+    line_code: str = "7368",
+    start_time: str = "03:50",
+    end_time: str = "04:45",
+) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "caieiras"
     ws.cell(row=4, column=1, value="1580")
     ws.cell(row=4, column=3, value="E N DA SILVA")
-    ws.cell(row=4, column=7, value="03:50 - 04:45")
+    ws.cell(row=4, column=7, value=f"{start_time} - {end_time}")
     ws.cell(row=5, column=7, value="E/ M LIVRE - SP-02")
     ws.cell(row=6, column=7, value=f"L - {line_code}")
     ws.cell(row=7, column=7, value="JD. PINHEIROS / VERA TERESA")
@@ -200,6 +213,154 @@ def test_replace_only_affects_selected_date(admin_token):
     assert old_day[0]["line_code"] == "1111"
     assert len(new_day) == 1
     assert new_day[0]["line_code"] == "7467"
+
+
+def test_same_file_and_effective_date_replaces_previous_import(admin_token):
+    first = client.post(
+        "/schedule/import?schedule_date=2026-05-01&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala_01-05.xlsx",
+                build_schedule_file("2828", "12:10", "13:10"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    second = client.post(
+        "/schedule/import?schedule_date=2026-05-01&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala_01-05.xlsx",
+                build_schedule_file("2828", "12:00", "13:00"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    lines = client.get(
+        "/schedule/lines?schedule_date=2026-05-01&line_code=2828",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()
+
+    db = TestingSessionLocal()
+    try:
+        assert db.query(ScheduleImport).count() == 1
+        assert db.query(ScheduleLine).count() == 1
+    finally:
+        db.close()
+
+    assert len(lines) == 1
+    assert lines[0]["start_time"] == "12:00"
+
+
+def test_different_effective_dates_keep_history_and_query_active_version(admin_token):
+    client.post(
+        "/schedule/import?schedule_date=2026-05-01&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala_vigencia_01-05.xlsx",
+                build_schedule_file("2828", "12:10", "13:10"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    client.post(
+        "/schedule/import?schedule_date=2026-05-20&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala_vigencia_20-05.xlsx",
+                build_schedule_file("2828", "12:00", "13:00"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    before_change = client.get(
+        "/schedule/lines?schedule_date=2026-05-19&line_code=2828",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()
+    after_change = client.get(
+        "/schedule/lines?schedule_date=2026-05-21&line_code=2828",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()
+
+    db = TestingSessionLocal()
+    try:
+        assert db.query(ScheduleImport).count() == 2
+        assert db.query(ScheduleLine).count() == 2
+    finally:
+        db.close()
+
+    assert len(before_change) == 1
+    assert before_change[0]["schedule_date"] == "2026-05-01"
+    assert before_change[0]["start_time"] == "12:10"
+    assert len(after_change) == 1
+    assert after_change[0]["schedule_date"] == "2026-05-20"
+    assert after_change[0]["start_time"] == "12:00"
+
+
+def test_different_files_same_effective_date_are_visible_together(admin_token):
+    client.post(
+        "/schedule/import?schedule_date=2026-05-20&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala_caieiras_20-05.xlsx",
+                build_schedule_file("2828", "12:00", "13:00"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    client.post(
+        "/schedule/import?schedule_date=2026-05-20&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala_extra_20-05.xlsx",
+                build_schedule_file("3030", "14:00", "15:00"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    lines = client.get(
+        "/schedule/lines?schedule_date=2026-05-21",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()
+
+    assert db_count(ScheduleImport) == 2
+    assert db_count(ScheduleLine) == 2
+    assert {line["line_code"] for line in lines} == {"2828", "3030"}
+
+
+def test_operator_receives_schedule_imported_by_admin(admin_token, operator_token):
+    client.post(
+        "/schedule/import?schedule_date=2026-05-20&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala_geral_20-05.xlsx",
+                build_schedule_file("2828", "12:00", "13:00"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    lines = client.get(
+        "/schedule/lines?schedule_date=2026-05-21&unit=Caieiras",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+
+    assert lines.status_code == 200
+    assert len(lines.json()) == 1
+    assert lines.json()[0]["line_code"] == "2828"
 
 
 def test_confirm_schedule_line_moves_to_confirmed_history(admin_token, operator_token):
@@ -336,6 +497,47 @@ def test_schedule_whatsapp_text_by_unit(admin_token):
     assert "ALTERACOES REALIZADAS NA ESCALA" in data["text"]
     assert "Linha 7368" in data["text"]
     assert "Prefixo 1580" in data["text"]
+
+
+def test_download_xlsx_with_query_token_after_schedule_change(admin_token):
+    client.post(
+        "/schedule/import?schedule_date=2026-04-13&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    line = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()[0]
+
+    update = client.patch(
+        f"/schedule/lines/{line['id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"start_time": "04:10", "driver_name": "MOTORISTA ALTERADO"},
+    )
+    assert update.status_code == 200
+    assert update.json()["status"] == "alterada"
+
+    response = client.get(
+        f"/schedule/download?schedule_date=2026-04-13&unit=Caieiras&token={admin_token}"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    wb = openpyxl.load_workbook(BytesIO(response.content))
+    ws = wb["ATUALIZAR"]
+    rows = list(ws.iter_rows(values_only=True))
+    assert rows[1][1] == "MOTORISTA ALTERADO"
+    assert rows[1][6] == "04:10"
 
 
 def test_audit_logs_are_listed(admin_token):

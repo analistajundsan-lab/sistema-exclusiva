@@ -217,13 +217,12 @@ Para uso real fora da rede local, precisa publicar o backend em ambiente com per
 Opcoes:
 
 - Render
-- Railway
 - Fly.io
 - VPS propria
 - Vercel com arquitetura ajustada para serverless
 
 Recomendacao MVP:
-- Backend no Render ou Railway.
+- Backend no Render.
 - Frontend no Vercel.
 
 ### 2. Banco de dados real
@@ -241,7 +240,6 @@ Opcoes gratuitas ou baratas:
 
 - Neon
 - Supabase
-- Railway Postgres
 - Render Postgres
 
 ### 3. Upload de fotos e videos

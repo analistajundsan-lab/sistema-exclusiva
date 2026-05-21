@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pencil, Trash2, Download, X, Check } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { ScheduleLine, ScheduleFilters, useSchedule } from '../hooks/useSchedule'
@@ -8,6 +8,7 @@ import api from '../api/client'
 
 const UNIT_TABS = ['Caieiras', 'Santana de Parnaiba', 'Jundiai'] as const
 type UnitTab = (typeof UNIT_TABS)[number]
+const SCHEDULE_FILTERS_KEY = 'scheduleFilters'
 
 interface EditForm {
   prefix_code: string
@@ -33,23 +34,40 @@ function lineToForm(line: ScheduleLine): EditForm {
   }
 }
 
+function readSavedScheduleFilters(): ScheduleFilters {
+  try {
+    const raw = localStorage.getItem(SCHEDULE_FILTERS_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function isUnitTab(value?: string | null): value is UnitTab {
+  return !!value && (UNIT_TABS as readonly string[]).includes(value)
+}
+
 export function Schedule() {
   const [activeTab, setActiveTab] = useState<UnitTab>(() => {
     const s = useAuthStore.getState()
     const r = s.role
     const u = s.userUnit
+    const saved = readSavedScheduleFilters()
     const readOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
-    if (readOnly && u && (UNIT_TABS as readonly string[]).includes(u)) return u as UnitTab
+    if (readOnly && isUnitTab(u)) return u
+    if (isUnitTab(saved.unit)) return saved.unit
     return 'Caieiras'
   })
   const [search, setSearch] = useState<ScheduleFilters>(() => {
     const s = useAuthStore.getState()
     const r = s.role
     const u = s.userUnit
+    const saved = readSavedScheduleFilters()
     const readOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
     return {
-      schedule_date: DEFAULT_OPERATION_DATE,
-      unit: (readOnly && u) ? u : 'Caieiras',
+      ...saved,
+      schedule_date: saved.schedule_date || DEFAULT_OPERATION_DATE,
+      unit: (readOnly && u) ? u : (isUnitTab(saved.unit) ? saved.unit : 'Caieiras'),
     }
   })
   const [file, setFile] = useState<File | null>(null)
@@ -85,6 +103,10 @@ export function Schedule() {
     importSchedule,
     refetch,
   } = useSchedule(search)
+
+  useEffect(() => {
+    localStorage.setItem(SCHEDULE_FILTERS_KEY, JSON.stringify(search))
+  }, [search])
 
   const fallbackWhatsappText = useMemo(() => {
     const date = search.schedule_date || '____'
@@ -127,7 +149,7 @@ export function Schedule() {
     }
     if (replace) {
       const ok = confirm(
-        `Esta acao substituira todos os registros da escala em ${search.schedule_date}. Continuar?`,
+        `Esta acao substituira apenas um upload anterior com o mesmo arquivo e a mesma vigencia (${search.schedule_date}). Outros arquivos ou vigencias ficam no historico. Continuar?`,
       )
       if (!ok) return
     }
@@ -288,8 +310,9 @@ export function Schedule() {
                 Importar escala em blocos
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Envie a planilha .xlsx atual. O sistema converte as abas Jundiai, Caieiras e
-                Santana para linhas operacionais.
+                Informe no filtro Data a vigencia inicial da escala enviada. Reenvios com o
+                mesmo arquivo e vigencia substituem aquele lote; arquivos ou vigencias
+                diferentes ficam no historico.
               </p>
               <input
                 id="schedule-file"
@@ -308,7 +331,7 @@ export function Schedule() {
                 checked={replace}
                 onChange={e => setReplace(e.target.checked)}
               />
-              Substituir escala desta data
+              Substituir reenvio do mesmo arquivo/vigencia
             </label>
             <button
               type="submit"

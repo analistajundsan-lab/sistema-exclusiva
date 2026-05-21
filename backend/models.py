@@ -103,6 +103,7 @@ class ScheduleLine(Base):
     __tablename__ = "schedule_lines"
 
     id = Column(Integer, primary_key=True, index=True)
+    import_id = Column(Integer, index=True)
     schedule_date = Column(Date, nullable=False, index=True)
     unit = Column(String(80), nullable=False, index=True)
     prefix_code = Column(String(20), nullable=False, index=True)
@@ -126,6 +127,19 @@ class ScheduleLine(Base):
     source_row = Column(Integer)
     source_col = Column(Integer)
     created_by = Column(Integer, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ScheduleImport(Base):
+    __tablename__ = "schedule_imports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    effective_date = Column(Date, nullable=False, index=True)
+    filename = Column(String(255), nullable=False, index=True)
+    file_size = Column(Integer)
+    rows_imported = Column(Integer, nullable=False, default=0)
+    created_by = Column(Integer, nullable=False, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
