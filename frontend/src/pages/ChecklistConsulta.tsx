@@ -5,7 +5,7 @@ import { useChecklist, ChecklistData } from '../hooks/useChecklist'
 import { useAuthStore } from '../store/auth'
 import {
   ClipboardList, Plus, Search, X, ChevronDown, ChevronUp,
-  Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus,
+  Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus, Pencil,
 } from 'lucide-react'
 
 function hasPendency(c: ChecklistData): 'red' | 'amber' | 'ok' {
@@ -14,8 +14,10 @@ function hasPendency(c: ChecklistData): 'red' | 'amber' | 'ok' {
     c.camera_fadiga, c.camera_ip_motorista, c.camera_salao,
   ]
   if (camValues.some(v => v === 'VISITA_TECNICA')) return 'red'
+  if (c.crlv_status === 'VENCIDO' || c.emtu_status === 'VENCIDO') return 'red'
   if (c.licenciamento?.includes('VENCIDO')) return 'red'
   if (c.cartao_artesp === 'SIM_VENCIDO' || c.cartao_artesp === 'NAO_COLOCAR_NOVO') return 'red'
+  if (c.crlv_status === 'NAO_LOCALIZADO' || c.emtu_status === 'NAO_LOCALIZADO') return 'amber'
   if (c.licenciamento?.includes('NAO_IMPRIMIR_NOVAMENTE')) return 'amber'
   if (c.wifi_status?.some(w => w !== 'SIM_FUNCIONAL')) return 'amber'
   return 'ok'
@@ -27,6 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
   SIM_EM_DIA: 'Sim — em dia',
   NAO_IMPRIMIR_NOVAMENTE: 'Não — imprimir novamente',
   VENCIDO: 'Vencido',
+  NAO_LOCALIZADO: 'Não localizado',
   SIM_REMOVIDO_COLOCADO_NOVO: 'Sim — removido e colocado novo',
   EXTRAVIADO_COLOCADO_NOVO: 'Extraviado — colocado novo',
   NAO_MANUTENCAO_FORA_GARAGEM: 'Não — manutenção/fora da garagem',
@@ -41,25 +44,33 @@ const STATUS_LABELS: Record<string, string> = {
   NA: 'N/A',
 }
 
-const label = (v?: string) => (v ? STATUS_LABELS[v] ?? v : '—')
-const labelList = (arr?: string[]) => arr?.length ? arr.map(v => STATUS_LABELS[v] ?? v).join(' · ') : '—'
+const lbl = (v?: string | null) => (v ? STATUS_LABELS[v] ?? v : null)
+const lblList = (arr?: string[] | null) => arr?.length ? arr.map(v => STATUS_LABELS[v] ?? v).join(' · ') : null
+const boolLbl = (v?: boolean | null) => v === true ? 'Sim' : v === false ? 'Não' : null
 
-function DetailRow({ title, value }: { title: string; value: string }) {
-  if (!value || value === '—') return null
+function SectionRow({ title, value, highlight }: { title: string; value: string | null; highlight?: 'red' | 'amber' | 'green' }) {
+  if (!value) return null
+  const colorClass = highlight === 'red'
+    ? 'text-red-600 dark:text-red-400'
+    : highlight === 'amber'
+    ? 'text-amber-600 dark:text-amber-400'
+    : highlight === 'green'
+    ? 'text-green-600 dark:text-green-500'
+    : 'text-gray-800 dark:text-gray-200'
   return (
     <div className="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
       <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{title}</span>
-      <span className="text-xs font-medium text-gray-800 dark:text-gray-200 text-right">{value}</span>
+      <span className={`text-xs font-semibold text-right ${colorClass}`}>{value}</span>
     </div>
   )
 }
 
-function CameraRow({ label: lbl, value }: { label: string; value?: string }) {
+function CameraRow({ label: lbl2, value }: { label: string; value?: string | null }) {
   if (!value) return null
   const isIssue = value === 'VISITA_TECNICA'
   return (
     <div className="flex justify-between items-center py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
-      <span className="text-xs text-gray-500 dark:text-gray-400">{lbl}</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400">{lbl2}</span>
       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
         isIssue
           ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
@@ -71,10 +82,12 @@ function CameraRow({ label: lbl, value }: { label: string; value?: string }) {
   )
 }
 
-function ChecklistCard({ c, expanded, onToggle }: {
+function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
   c: ChecklistData
   expanded: boolean
   onToggle: () => void
+  isAdmin: boolean
+  onEdit: () => void
 }) {
   const status = hasPendency(c)
   const date = new Date(c.created_at).toLocaleString('pt-BR', {
@@ -89,6 +102,14 @@ function ChecklistCard({ c, expanded, onToggle }: {
 
   const StatusIcon = statusConfig.icon
 
+  const hasCameras = [c.camera_frontal, c.camera_lateral_esq, c.camera_lateral_dir, c.camera_fadiga, c.camera_ip_motorista, c.camera_salao].some(Boolean)
+  const hasAcessorios = c.tem_leitor_embarque != null || c.ar_condicionado != null
+  const hasDocs = c.crlv_status || c.emtu_status || (c.checklist_colocado?.length) || c.licenciamento?.length || c.cartao_artesp
+  const hasMateriais = c.qr_code != null || c.adesivo_leitor != null || c.placa_senha_wifi != null
+
+  const docHighlight = (v?: string | null) =>
+    v === 'VENCIDO' ? 'red' : v === 'NAO_LOCALIZADO' ? 'amber' : v === 'SIM_EM_DIA' ? 'green' : undefined
+
   return (
     <div className={`rounded-2xl border-2 overflow-hidden transition-all ${statusConfig.bg}`}>
       {/* Card header */}
@@ -101,7 +122,7 @@ function ChecklistCard({ c, expanded, onToggle }: {
           <Bus size={18} className="text-brand-700 dark:text-brand-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-bold text-gray-900 dark:text-gray-100">{c.prefixo}</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium">{c.tipo}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex items-center gap-1 ${statusConfig.badge}`}>
@@ -119,10 +140,20 @@ function ChecklistCard({ c, expanded, onToggle }: {
       {/* Expanded detail */}
       {expanded && (
         <div className="px-4 pb-4 space-y-4 border-t border-gray-100 dark:border-gray-800 pt-3">
+
+          {isAdmin && (
+            <button
+              onClick={e => { e.stopPropagation(); onEdit() }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-brand-700 text-brand-700 dark:text-brand-400 dark:border-brand-500 font-semibold text-xs w-full justify-center hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+            >
+              <Pencil size={13} /> Editar este checklist
+            </button>
+          )}
+
           {c.tipo === 'MENSAL' && (
             <>
-              {/* Cameras */}
-              {[c.camera_frontal, c.camera_lateral_esq, c.camera_lateral_dir, c.camera_fadiga, c.camera_ip_motorista, c.camera_salao].some(Boolean) && (
+              {/* Câmeras */}
+              {hasCameras && (
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
                     <Camera size={10} /> Câmeras
@@ -137,39 +168,53 @@ function ChecklistCard({ c, expanded, onToggle }: {
               )}
 
               {/* Acessórios */}
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Acessórios</p>
-                <DetailRow title="Leitor de embarque" value={c.tem_leitor_embarque != null ? (c.tem_leitor_embarque ? 'Sim' : 'Não') : '—'} />
-                <DetailRow title="Ar condicionado" value={c.ar_condicionado != null ? (c.ar_condicionado ? 'Sim' : 'Não') : '—'} />
-              </div>
+              {hasAcessorios && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Acessórios</p>
+                  <SectionRow title="Leitor de embarque" value={boolLbl(c.tem_leitor_embarque)} />
+                  <SectionRow title="Ar condicionado" value={boolLbl(c.ar_condicionado)} />
+                </div>
+              )}
 
               {/* Documentos */}
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <FileText size={10} /> Documentos
-                </p>
-                <DetailRow title="Licenciamento" value={labelList(c.licenciamento) + (c.licenciamento_outro ? ` (${c.licenciamento_outro})` : '')} />
-                <DetailRow title="Checklist físico" value={labelList(c.checklist_colocado)} />
-                <DetailRow title="Cartão ARTESP" value={label(c.cartao_artesp)} />
-              </div>
+              {hasDocs && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <FileText size={10} /> Documentos
+                  </p>
+                  <SectionRow title="CRLV" value={lbl(c.crlv_status)} highlight={docHighlight(c.crlv_status)} />
+                  <SectionRow title="EMTU" value={lbl(c.emtu_status)} highlight={docHighlight(c.emtu_status)} />
+                  <SectionRow title="Checklist físico" value={lblList(c.checklist_colocado)} />
+                  {/* legado */}
+                  {c.licenciamento?.length ? <SectionRow title="Licenciamento" value={lblList(c.licenciamento) + (c.licenciamento_outro ? ` (${c.licenciamento_outro})` : '')} /> : null}
+                  {c.cartao_artesp ? <SectionRow title="Cartão ARTESP" value={lbl(c.cartao_artesp)} /> : null}
+                </div>
+              )}
 
-              {/* Materiais */}
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Materiais Gráficos</p>
-                <DetailRow title="QR Code" value={c.qr_code != null ? (c.qr_code ? 'Sim' : 'Não') : '—'} />
-                <DetailRow title="Adesivo leitor" value={c.adesivo_leitor != null ? (c.adesivo_leitor ? 'Sim' : 'Não') : '—'} />
-                <DetailRow title="Placa senha Wi-Fi" value={c.placa_senha_wifi != null ? (c.placa_senha_wifi ? 'Sim' : 'Não') : '—'} />
-              </div>
+              {/* Materiais Gráficos */}
+              {hasMateriais && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Materiais Gráficos</p>
+                  <SectionRow title="QR Code" value={boolLbl(c.qr_code)} />
+                  <SectionRow title="Adesivo leitor" value={boolLbl(c.adesivo_leitor)} />
+                  <SectionRow title="Placa senha Wi-Fi" value={boolLbl(c.placa_senha_wifi)} />
+                </div>
+              )}
             </>
           )}
 
           {/* Wi-Fi */}
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-              <Wifi size={10} /> Wi-Fi
-            </p>
-            <DetailRow title="Status" value={labelList(c.wifi_status) + (c.wifi_outro ? ` — ${c.wifi_outro}` : '')} />
-          </div>
+          {(c.wifi_status?.length || c.wifi_outro) && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Wifi size={10} /> Wi-Fi
+              </p>
+              <SectionRow
+                title="Status"
+                value={lblList(c.wifi_status) ? (lblList(c.wifi_status)! + (c.wifi_outro ? ` — ${c.wifi_outro}` : '')) : c.wifi_outro || null}
+              />
+            </div>
+          )}
 
           {/* Observações */}
           {c.observacoes && (
@@ -202,6 +247,7 @@ export function ChecklistConsulta() {
   const navigate = useNavigate()
   const { role } = useAuthStore()
   const { listChecklists } = useChecklist()
+  const isAdmin = role === 'admin'
 
   const [items, setItems] = useState<ChecklistData[]>([])
   const [loadingList, setLoadingList] = useState(true)
@@ -234,6 +280,10 @@ export function ChecklistConsulta() {
   const hasFilters = prefixo || tipo || dataInicio || dataFim
 
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+
+  const handleEdit = (c: ChecklistData) => {
+    navigate('/checklist/novo', { state: { editData: c } })
+  }
 
   return (
     <Layout>
@@ -317,6 +367,8 @@ export function ChecklistConsulta() {
               c={c}
               expanded={expanded === c.id}
               onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
+              isAdmin={isAdmin}
+              onEdit={() => handleEdit(c)}
             />
           ))}
         </div>

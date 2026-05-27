@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from auth import apply_user_unit_scope, ensure_unit_access, get_current_user
 from models import AuditLog, User, VehicleChecklist, get_db
-from schemas import ChecklistCreate, ChecklistResponse
+from schemas import ChecklistCreate, ChecklistResponse, ChecklistUpdate
 
 router = APIRouter(prefix="/checklist", tags=["checklist"])
 
@@ -130,4 +130,33 @@ async def get_checklist(
     if not c:
         raise HTTPException(status_code=404, detail="Checklist nao encontrado")
     ensure_unit_access(current_user, c.garagem)
+    return _to_response(c)
+
+
+@router.patch("/{checklist_id}", response_model=ChecklistResponse)
+async def update_checklist(
+    checklist_id: int,
+    body: ChecklistUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem editar checklists")
+    c = db.query(VehicleChecklist).filter(VehicleChecklist.id == checklist_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Checklist nao encontrado")
+    ensure_unit_access(current_user, c.garagem)
+
+    data = body.model_dump(exclude_unset=True)
+    for field in JSON_FIELDS:
+        if field in data:
+            val = data[field]
+            data[field] = json.dumps(val, ensure_ascii=False) if isinstance(val, list) else None
+
+    for key, val in data.items():
+        setattr(c, key, val)
+
+    db.add(AuditLog(user_id=current_user.id, action="UPDATE", resource="checklist", resource_id=c.id))
+    db.commit()
+    db.refresh(c)
     return _to_response(c)
