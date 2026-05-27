@@ -14,10 +14,16 @@ function hasPendency(c: ChecklistData): 'red' | 'amber' | 'ok' {
     c.camera_fadiga, c.camera_ip_motorista, c.camera_salao,
   ]
   if (camValues.some(v => v === 'VISITA_TECNICA')) return 'red'
-  if (c.crlv_status === 'VENCIDO' || c.emtu_status === 'VENCIDO') return 'red'
+  if (c.crlv_status === 'VENCIDO' || c.artesp_status === 'VENCIDO' || c.emdec_status === 'VENCIDO') return 'red'
   if (c.licenciamento?.includes('VENCIDO')) return 'red'
   if (c.cartao_artesp === 'SIM_VENCIDO' || c.cartao_artesp === 'NAO_COLOCAR_NOVO') return 'red'
-  if (c.crlv_status === 'NAO_LOCALIZADO' || c.emtu_status === 'NAO_LOCALIZADO') return 'amber'
+  if (
+    c.crlv_status === 'NAO_LOCALIZADO' ||
+    c.artesp_status === 'NAO_LOCALIZADO' ||
+    c.emdec_status === 'NAO_LOCALIZADO' ||
+    c.emtu_status === 'NAO_LOCALIZADO' ||
+    c.emtu_status === 'DANIFICADO'
+  ) return 'amber'
   if (c.licenciamento?.includes('NAO_IMPRIMIR_NOVAMENTE')) return 'amber'
   if (c.wifi_status?.some(w => w !== 'SIM_FUNCIONAL')) return 'amber'
   return 'ok'
@@ -30,6 +36,8 @@ const STATUS_LABELS: Record<string, string> = {
   NAO_IMPRIMIR_NOVAMENTE: 'Não — imprimir novamente',
   VENCIDO: 'Vencido',
   NAO_LOCALIZADO: 'Não localizado',
+  SIM_LOCALIZADO: 'Sim — localizado',
+  DANIFICADO: 'Danificado — necessário troca',
   SIM_REMOVIDO_COLOCADO_NOVO: 'Sim — removido e colocado novo',
   EXTRAVIADO_COLOCADO_NOVO: 'Extraviado — colocado novo',
   NAO_MANUTENCAO_FORA_GARAGEM: 'Não — manutenção/fora da garagem',
@@ -104,11 +112,11 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
 
   const hasCameras = [c.camera_frontal, c.camera_lateral_esq, c.camera_lateral_dir, c.camera_fadiga, c.camera_ip_motorista, c.camera_salao].some(Boolean)
   const hasAcessorios = c.tem_leitor_embarque != null || c.ar_condicionado != null
-  const hasDocs = c.crlv_status || c.emtu_status || (c.checklist_colocado?.length) || c.licenciamento?.length || c.cartao_artesp
+  const hasDocs = c.crlv_status || c.emtu_status || c.artesp_status || c.emdec_status || (c.checklist_colocado?.length) || c.licenciamento?.length || c.cartao_artesp
   const hasMateriais = c.qr_code != null || c.adesivo_leitor != null || c.placa_senha_wifi != null
 
   const docHighlight = (v?: string | null) =>
-    v === 'VENCIDO' ? 'red' : v === 'NAO_LOCALIZADO' ? 'amber' : v === 'SIM_EM_DIA' ? 'green' : undefined
+    v === 'VENCIDO' ? 'red' : (v === 'NAO_LOCALIZADO' || v === 'DANIFICADO') ? 'amber' : (v === 'SIM_EM_DIA' || v === 'SIM_LOCALIZADO') ? 'green' : undefined
 
   return (
     <div className={`rounded-2xl border-2 overflow-hidden transition-all ${statusConfig.bg}`}>
@@ -183,7 +191,9 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
                     <FileText size={10} /> Documentos
                   </p>
                   <SectionRow title="CRLV" value={lbl(c.crlv_status)} highlight={docHighlight(c.crlv_status)} />
-                  <SectionRow title="EMTU" value={lbl(c.emtu_status)} highlight={docHighlight(c.emtu_status)} />
+                  <SectionRow title="EMTU (QR code)" value={lbl(c.emtu_status)} highlight={docHighlight(c.emtu_status)} />
+                  <SectionRow title="ARTESP" value={lbl(c.artesp_status)} highlight={docHighlight(c.artesp_status)} />
+                  <SectionRow title="EMDEC" value={lbl(c.emdec_status)} highlight={docHighlight(c.emdec_status)} />
                   <SectionRow title="Checklist físico" value={lblList(c.checklist_colocado)} />
                   {/* legado */}
                   {c.licenciamento?.length ? <SectionRow title="Licenciamento" value={lblList(c.licenciamento) + (c.licenciamento_outro ? ` (${c.licenciamento_outro})` : '')} /> : null}

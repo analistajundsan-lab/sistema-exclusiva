@@ -186,7 +186,9 @@ class VehicleChecklist(Base):
     checklist_colocado = Column(Text)
     cartao_artesp = Column(String(50))  # legado — mantido para dados antigos
     crlv_status = Column(String(50))    # SIM_EM_DIA | VENCIDO | NAO_LOCALIZADO
-    emtu_status = Column(String(50))    # SIM_EM_DIA | VENCIDO | NAO_LOCALIZADO
+    emtu_status = Column(String(50))    # SIM_LOCALIZADO | DANIFICADO | NAO_LOCALIZADO
+    artesp_status = Column(String(50))  # SIM_EM_DIA | VENCIDO | NAO_LOCALIZADO
+    emdec_status = Column(String(50))   # SIM_EM_DIA | VENCIDO | NAO_LOCALIZADO
 
     # Materiais gráficos (MENSAL)
     qr_code = Column(Boolean)
