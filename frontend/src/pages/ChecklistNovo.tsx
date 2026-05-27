@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { useChecklist, ChecklistData } from '../hooks/useChecklist'
@@ -41,6 +41,12 @@ const DOC_STATUS_OPTIONS = [
   { value: 'NAO_LOCALIZADO', label: 'Não localizado' },
 ]
 
+const EMTU_OPTIONS = [
+  { value: 'SIM_LOCALIZADO', label: 'Sim — localizado' },
+  { value: 'DANIFICADO', label: 'Danificado — necessário troca' },
+  { value: 'NAO_LOCALIZADO', label: 'Não localizado' },
+]
+
 const CHECKLIST_OPTIONS = [
   { value: 'SIM_REMOVIDO_COLOCADO_NOVO', label: 'Sim — removido antigo e colocado novo' },
   { value: 'EXTRAVIADO_COLOCADO_NOVO', label: 'Extraviado — colocado novo' },
@@ -62,7 +68,7 @@ interface Form {
   camera_fadiga: string; camera_ip_motorista: string; camera_salao: string
   tem_leitor_embarque: boolean | undefined; ar_condicionado: boolean | undefined
   checklist_colocado: string[]
-  crlv_status: string; emtu_status: string
+  crlv_status: string; emtu_status: string; artesp_status: string; emdec_status: string
   qr_code: boolean | undefined; adesivo_leitor: boolean | undefined; placa_senha_wifi: boolean | undefined
   wifi_status: string[]; wifi_outro: string
   observacoes: string; evidencias: string[]
@@ -74,7 +80,7 @@ const INITIAL: Form = {
   camera_fadiga: '', camera_ip_motorista: '', camera_salao: '',
   tem_leitor_embarque: undefined, ar_condicionado: undefined,
   checklist_colocado: [],
-  crlv_status: '', emtu_status: '',
+  crlv_status: '', emtu_status: '', artesp_status: '', emdec_status: '',
   qr_code: undefined, adesivo_leitor: undefined, placa_senha_wifi: undefined,
   wifi_status: [], wifi_outro: '',
   observacoes: '', evidencias: [],
@@ -96,6 +102,8 @@ function fromExisting(d: ChecklistData): Form {
     checklist_colocado: d.checklist_colocado || [],
     crlv_status: d.crlv_status || '',
     emtu_status: d.emtu_status || '',
+    artesp_status: d.artesp_status || '',
+    emdec_status: d.emdec_status || '',
     qr_code: d.qr_code,
     adesivo_leitor: d.adesivo_leitor,
     placa_senha_wifi: d.placa_senha_wifi,
@@ -208,9 +216,16 @@ export function ChecklistNovo() {
   const location = useLocation()
   const editData: ChecklistData | undefined = (location.state as any)?.editData
 
-  const { userUnit, userUnits, displayName, userName } = useAuthStore()
-  const { createChecklist, updateChecklist, loading, error } = useChecklist()
+  const { userUnit, userUnits, displayName, userName, role } = useAuthStore()
+  const { createChecklist, updateChecklist, listGaragens, loading, error } = useChecklist()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [allGaragens, setAllGaragens] = useState<string[]>([])
+
+  useEffect(() => {
+    if (role === 'admin') {
+      listGaragens().then(setAllGaragens).catch(() => {})
+    }
+  }, [role]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [form, setForm] = useState<Form>(
     editData
@@ -343,7 +358,20 @@ export function ChecklistNovo() {
           <>
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Garagem *</label>
-              {!isEdit && userUnits && userUnits.length > 1 ? (
+              {isEdit ? (
+                <div className="px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  {form.garagem || '—'}
+                </div>
+              ) : role === 'admin' ? (
+                <select
+                  value={form.garagem}
+                  onChange={e => set('garagem', e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm font-medium"
+                >
+                  <option value="">Selecione a garagem</option>
+                  {allGaragens.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              ) : userUnits && userUnits.length > 1 ? (
                 <select
                   value={form.garagem}
                   onChange={e => set('garagem', e.target.value)}
@@ -463,8 +491,19 @@ export function ChecklistNovo() {
             </div>
 
             <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">EMTU</p>
-              <RadioCard options={DOC_STATUS_OPTIONS} selected={form.emtu_status} onChange={v => set('emtu_status', v)} />
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">EMTU</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-2">QR Code na porta do veículo</p>
+              <RadioCard options={EMTU_OPTIONS} selected={form.emtu_status} onChange={v => set('emtu_status', v)} />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">ARTESP</p>
+              <RadioCard options={DOC_STATUS_OPTIONS} selected={form.artesp_status} onChange={v => set('artesp_status', v)} />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">EMDEC</p>
+              <RadioCard options={DOC_STATUS_OPTIONS} selected={form.emdec_status} onChange={v => set('emdec_status', v)} />
             </div>
 
             <div>

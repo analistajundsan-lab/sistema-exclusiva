@@ -291,6 +291,8 @@ class ChecklistCreate(BaseModel):
     checklist_colocado: Optional[List[str]] = None
     crlv_status: Optional[str] = None
     emtu_status: Optional[str] = None
+    artesp_status: Optional[str] = None
+    emdec_status: Optional[str] = None
 
     qr_code: Optional[bool] = None
     adesivo_leitor: Optional[bool] = None
@@ -317,6 +319,8 @@ class ChecklistUpdate(BaseModel):
     checklist_colocado: Optional[List[str]] = None
     crlv_status: Optional[str] = None
     emtu_status: Optional[str] = None
+    artesp_status: Optional[str] = None
+    emdec_status: Optional[str] = None
 
     qr_code: Optional[bool] = None
     adesivo_leitor: Optional[bool] = None
@@ -359,6 +363,8 @@ class ChecklistResponse(BaseModel):
     cartao_artesp: Optional[str] = None              # legado
     crlv_status: Optional[str] = None
     emtu_status: Optional[str] = None
+    artesp_status: Optional[str] = None
+    emdec_status: Optional[str] = None
 
     qr_code: Optional[bool] = None
     adesivo_leitor: Optional[bool] = None

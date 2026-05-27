@@ -22,6 +22,8 @@ export interface ChecklistData {
   cartao_artesp?: string         // legado
   crlv_status?: string
   emtu_status?: string
+  artesp_status?: string
+  emdec_status?: string
   qr_code?: boolean
   adesivo_leitor?: boolean
   placa_senha_wifi?: boolean
@@ -88,5 +90,10 @@ export function useChecklist() {
     return res.data as ChecklistData
   }
 
-  return { createChecklist, updateChecklist, listChecklists, getChecklist, loading, error }
+  const listGaragens = async (): Promise<string[]> => {
+    const res = await api.get('/checklist/garagens')
+    return res.data as string[]
+  }
+
+  return { createChecklist, updateChecklist, listChecklists, getChecklist, listGaragens, loading, error }
 }

@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import apply_user_unit_scope, ensure_unit_access, get_current_user
-from models import AuditLog, User, VehicleChecklist, get_db
+from models import AuditLog, ScheduleLine, User, VehicleChecklist, get_db
 from schemas import ChecklistCreate, ChecklistResponse, ChecklistUpdate
 
 router = APIRouter(prefix="/checklist", tags=["checklist"])
@@ -88,6 +88,18 @@ async def create_checklist(
     db.commit()
     db.refresh(checklist)
     return _to_response(checklist)
+
+
+@router.get("/garagens", response_model=List[str])
+async def list_garagens(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna todas as garagens/unidades disponíveis no sistema."""
+    rows_cl = db.query(VehicleChecklist.garagem).distinct().all()
+    rows_sl = db.query(ScheduleLine.unit).distinct().all()
+    garagens = sorted({r[0] for r in rows_cl + rows_sl if r[0]})
+    return garagens
 
 
 @router.get("/", response_model=List[ChecklistResponse])
