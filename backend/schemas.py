@@ -357,10 +357,10 @@ class ChecklistResponse(BaseModel):
     tem_leitor_embarque: Optional[bool] = None
     ar_condicionado: Optional[bool] = None
 
-    licenciamento: Optional[List[str]] = None        # legado
-    licenciamento_outro: Optional[str] = None        # legado
+    licenciamento: Optional[List[str]] = None  # legado
+    licenciamento_outro: Optional[str] = None  # legado
     checklist_colocado: Optional[List[str]] = None
-    cartao_artesp: Optional[str] = None              # legado
+    cartao_artesp: Optional[str] = None  # legado
     crlv_status: Optional[str] = None
     emtu_status: Optional[str] = None
     artesp_status: Optional[str] = None

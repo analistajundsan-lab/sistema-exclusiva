@@ -153,7 +153,9 @@ async def update_checklist(
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role.value != "admin":
-        raise HTTPException(status_code=403, detail="Apenas administradores podem editar checklists")
+        raise HTTPException(
+            status_code=403, detail="Apenas administradores podem editar checklists"
+        )
     c = db.query(VehicleChecklist).filter(VehicleChecklist.id == checklist_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Checklist nao encontrado")
@@ -163,12 +165,21 @@ async def update_checklist(
     for field in JSON_FIELDS:
         if field in data:
             val = data[field]
-            data[field] = json.dumps(val, ensure_ascii=False) if isinstance(val, list) else None
+            data[field] = (
+                json.dumps(val, ensure_ascii=False) if isinstance(val, list) else None
+            )
 
     for key, val in data.items():
         setattr(c, key, val)
 
-    db.add(AuditLog(user_id=current_user.id, action="UPDATE", resource="checklist", resource_id=c.id))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="UPDATE",
+            resource="checklist",
+            resource_id=c.id,
+        )
+    )
     db.commit()
     db.refresh(c)
     return _to_response(c)
