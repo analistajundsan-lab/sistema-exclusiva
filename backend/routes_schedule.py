@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 from io import BytesIO
 from typing import List, Optional
@@ -37,6 +37,7 @@ from schemas import (
     ScheduleSummaryItem,
     ScheduleWhatsappResponse,
 )
+from turn_reference_data import EXCLUDED_TURN_LINES, TURN_REFERENCE
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -176,6 +177,62 @@ def safe_xlsx_text(value):
     if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
         return f"'{value}"
     return value
+
+
+def normalize_line_code(value: str) -> str:
+    return "".join(ch for ch in str(value or "").strip() if ch.isdigit())
+
+
+def normalize_dashboard_client(value: str) -> str:
+    text = (value or "").strip().upper()
+    compact = text.replace(" ", "")
+    if "LUXOTTICA" in text:
+        return "LUXOTTICA"
+    if "GARDNER" in text:
+        return "GARDNER"
+    if "SORTATION" in text:
+        return "SORTATION"
+    if "SP-02" in compact or "SP02" in compact:
+        return "SP02"
+    if "SP04" in compact or "SP14" in compact:
+        return "SP04/14"
+    if "SP06" in compact:
+        return "SP06"
+    if "PLAT" in text:
+        return "PLATLOG"
+    return text or "SEM CLIENTE"
+
+
+def empty_direction_stats() -> dict:
+    return {
+        "entrada": 0,
+        "saida": 0,
+        "confirmed_entrada": 0,
+        "confirmed_saida": 0,
+        "pending_entrada": 0,
+        "pending_saida": 0,
+        "total": 0,
+        "_lines": set(),
+    }
+
+
+def add_direction_stats(bucket: dict, line: ScheduleLine) -> None:
+    direction = (line.direction or "").upper()
+    is_confirmed = line.status == ScheduleLineStatus.CONFIRMADA
+    if direction == "ENTRADA":
+        bucket["entrada"] += 1
+        bucket["confirmed_entrada" if is_confirmed else "pending_entrada"] += 1
+    elif direction == "SAIDA":
+        bucket["saida"] += 1
+        bucket["confirmed_saida" if is_confirmed else "pending_saida"] += 1
+    bucket["total"] += 1
+    bucket["_lines"].add(normalize_line_code(line.line_code))
+
+
+def public_direction_stats(bucket: dict) -> dict:
+    data = {key: value for key, value in bucket.items() if key != "_lines"}
+    data["unique_lines"] = len(bucket["_lines"])
+    return data
 
 
 @router.post(
@@ -555,6 +612,103 @@ async def schedule_summary(
         )
         for row in rows
     ]
+
+
+@router.get("/dashboard-turns")
+async def schedule_dashboard_turns(
+    schedule_date: date,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date)
+    query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
+    lines = query.order_by(
+        ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
+    ).all()
+
+    turn_order = ["T1", "T2", "T3", "T4", "T5", "APRENDIZ"]
+    units: dict[str, dict] = {}
+    client_index: dict[str, dict] = defaultdict(empty_direction_stats)
+    excluded_found: dict[str, dict] = defaultdict(empty_direction_stats)
+
+    for line in lines:
+        line_code = normalize_line_code(line.line_code)
+        if not line_code:
+            continue
+
+        unit_data = units.setdefault(
+            line.unit,
+            {
+                "unit": line.unit,
+                "turns": {turn: empty_direction_stats() for turn in turn_order},
+                "client_cards": defaultdict(empty_direction_stats),
+                "total": empty_direction_stats(),
+            },
+        )
+
+        if line_code in EXCLUDED_TURN_LINES:
+            client = normalize_dashboard_client(line.client_name)
+            add_direction_stats(excluded_found[client], line)
+            continue
+
+        reference = TURN_REFERENCE.get(line_code)
+        if reference:
+            turn = reference["turn"]
+            client = reference["client"]
+            if turn not in unit_data["turns"]:
+                unit_data["turns"][turn] = empty_direction_stats()
+            add_direction_stats(unit_data["turns"][turn], line)
+            add_direction_stats(client_index[client], line)
+        else:
+            client = normalize_dashboard_client(line.client_name)
+            add_direction_stats(unit_data["client_cards"][client], line)
+            add_direction_stats(client_index[client], line)
+
+        add_direction_stats(unit_data["total"], line)
+
+    response_units = []
+    for unit_name in sorted(units):
+        unit_data = units[unit_name]
+        response_units.append(
+            {
+                "unit": unit_name,
+                "total": public_direction_stats(unit_data["total"]),
+                "turns": [
+                    {
+                        "key": turn,
+                        "label": "Aprendiz" if turn == "APRENDIZ" else turn,
+                        **public_direction_stats(unit_data["turns"][turn]),
+                    }
+                    for turn in turn_order
+                ],
+                "client_cards": [
+                    {
+                        "client": client,
+                        **public_direction_stats(stats),
+                    }
+                    for client, stats in sorted(unit_data["client_cards"].items())
+                ],
+            }
+        )
+
+    return {
+        "schedule_date": schedule_date,
+        "units": response_units,
+        "client_index": [
+            {
+                "client": client,
+                **public_direction_stats(stats),
+            }
+            for client, stats in sorted(client_index.items())
+        ],
+        "excluded": [
+            {
+                "client": client,
+                **public_direction_stats(stats),
+            }
+            for client, stats in sorted(excluded_found.items())
+        ],
+    }
 
 
 @router.get("/whatsapp", response_model=ScheduleWhatsappResponse)

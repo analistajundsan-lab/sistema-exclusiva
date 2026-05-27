@@ -128,6 +128,39 @@ def test_admin_imports_schedule(admin_token):
     assert data[0]["line_code"] == "7368"
 
 
+def test_dashboard_turns_groups_by_unit_turn_and_direction(admin_token):
+    import_response = client.post(
+        "/schedule/import?schedule_date=2026-04-13&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file("7368"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert import_response.status_code == 201
+
+    response = client.get(
+        "/schedule/dashboard-turns?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schedule_date"] == "2026-04-13"
+    assert data["units"][0]["unit"] == "Caieiras"
+    assert data["units"][0]["total"]["entrada"] == 1
+    assert data["units"][0]["total"]["saida"] == 0
+
+    t1 = next(turn for turn in data["units"][0]["turns"] if turn["key"] == "T1")
+    assert t1["entrada"] == 1
+    assert t1["saida"] == 0
+    assert t1["unique_lines"] == 1
+    assert data["client_index"][0]["client"] == "SP02"
+
+
 def test_admin_previews_schedule_without_saving(admin_token):
     response = client.post(
         "/schedule/import/preview",
