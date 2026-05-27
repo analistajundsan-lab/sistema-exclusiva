@@ -58,6 +58,9 @@ def migrate_existing_sqlite() -> None:
         ensure_column("incidents", "victim_status", "victim_status VARCHAR(20)")
     if "schedule_lines" in tables:
         ensure_column("schedule_lines", "import_id", "import_id INTEGER")
+    if "vehicle_checklists" in tables:
+        ensure_column("vehicle_checklists", "crlv_status", "crlv_status VARCHAR(50)")
+        ensure_column("vehicle_checklists", "emtu_status", "emtu_status VARCHAR(50)")
 
 
 def upsert_admin(

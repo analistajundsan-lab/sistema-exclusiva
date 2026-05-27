@@ -288,10 +288,35 @@ class ChecklistCreate(BaseModel):
     tem_leitor_embarque: Optional[bool] = None
     ar_condicionado: Optional[bool] = None
 
-    licenciamento: Optional[List[str]] = None
-    licenciamento_outro: Optional[str] = None
     checklist_colocado: Optional[List[str]] = None
-    cartao_artesp: Optional[str] = None
+    crlv_status: Optional[str] = None
+    emtu_status: Optional[str] = None
+
+    qr_code: Optional[bool] = None
+    adesivo_leitor: Optional[bool] = None
+    placa_senha_wifi: Optional[bool] = None
+
+    wifi_status: Optional[List[str]] = None
+    wifi_outro: Optional[str] = None
+
+    observacoes: Optional[str] = None
+    evidencias: Optional[List[str]] = None
+
+
+class ChecklistUpdate(BaseModel):
+    camera_frontal: Optional[str] = None
+    camera_lateral_esq: Optional[str] = None
+    camera_lateral_dir: Optional[str] = None
+    camera_fadiga: Optional[str] = None
+    camera_ip_motorista: Optional[str] = None
+    camera_salao: Optional[str] = None
+
+    tem_leitor_embarque: Optional[bool] = None
+    ar_condicionado: Optional[bool] = None
+
+    checklist_colocado: Optional[List[str]] = None
+    crlv_status: Optional[str] = None
+    emtu_status: Optional[str] = None
 
     qr_code: Optional[bool] = None
     adesivo_leitor: Optional[bool] = None
@@ -322,10 +347,12 @@ class ChecklistResponse(BaseModel):
     tem_leitor_embarque: Optional[bool] = None
     ar_condicionado: Optional[bool] = None
 
-    licenciamento: Optional[List[str]] = None
-    licenciamento_outro: Optional[str] = None
+    licenciamento: Optional[List[str]] = None        # legado
+    licenciamento_outro: Optional[str] = None        # legado
     checklist_colocado: Optional[List[str]] = None
-    cartao_artesp: Optional[str] = None
+    cartao_artesp: Optional[str] = None              # legado
+    crlv_status: Optional[str] = None
+    emtu_status: Optional[str] = None
 
     qr_code: Optional[bool] = None
     adesivo_leitor: Optional[bool] = None

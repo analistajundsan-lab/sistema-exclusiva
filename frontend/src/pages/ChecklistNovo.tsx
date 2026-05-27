@@ -1,11 +1,11 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { useChecklist } from '../hooks/useChecklist'
+import { useChecklist, ChecklistData } from '../hooks/useChecklist'
 import { useAuthStore } from '../store/auth'
 import {
   ClipboardList, ChevronLeft, ChevronRight, Check, Wrench,
-  Camera, FileText, Wifi, CheckCircle2, ImagePlus, X, Bus,
+  Camera, FileText, Wifi, CheckCircle2, ImagePlus, X, Bus, Pencil,
 } from 'lucide-react'
 
 async function compressImage(file: File): Promise<string> {
@@ -35,10 +35,10 @@ const CAMERAS = [
   { key: 'camera_salao', label: 'Salão' },
 ] as const
 
-const LIC_OPTIONS = [
-  { value: 'SIM_EM_DIA', label: 'Sim, em dia' },
-  { value: 'NAO_IMPRIMIR_NOVAMENTE', label: 'Não — imprimir novamente' },
+const DOC_STATUS_OPTIONS = [
+  { value: 'SIM_EM_DIA', label: 'Sim — em dia' },
   { value: 'VENCIDO', label: 'Vencido' },
+  { value: 'NAO_LOCALIZADO', label: 'Não localizado' },
 ]
 
 const CHECKLIST_OPTIONS = [
@@ -47,13 +47,6 @@ const CHECKLIST_OPTIONS = [
   { value: 'NAO_MANUTENCAO_FORA_GARAGEM', label: 'Não — veículo em manutenção ou fora da garagem' },
   { value: 'JA_POSSUI_CHECKLIST_MES', label: 'Já possui checklist do mês' },
   { value: 'SEM_CHECKLIST_COLOCAR_NOVO', label: 'Sem checklist — colocar novo' },
-]
-
-const ARTESP_OPTIONS = [
-  { value: 'SIM_EM_DIA', label: 'Sim — em dia' },
-  { value: 'SIM_VENCIDO', label: 'Sim — vencido' },
-  { value: 'NAO_COLOCAR_NOVO', label: 'Não — colocar novo' },
-  { value: 'NA', label: 'N/A' },
 ]
 
 const WIFI_OPTIONS = [
@@ -68,8 +61,8 @@ interface Form {
   camera_frontal: string; camera_lateral_esq: string; camera_lateral_dir: string
   camera_fadiga: string; camera_ip_motorista: string; camera_salao: string
   tem_leitor_embarque: boolean | undefined; ar_condicionado: boolean | undefined
-  licenciamento: string[]; licenciamento_outro: string
-  checklist_colocado: string[]; cartao_artesp: string
+  checklist_colocado: string[]
+  crlv_status: string; emtu_status: string
   qr_code: boolean | undefined; adesivo_leitor: boolean | undefined; placa_senha_wifi: boolean | undefined
   wifi_status: string[]; wifi_outro: string
   observacoes: string; evidencias: string[]
@@ -80,11 +73,37 @@ const INITIAL: Form = {
   camera_frontal: '', camera_lateral_esq: '', camera_lateral_dir: '',
   camera_fadiga: '', camera_ip_motorista: '', camera_salao: '',
   tem_leitor_embarque: undefined, ar_condicionado: undefined,
-  licenciamento: [], licenciamento_outro: '',
-  checklist_colocado: [], cartao_artesp: '',
+  checklist_colocado: [],
+  crlv_status: '', emtu_status: '',
   qr_code: undefined, adesivo_leitor: undefined, placa_senha_wifi: undefined,
   wifi_status: [], wifi_outro: '',
   observacoes: '', evidencias: [],
+}
+
+function fromExisting(d: ChecklistData): Form {
+  return {
+    garagem: d.garagem,
+    prefixo: d.prefixo,
+    tipo: d.tipo,
+    camera_frontal: d.camera_frontal || '',
+    camera_lateral_esq: d.camera_lateral_esq || '',
+    camera_lateral_dir: d.camera_lateral_dir || '',
+    camera_fadiga: d.camera_fadiga || '',
+    camera_ip_motorista: d.camera_ip_motorista || '',
+    camera_salao: d.camera_salao || '',
+    tem_leitor_embarque: d.tem_leitor_embarque,
+    ar_condicionado: d.ar_condicionado,
+    checklist_colocado: d.checklist_colocado || [],
+    crlv_status: d.crlv_status || '',
+    emtu_status: d.emtu_status || '',
+    qr_code: d.qr_code,
+    adesivo_leitor: d.adesivo_leitor,
+    placa_senha_wifi: d.placa_senha_wifi,
+    wifi_status: d.wifi_status || [],
+    wifi_outro: d.wifi_outro || '',
+    observacoes: d.observacoes || '',
+    evidencias: d.evidencias || [],
+  }
 }
 
 function YesNo({ value, onChange }: { value: boolean | undefined; onChange: (v: boolean) => void }) {
@@ -108,6 +127,41 @@ function YesNo({ value, onChange }: { value: boolean | undefined; onChange: (v: 
             : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-red-400'
         }`}
       >Não</button>
+    </div>
+  )
+}
+
+function RadioCard({ options, selected, onChange }: {
+  options: { value: string; label: string }[]
+  selected: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {options.map(opt => {
+        const on = selected === opt.value
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+              on
+                ? 'border-brand-700 bg-brand-50 dark:bg-brand-900/20 dark:border-brand-500'
+                : 'border-gray-200 dark:border-gray-700 hover:border-brand-300'
+            }`}
+          >
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+              on ? 'border-brand-700 bg-brand-700' : 'border-gray-300 dark:border-gray-600'
+            }`}>
+              {on && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+            </div>
+            <span className={`text-sm font-medium ${on ? 'text-brand-800 dark:text-brand-300' : 'text-gray-700 dark:text-gray-300'}`}>
+              {opt.label}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -151,18 +205,23 @@ function MultiCard({ options, selected, onChange }: {
 
 export function ChecklistNovo() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const editData: ChecklistData | undefined = (location.state as any)?.editData
+
   const { userUnit, userUnits, displayName, userName } = useAuthStore()
-  const { createChecklist, loading, error } = useChecklist()
+  const { createChecklist, updateChecklist, loading, error } = useChecklist()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [form, setForm] = useState<Form>({
-    ...INITIAL,
-    garagem: userUnit || (userUnits?.[0] ?? ''),
-  })
+  const [form, setForm] = useState<Form>(
+    editData
+      ? fromExisting(editData)
+      : { ...INITIAL, garagem: userUnit || (userUnits?.[0] ?? '') }
+  )
   const [step, setStep] = useState(0)
   const [done, setDone] = useState(false)
   const [imgLoading, setImgLoading] = useState(false)
 
+  const isEdit = Boolean(editData)
   const steps = form.tipo === 'AVULSO' ? [0, 3, 4] : [0, 1, 2, 3, 4]
   const stepIdx = steps.indexOf(step)
   const isLast = stepIdx === steps.length - 1
@@ -183,7 +242,11 @@ export function ChecklistNovo() {
 
   const handleSubmit = async () => {
     try {
-      await createChecklist(form)
+      if (isEdit && editData) {
+        await updateChecklist(editData.id, form)
+      } else {
+        await createChecklist(form)
+      }
       setDone(true)
     } catch { /* error shown via hook */ }
   }
@@ -214,15 +277,19 @@ export function ChecklistNovo() {
           <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
             <CheckCircle2 size={32} className="text-green-600" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Checklist salvo!</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+            {isEdit ? 'Checklist atualizado!' : 'Checklist salvo!'}
+          </h2>
           <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
             Veículo <strong>{form.prefixo.toUpperCase()}</strong> — {form.garagem}
           </p>
           <div className="flex gap-3">
-            <button
-              onClick={() => { setForm({ ...INITIAL, garagem: form.garagem }); setStep(0); setDone(false) }}
-              className="px-5 py-2.5 border-2 border-brand-700 text-brand-700 rounded-xl font-semibold text-sm"
-            >Novo Checklist</button>
+            {!isEdit && (
+              <button
+                onClick={() => { setForm({ ...INITIAL, garagem: form.garagem }); setStep(0); setDone(false) }}
+                className="px-5 py-2.5 border-2 border-brand-700 text-brand-700 rounded-xl font-semibold text-sm"
+              >Novo Checklist</button>
+            )}
             <button
               onClick={() => navigate('/checklist')}
               className="px-5 py-2.5 bg-brand-700 text-white rounded-xl font-semibold text-sm"
@@ -242,8 +309,8 @@ export function ChecklistNovo() {
         </button>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <ClipboardList size={20} className="text-brand-700" />
-            Novo Checklist
+            {isEdit ? <Pencil size={20} className="text-brand-700" /> : <ClipboardList size={20} className="text-brand-700" />}
+            {isEdit ? `Editar Checklist #${editData?.id}` : 'Novo Checklist'}
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {displayName || userName}
@@ -276,7 +343,7 @@ export function ChecklistNovo() {
           <>
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Garagem *</label>
-              {userUnits && userUnits.length > 1 ? (
+              {!isEdit && userUnits && userUnits.length > 1 ? (
                 <select
                   value={form.garagem}
                   onChange={e => set('garagem', e.target.value)}
@@ -294,15 +361,21 @@ export function ChecklistNovo() {
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Prefixo do veículo *</label>
-              <input
-                type="text"
-                value={form.prefixo}
-                onChange={e => set('prefixo', e.target.value.toUpperCase())}
-                placeholder="Ex: 1234"
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-lg font-bold tracking-widest placeholder:font-normal placeholder:text-sm placeholder:tracking-normal"
-                inputMode="text"
-                autoCapitalize="characters"
-              />
+              {isEdit ? (
+                <div className="px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 text-lg font-bold text-gray-700 dark:text-gray-300 tracking-widest">
+                  {form.prefixo}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={form.prefixo}
+                  onChange={e => set('prefixo', e.target.value.toUpperCase())}
+                  placeholder="Ex: 1234"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-lg font-bold tracking-widest placeholder:font-normal placeholder:text-sm placeholder:tracking-normal"
+                  inputMode="text"
+                  autoCapitalize="characters"
+                />
+              )}
             </div>
 
             <div>
@@ -312,12 +385,13 @@ export function ChecklistNovo() {
                   <button
                     key={t}
                     type="button"
-                    onClick={() => { set('tipo', t); }}
+                    disabled={isEdit}
+                    onClick={() => { if (!isEdit) set('tipo', t) }}
                     className={`py-4 rounded-xl font-bold text-sm border-2 transition-all ${
                       form.tipo === t
                         ? 'bg-brand-700 border-brand-700 text-white'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-brand-400'
-                    }`}
+                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                    } ${isEdit ? 'opacity-60 cursor-not-allowed' : 'hover:border-brand-400'}`}
                   >
                     {t}
                     {t === 'AVULSO' && <span className="block text-[10px] font-normal mt-0.5 opacity-70">Apenas Wi-Fi</span>}
@@ -384,47 +458,18 @@ export function ChecklistNovo() {
         {step === 2 && (
           <>
             <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Licenciamento</p>
-              <MultiCard options={LIC_OPTIONS} selected={form.licenciamento} onChange={v => set('licenciamento', v)} />
-              <input
-                type="text"
-                value={form.licenciamento_outro}
-                onChange={e => set('licenciamento_outro', e.target.value)}
-                placeholder="Ano do licenciamento (ex: 2025)"
-                className="mt-2 w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400"
-              />
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">CRLV</p>
+              <RadioCard options={DOC_STATUS_OPTIONS} selected={form.crlv_status} onChange={v => set('crlv_status', v)} />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">EMTU</p>
+              <RadioCard options={DOC_STATUS_OPTIONS} selected={form.emtu_status} onChange={v => set('emtu_status', v)} />
             </div>
 
             <div>
               <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Foi colocado check list?</p>
               <MultiCard options={CHECKLIST_OPTIONS} selected={form.checklist_colocado} onChange={v => set('checklist_colocado', v)} />
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Cartão ARTESP</p>
-              <div className="space-y-2">
-                {ARTESP_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => set('cartao_artesp', opt.value)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
-                      form.cartao_artesp === opt.value
-                        ? 'border-brand-700 bg-brand-50 dark:bg-brand-900/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-brand-300'
-                    }`}
-                  >
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                      form.cartao_artesp === opt.value ? 'border-brand-700 bg-brand-700' : 'border-gray-300 dark:border-gray-600'
-                    }`}>
-                      {form.cartao_artesp === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </div>
-                    <span className={`text-sm font-medium ${form.cartao_artesp === opt.value ? 'text-brand-800 dark:text-brand-300' : 'text-gray-700 dark:text-gray-300'}`}>
-                      {opt.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div>
@@ -533,7 +578,7 @@ export function ChecklistNovo() {
           className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-brand-700 hover:bg-brand-800 disabled:opacity-40 text-white font-semibold text-sm transition-all"
         >
           {loading ? 'Salvando...' : isLast ? (
-            <><CheckCircle2 size={16} /> Salvar Checklist</>
+            <><CheckCircle2 size={16} /> {isEdit ? 'Salvar Edição' : 'Salvar Checklist'}</>
           ) : (
             <>Próximo <ChevronRight size={16} /></>
           )}

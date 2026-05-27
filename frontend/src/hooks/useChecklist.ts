@@ -16,10 +16,12 @@ export interface ChecklistData {
   camera_salao?: string
   tem_leitor_embarque?: boolean
   ar_condicionado?: boolean
-  licenciamento?: string[]
-  licenciamento_outro?: string
+  licenciamento?: string[]       // legado
+  licenciamento_outro?: string   // legado
   checklist_colocado?: string[]
-  cartao_artesp?: string
+  cartao_artesp?: string         // legado
+  crlv_status?: string
+  emtu_status?: string
   qr_code?: boolean
   adesivo_leitor?: boolean
   placa_senha_wifi?: boolean
@@ -49,6 +51,21 @@ export function useChecklist() {
     }
   }
 
+  const updateChecklist = async (id: number, data: Partial<Omit<ChecklistData, 'id' | 'auditor_id' | 'auditor_name' | 'created_at'>>) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await api.patch(`/checklist/${id}`, data)
+      return res.data as ChecklistData
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || 'Erro ao atualizar checklist.'
+      setError(msg)
+      throw e
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const listChecklists = async (params?: {
     prefixo?: string
     garagem?: string
@@ -67,5 +84,5 @@ export function useChecklist() {
     return res.data as ChecklistData
   }
 
-  return { createChecklist, listChecklists, getChecklist, loading, error }
+  return { createChecklist, updateChecklist, listChecklists, getChecklist, loading, error }
 }

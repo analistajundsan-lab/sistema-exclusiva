@@ -181,10 +181,12 @@ class VehicleChecklist(Base):
     ar_condicionado = Column(Boolean)
 
     # Documentos (MENSAL) — arrays armazenados como JSON em Text
-    licenciamento = Column(Text)
+    licenciamento = Column(Text)         # legado — mantido para dados antigos
     licenciamento_outro = Column(String(100))
     checklist_colocado = Column(Text)
-    cartao_artesp = Column(String(50))
+    cartao_artesp = Column(String(50))  # legado — mantido para dados antigos
+    crlv_status = Column(String(50))    # SIM_EM_DIA | VENCIDO | NAO_LOCALIZADO
+    emtu_status = Column(String(50))    # SIM_EM_DIA | VENCIDO | NAO_LOCALIZADO
 
     # Materiais gráficos (MENSAL)
     qr_code = Column(Boolean)
