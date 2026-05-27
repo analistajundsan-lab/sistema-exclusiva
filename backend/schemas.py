@@ -300,6 +300,12 @@ class ChecklistCreate(BaseModel):
     wifi_status: Optional[List[str]] = None
     wifi_outro: Optional[str] = None
 
+    # Conferência de Documentos
+    crlv_emtu: Optional[str] = None
+    crlv_emtu_qrcode: Optional[bool] = None
+    artesp_doc: Optional[str] = None
+    emdec_doc: Optional[str] = None
+
     observacoes: Optional[str] = None
     evidencias: Optional[List[str]] = None
 
@@ -333,6 +339,12 @@ class ChecklistResponse(BaseModel):
 
     wifi_status: Optional[List[str]] = None
     wifi_outro: Optional[str] = None
+
+    # Conferência de Documentos
+    crlv_emtu: Optional[str] = None
+    crlv_emtu_qrcode: Optional[bool] = None
+    artesp_doc: Optional[str] = None
+    emdec_doc: Optional[str] = None
 
     observacoes: Optional[str] = None
     evidencias: Optional[List[str]] = None

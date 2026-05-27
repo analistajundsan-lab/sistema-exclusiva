@@ -168,7 +168,7 @@ class VehicleChecklist(Base):
     prefixo = Column(String(20), nullable=False, index=True)
     tipo = Column(String(20), nullable=False)  # AVULSO | MENSAL
 
-    # Câmeras (MENSAL)
+    # Cameras (MENSAL)
     camera_frontal = Column(String(30))
     camera_lateral_esq = Column(String(30))
     camera_lateral_dir = Column(String(30))
@@ -176,17 +176,17 @@ class VehicleChecklist(Base):
     camera_ip_motorista = Column(String(30))
     camera_salao = Column(String(30))
 
-    # Acessórios básicos (MENSAL)
+    # Acessorios basicos (MENSAL)
     tem_leitor_embarque = Column(Boolean)
     ar_condicionado = Column(Boolean)
 
-    # Documentos (MENSAL) — arrays armazenados como JSON em Text
+    # Documentos (MENSAL) -- arrays armazenados como JSON em Text
     licenciamento = Column(Text)
     licenciamento_outro = Column(String(100))
     checklist_colocado = Column(Text)
     cartao_artesp = Column(String(50))
 
-    # Materiais gráficos (MENSAL)
+    # Materiais graficos (MENSAL)
     qr_code = Column(Boolean)
     adesivo_leitor = Column(Boolean)
     placa_senha_wifi = Column(Boolean)
@@ -194,6 +194,12 @@ class VehicleChecklist(Base):
     # Wi-Fi (AVULSO e MENSAL)
     wifi_status = Column(Text)
     wifi_outro = Column(String(255))
+
+    # Conferencia de Documentos (MENSAL) -- CRLV-EMTU, ARTESP, EMDEC
+    crlv_emtu = Column(String(50))
+    crlv_emtu_qrcode = Column(Boolean)
+    artesp_doc = Column(String(50))
+    emdec_doc = Column(String(50))
 
     observacoes = Column(Text)
     evidencias = Column(Text)  # JSON array de base64

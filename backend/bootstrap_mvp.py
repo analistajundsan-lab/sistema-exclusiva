@@ -58,6 +58,11 @@ def migrate_existing_sqlite() -> None:
         ensure_column("incidents", "victim_status", "victim_status VARCHAR(20)")
     if "schedule_lines" in tables:
         ensure_column("schedule_lines", "import_id", "import_id INTEGER")
+    if "vehicle_checklists" in tables:
+        ensure_column("vehicle_checklists", "crlv_emtu", "crlv_emtu VARCHAR(50)")
+        ensure_column("vehicle_checklists", "crlv_emtu_qrcode", "crlv_emtu_qrcode BOOLEAN")
+        ensure_column("vehicle_checklists", "artesp_doc", "artesp_doc VARCHAR(50)")
+        ensure_column("vehicle_checklists", "emdec_doc", "emdec_doc VARCHAR(50)")
 
 
 def upsert_admin(
@@ -70,7 +75,6 @@ def upsert_admin(
     cpf_hash = hash_cpf(cpf)
     user = db.query(User).filter(User.cpf_hash == cpf_hash).first()
     if not user:
-        # Apenas na CRIAÇÃO define senha temporária e força troca
         user = User(
             cpf_hash=cpf_hash,
             email=email,
@@ -82,7 +86,6 @@ def upsert_admin(
         )
         db.add(user)
         db.flush()
-    # Em deploys subsequentes: atualiza só metadados — NUNCA reseta senha
     user.email = email
     user.name = name
     user.role = UserRole.ADMIN

@@ -15,6 +15,32 @@ router = APIRouter(prefix="/checklist", tags=["checklist"])
 JSON_FIELDS = ["licenciamento", "checklist_colocado", "wifi_status", "evidencias"]
 
 
+@router.get("/garagens", response_model=List[str])
+async def list_garagens(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna todas as garagens unicas conhecidas (checklists + unidades de usuarios ativos)."""
+    garagens: set[str] = set()
+
+    rows = db.query(VehicleChecklist.garagem).distinct().all()
+    for (g,) in rows:
+        if g and g.strip():
+            garagens.add(g.strip())
+
+    users = db.query(User.unit, User.units).filter(User.is_active.is_(True)).all()
+    for u in users:
+        if u.unit and u.unit.strip():
+            garagens.add(u.unit.strip())
+        if u.units:
+            for g in u.units.split(","):
+                g = g.strip()
+                if g:
+                    garagens.add(g)
+
+    return sorted(garagens)
+
+
 def _to_response(c: VehicleChecklist) -> ChecklistResponse:
     data: dict = {col.name: getattr(c, col.name) for col in c.__table__.columns}
     for field in JSON_FIELDS:

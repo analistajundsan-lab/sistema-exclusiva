@@ -25,6 +25,10 @@ export interface ChecklistData {
   placa_senha_wifi?: boolean
   wifi_status?: string[]
   wifi_outro?: string
+  crlv_emtu?: string
+  crlv_emtu_qrcode?: boolean
+  artesp_doc?: string
+  emdec_doc?: string
   observacoes?: string
   evidencias?: string[]
   created_at: string
