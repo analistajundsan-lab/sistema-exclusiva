@@ -1,9 +1,9 @@
-import { ReactNode } from 'react'
+import { ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardCheck, AlertTriangle,
   Calendar, Shield, Users, LogOut, Sun, Moon,
-  User, ChevronRight, Bus, Search, ClipboardList, type LucideIcon,
+  User, ChevronRight, Bus, Search, ClipboardList, Download, type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthStore } from '../store/auth'
@@ -33,6 +33,26 @@ export function Layout({ children }: { children: ReactNode }) {
   const { dark, toggle } = useThemeStore()
   const navigate = useNavigate()
   const location = useLocation()
+
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault()
+      setInstallPrompt(e as BeforeInstallPromptEvent)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', () => setInstalled(true))
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const handleInstall = async () => {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') setInstallPrompt(null)
+  }
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -137,6 +157,16 @@ export function Layout({ children }: { children: ReactNode }) {
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Exclusiva</span>
             </div>
             <div className="flex items-center gap-2">
+              {installPrompt && !installed && (
+                <button
+                  onClick={handleInstall}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brand-700 text-white text-xs font-semibold"
+                  title="Instalar app no celular"
+                >
+                  <Download size={14} />
+                  <span>Instalar</span>
+                </button>
+              )}
               <button
                 onClick={toggle}
                 className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -189,14 +219,14 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* ── Bottom tab bar (mobile only) ── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
-        <div className="flex items-stretch">
-          {visibleNav.slice(0, 5).map(({ to, label, icon: Icon }) => {
+        <div className="flex items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {visibleNav.map(({ to, label, icon: Icon }) => {
             const active = isActive(to)
             return (
               <Link
                 key={to}
                 to={to}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors ${
+                className={`relative [flex:1_0_60px] flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors ${
                   active
                     ? 'text-brand-700 dark:text-brand-400'
                     : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
@@ -213,7 +243,7 @@ export function Layout({ children }: { children: ReactNode }) {
           {/* Logout at the end on mobile */}
           <button
             onClick={handleLogout}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium text-gray-400 dark:text-gray-500"
+            className="[flex:1_0_60px] flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium text-gray-400 dark:text-gray-500"
           >
             <LogOut size={20} />
             <span>Sair</span>
