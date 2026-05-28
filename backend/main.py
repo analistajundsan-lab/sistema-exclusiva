@@ -19,7 +19,11 @@ from prometheus_client import make_asgi_app
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+    logging.getLogger(__name__).info("DB: create_all concluido com sucesso")
+except Exception as _exc:
+    logging.getLogger(__name__).error("DB: create_all FALHOU: %s", _exc)
 
 docs_enabled = settings.ENVIRONMENT != "production"
 
@@ -31,6 +35,31 @@ app = FastAPI(
     redoc_url="/redoc" if docs_enabled else None,
     openapi_url="/openapi.json" if docs_enabled else None,
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Garante que erros 500 não-tratados incluam o header CORS.
+
+    Sem este handler, o Starlette propaga a exceção até o uvicorn, que gera
+    a resposta 500 ANTES de passar pelo CORSMiddleware — fazendo o browser
+    bloquear a resposta por CORS violation e o axios reportar !status
+    (sem resposta), o que no frontend vira "Sem conexão com o servidor".
+    """
+    logger.error(
+        "Erro nao tratado em %s %s: %s",
+        request.method, request.url.path, exc, exc_info=True,
+    )
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Erro interno do servidor"},
+    )
+    # Adiciona CORS para que o browser consiga ler a resposta de erro
+    origin = request.headers.get("origin", "")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 if settings.EXPOSE_METRICS:
     metrics_app = make_asgi_app()

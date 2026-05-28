@@ -14,7 +14,24 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 import enum
 from datetime import datetime
+from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 from config import settings
+
+
+def _clean_db_url(url: str) -> str:
+    """Remove parâmetros que o Neon PgBouncer (pooler) não suporta.
+
+    - channel_binding=require: exige SCRAM-SHA-256-PLUS que o PgBouncer
+      não implementa em transaction mode, causando falha nas queries.
+    """
+    try:
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        params.pop("channel_binding", None)
+        new_query = urlencode({k: v[0] for k, v in params.items()})
+        return urlunparse(parsed._replace(query=new_query))
+    except Exception:
+        return url
 
 Base = declarative_base()
 
@@ -208,7 +225,7 @@ class VehicleChecklist(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, echo=False)
+engine = create_engine(_clean_db_url(settings.DATABASE_URL), pool_pre_ping=True, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
