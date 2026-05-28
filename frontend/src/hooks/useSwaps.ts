@@ -8,7 +8,9 @@ export interface Swap {
   unit?: string
   client_name?: string
   vehicle_out: string
-  vehicle_in: string
+  vehicle_in?: string
+  driver_out?: string
+  driver_in?: string
   reason?: string
   lines_covered?: string
   whatsapp_text?: string
