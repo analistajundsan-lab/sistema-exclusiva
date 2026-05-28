@@ -203,7 +203,14 @@ export function OnCall() {
             <span className="mb-1.5">Próximas 40 min</span>
             <button
               type="button"
-              onClick={() => setAutoMode(m => !m)}
+              onClick={() => {
+                const next = !autoMode
+                setAutoMode(next)
+                pending.applyFilters({
+                  ...filters,
+                  ...(next ? { start_in_minutes: '40' } : {}),
+                } as any)
+              }}
               className={`relative inline-flex h-10 w-16 items-center rounded-xl text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 ${autoMode ? 'bg-brand-700 dark:bg-brand-600 border-brand-700' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'} border`}
             >
               <span className={`absolute left-1 transition-all duration-200 ${autoMode ? 'translate-x-7' : 'translate-x-0'} inline-block w-6 h-6 rounded-lg bg-white shadow`} />
