@@ -1,5 +1,17 @@
+import json
+
+from pydantic import computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator, model_validator
+
+_DEFAULT_ORIGINS = ",".join([
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://localhost:3000",
+    "https://sistema-exclusiva-pied.vercel.app",
+    "https://sistema-exclusiva.fly.dev",
+])
 
 
 class Settings(BaseSettings):
@@ -18,28 +30,23 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
     EXPOSE_METRICS: bool = True
-    ALLOWED_ORIGINS: list = [
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://localhost:3000",
-        "https://sistema-exclusiva-pied.vercel.app",
-        "https://sistema-exclusiva.fly.dev",
-    ]
+
+    # str field avoids pydantic-settings v2 JSON-parsing a list before validators run
+    ALLOWED_ORIGINS_RAW: str = _DEFAULT_ORIGINS
     ALLOWED_ORIGIN_REGEX: str | None = None
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, value):
-        if isinstance(value, str):
-            value = value.strip()
-            if value.startswith("["):
-                import json
-
-                return json.loads(value)
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+    @computed_field  # type: ignore[misc]
+    @property
+    def ALLOWED_ORIGINS(self) -> list:
+        v = self.ALLOWED_ORIGINS_RAW.strip()
+        if not v:
+            return _DEFAULT_ORIGINS.split(",")
+        if v.startswith("["):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                pass
+        return [item.strip() for item in v.split(",") if item.strip()]
 
     @model_validator(mode="after")
     def reject_default_secret_in_production(self):
