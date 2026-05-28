@@ -24,6 +24,10 @@ def _clean_db_url(url: str) -> str:
     - channel_binding=require: exige SCRAM-SHA-256-PLUS que o PgBouncer
       não implementa em transaction mode, causando falha nas queries.
     """
+    # Skip processing for non-PostgreSQL URLs (e.g., SQLite for tests)
+    if not url.startswith("postgresql://"):
+        return url
+
     try:
         parsed = urlparse(url)
         params = parse_qs(parsed.query, keep_blank_values=True)
@@ -225,7 +229,8 @@ class VehicleChecklist(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-engine = create_engine(_clean_db_url(settings.DATABASE_URL), pool_pre_ping=True, echo=False)
+_database_url = settings.DATABASE_URL or "postgresql://postgres:postgres@localhost:5432/sistema_exclusiva"
+engine = create_engine(_clean_db_url(_database_url), pool_pre_ping=True, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

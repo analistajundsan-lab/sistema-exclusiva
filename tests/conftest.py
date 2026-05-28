@@ -10,6 +10,7 @@ os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-pytest-only"
 os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["JWT_EXPIRATION_MINUTES"] = "30"
+os.environ["EXPOSE_METRICS"] = "true"
 
 
 @pytest.fixture(autouse=True)
