@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 import hashlib
 import re
@@ -431,6 +431,60 @@ def test_operator_receives_schedule_imported_by_admin(admin_token, operator_toke
     assert lines.json()[0]["line_code"] == "2828"
 
 
+def test_start_window_uses_active_import_without_forcing_line_date(
+    admin_token, operator_token
+):
+    brt = timezone(timedelta(hours=-3))
+    now_brt = datetime.now(brt)
+    start_time = (now_brt + timedelta(minutes=10)).strftime("%H:%M")
+    end_time = (now_brt + timedelta(minutes=50)).strftime("%H:%M")
+    effective_date = now_brt.date() - timedelta(days=1)
+
+    db = TestingSessionLocal()
+    try:
+        schedule_import = ScheduleImport(
+            effective_date=effective_date,
+            filename="escala_ativa.xlsx",
+            rows_imported=1,
+            created_by=1,
+        )
+        db.add(schedule_import)
+        db.flush()
+        db.add(
+            ScheduleLine(
+                import_id=schedule_import.id,
+                schedule_date=effective_date,
+                unit="Caieiras",
+                prefix_code="1580",
+                driver_name="MOTORISTA TESTE",
+                line_code="2828",
+                direction="ENTRADA",
+                client_name="M LIVRE - SP-02",
+                start_time=start_time,
+                end_time=end_time,
+                created_by=1,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/schedule/lines?schedule_date={now_brt.date()}&status=pendente&start_in_minutes=40",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    count = client.get(
+        f"/schedule/lines/count?schedule_date={now_brt.date()}&status=pendente&start_in_minutes=40",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+
+    assert response.status_code == 200
+    assert count.status_code == 200
+    assert len(response.json()) == 1
+    assert count.json()["total"] == 1
+    assert response.json()[0]["line_code"] == "2828"
+
+
 def test_confirm_schedule_line_moves_to_confirmed_history(admin_token, operator_token):
     import_response = client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
@@ -705,6 +759,48 @@ def test_swap_can_be_created_from_confirmed_schedule_line(admin_token, operator_
     assert data["unit"] == "Caieiras"
     assert "PREFIXO 1590" in data["whatsapp_text"]
     assert "ATENDERA AS LINHAS" in data["whatsapp_text"]
+
+
+def test_swap_can_change_only_driver_from_confirmed_schedule_line(
+    admin_token, operator_token
+):
+    client.post(
+        "/schedule/import?schedule_date=2026-04-13&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    line = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()[0]
+    client.post(
+        f"/schedule/lines/{line['id']}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+
+    response = client.post(
+        "/swaps/",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={
+            "schedule_line_id": line["id"],
+            "vehicle_out": line["prefix_code"],
+            "driver_in": "MOTORISTA RESERVA",
+            "reason": "Adequacao operacional",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["vehicle_in"] is None
+    assert data["driver_out"] == line["driver_name"]
+    assert data["driver_in"] == "MOTORISTA RESERVA"
+    assert "MOTORISTA MOTORISTA RESERVA" in data["whatsapp_text"]
 
 
 def test_swap_requires_confirmed_schedule_line(admin_token, operator_token):

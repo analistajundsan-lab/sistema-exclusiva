@@ -93,6 +93,62 @@ function filterLines(lines: DemoLine[], params: Record<string, string>) {
   )
 }
 
+function emptyDirectionStats() {
+  return {
+    entrada: 0,
+    saida: 0,
+    confirmed_entrada: 0,
+    confirmed_saida: 0,
+    pending_entrada: 0,
+    pending_saida: 0,
+    total: 0,
+    unique_lines: 0,
+  }
+}
+
+function countDirectionStats(selected: DemoLine[]) {
+  const stats = emptyDirectionStats()
+  const uniqueLines = new Set<string>()
+  selected.forEach(line => {
+    const isEntrada = line.direction === 'ENTRADA'
+    const confirmed = line.status === 'confirmada'
+    if (isEntrada) {
+      stats.entrada += 1
+      stats[confirmed ? 'confirmed_entrada' : 'pending_entrada'] += 1
+    } else {
+      stats.saida += 1
+      stats[confirmed ? 'confirmed_saida' : 'pending_saida'] += 1
+    }
+    stats.total += 1
+    uniqueLines.add(line.line_code)
+  })
+  stats.unique_lines = uniqueLines.size
+  return stats
+}
+
+function demoDashboard(lines: DemoLine[], scheduleDate: string) {
+  const units = ['Caieiras', 'Jundiai', 'Santana de Parnaiba'].map(unit => {
+    const unitLines = lines.filter(line => line.unit === unit && line.schedule_date === scheduleDate)
+    return {
+      unit,
+      total: countDirectionStats(unitLines),
+      turns: ['T1', 'T2', 'T3', 'T4', 'T5', 'APRENDIZ'].map(turn => ({
+        key: turn,
+        label: turn === 'APRENDIZ' ? 'Aprendiz' : turn,
+        ...countDirectionStats(turn === 'T1' ? unitLines : []),
+      })),
+      client_cards: [],
+    }
+  }).filter(unit => unit.total.total > 0)
+
+  return {
+    schedule_date: scheduleDate,
+    units,
+    client_index: [],
+    excluded: [],
+  }
+}
+
 export async function demoAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse> {
   const method = (config.method || 'get').toLowerCase()
   const path = pathOf(config)
@@ -137,6 +193,7 @@ export async function demoAdapter(config: InternalAxiosRequestConfig): Promise<A
     })
     return ok(config, grouped)
   }
+  if (path === '/schedule/dashboard-turns') return ok(config, demoDashboard(lines, params.schedule_date || DEFAULT_OPERATION_DATE))
   if (path.match(/\/schedule\/lines\/\d+\/confirm/) && method === 'post') {
     const id = Number(path.split('/')[3])
     const line = lines.find(item => item.id === id)
@@ -176,7 +233,7 @@ export async function demoAdapter(config: InternalAxiosRequestConfig): Promise<A
 
   if (path === '/swaps/count') return ok(config, { total: Number(localStorage.getItem('demoSwapsTotal') || 0) })
   if (path === '/swaps/' || path === '/swaps') return method === 'post'
-    ? ok(config, { id: Date.now(), ...body, schedule_date: DEFAULT_OPERATION_DATE, unit: params.unit || 'Caieiras', client_name: 'M LIVRE - SP-02', created_by: 2, created_at: new Date().toISOString(), whatsapp_text: `Troca operacional confirmada\n\nCarro substituido: ${body.vehicle_out}\nCarro substituto: ${body.vehicle_in}\n\nLinha(s) atendida(s): ${body.lines_covered}` }, 201)
+    ? ok(config, { id: Date.now(), ...body, schedule_date: DEFAULT_OPERATION_DATE, unit: params.unit || 'Caieiras', client_name: 'M LIVRE - SP-02', created_by: 2, created_at: new Date().toISOString(), whatsapp_text: `Troca operacional confirmada\n\nPrefixo substituido: ${body.vehicle_out || '-'}\nPrefixo substituto: ${body.vehicle_in || '-'}\nMotorista substituto: ${body.driver_in || '-'}\n\nLinha(s) atendida(s): ${body.lines_covered}` }, 201)
     : ok(config, [])
   if (path === '/swaps/whatsapp/text') return ok(config, { total: 0, text: 'Nenhuma troca registrada para os filtros informados.' })
 

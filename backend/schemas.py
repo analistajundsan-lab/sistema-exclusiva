@@ -142,15 +142,19 @@ class IncidentResponse(BaseModel):
 
 class SwapCreate(BaseModel):
     schedule_line_id: Optional[int] = None
-    vehicle_out: str = Field(..., min_length=1, max_length=10)
-    vehicle_in: str = Field(..., min_length=1, max_length=10)
+    vehicle_out: Optional[str] = Field(None, max_length=10)
+    vehicle_in: Optional[str] = Field(None, max_length=10)
+    driver_out: Optional[str] = Field(None, max_length=255)
+    driver_in: Optional[str] = Field(None, max_length=255)
     reason: Optional[str] = Field(None, max_length=255)
     lines_covered: Optional[str] = Field(None, max_length=500)
 
 
 class SwapUpdate(BaseModel):
     vehicle_out: Optional[str] = Field(None, min_length=1, max_length=10)
-    vehicle_in: Optional[str] = Field(None, min_length=1, max_length=10)
+    vehicle_in: Optional[str] = Field(None, max_length=10)
+    driver_out: Optional[str] = Field(None, max_length=255)
+    driver_in: Optional[str] = Field(None, max_length=255)
     reason: Optional[str] = Field(None, max_length=255)
     lines_covered: Optional[str] = Field(None, max_length=500)
 
@@ -164,7 +168,9 @@ class SwapResponse(BaseModel):
     unit: Optional[str] = None
     client_name: Optional[str] = None
     vehicle_out: str
-    vehicle_in: str
+    vehicle_in: Optional[str] = None
+    driver_out: Optional[str] = None
+    driver_in: Optional[str] = None
     reason: Optional[str] = None
     lines_covered: Optional[str] = None
     whatsapp_text: Optional[str] = None

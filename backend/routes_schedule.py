@@ -1,5 +1,5 @@
 from collections import Counter, defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import List, Optional
 
@@ -173,6 +173,40 @@ def apply_filters(
     return query
 
 
+def apply_start_window(
+    query,
+    start_in_minutes: Optional[int],
+    operation_date: Optional[date] = None,
+    now_brt: Optional[datetime] = None,
+):
+    if start_in_minutes is None:
+        return query
+
+    brt = timezone(timedelta(hours=-3))
+    now_brt = now_brt or datetime.now(brt)
+    cutoff_brt = now_brt + timedelta(minutes=start_in_minutes)
+    now_str = now_brt.strftime("%H:%M")
+    cutoff_str = cutoff_brt.strftime("%H:%M")
+
+    if operation_date and operation_date != now_brt.date():
+        return query
+
+    if now_brt.date() == cutoff_brt.date():
+        return query.filter(
+            ScheduleLine.start_time >= now_str,
+            ScheduleLine.start_time <= cutoff_str,
+        )
+
+    from sqlalchemy import or_
+
+    return query.filter(
+        or_(
+            ScheduleLine.start_time >= now_str,
+            ScheduleLine.start_time <= cutoff_str,
+        )
+    )
+
+
 def safe_xlsx_text(value):
     if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
         return f"'{value}"
@@ -340,6 +374,7 @@ async def count_schedule_lines(
     status: Optional[ScheduleLineStatus] = None,
     start_time_gte: Optional[str] = None,
     start_time_lt: Optional[str] = None,
+    start_in_minutes: Optional[int] = Query(None, ge=1, le=1440),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -359,6 +394,7 @@ async def count_schedule_lines(
         query = query.filter(ScheduleLine.start_time >= start_time_gte)
     if start_time_lt:
         query = query.filter(ScheduleLine.start_time < start_time_lt)
+    query = apply_start_window(query, start_in_minutes, schedule_date)
     return {"total": query.count()}
 
 
@@ -389,36 +425,7 @@ async def list_schedule_lines(
     )
     query = apply_schedule_date_scope(db, query, schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
-    if start_in_minutes is not None:
-        from datetime import timedelta, timezone
-        from sqlalchemy import and_, or_
-
-        brt = timezone(timedelta(hours=-3))
-        now_brt = datetime.now(brt)
-        cutoff_brt = now_brt + timedelta(minutes=start_in_minutes)
-        now_str = now_brt.strftime("%H:%M")
-        cutoff_str = cutoff_brt.strftime("%H:%M")
-
-        if now_brt.date() == cutoff_brt.date():
-            query = query.filter(
-                ScheduleLine.schedule_date == now_brt.date(),
-                ScheduleLine.start_time >= now_str,
-                ScheduleLine.start_time <= cutoff_str,
-            )
-        else:
-            # Janela cruza meia-noite: une linhas de hoje (>= now) e amanhã (<= cutoff)
-            query = query.filter(
-                or_(
-                    and_(
-                        ScheduleLine.schedule_date == now_brt.date(),
-                        ScheduleLine.start_time >= now_str,
-                    ),
-                    and_(
-                        ScheduleLine.schedule_date == cutoff_brt.date(),
-                        ScheduleLine.start_time <= cutoff_str,
-                    ),
-                )
-            )
+    query = apply_start_window(query, start_in_minutes, schedule_date)
     return (
         query.order_by(
             ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code

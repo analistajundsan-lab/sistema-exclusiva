@@ -1,1 +1,3 @@
-export const DEFAULT_OPERATION_DATE = new Date().toISOString().slice(0, 10)
+export const DEFAULT_OPERATION_DATE = new Date().toLocaleDateString('en-CA', {
+  timeZone: 'America/Sao_Paulo',
+})

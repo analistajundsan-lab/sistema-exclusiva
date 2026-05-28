@@ -39,9 +39,24 @@ def format_lines_covered(direction: str, line_code: str) -> str:
     return f"{abbr}/{line_code}" if line_code else abbr
 
 
-def build_swap_whatsapp_text(vehicle_in: str, lines_covered: Optional[str]) -> str:
+def clean_optional(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def build_swap_whatsapp_text(
+    vehicle_in: Optional[str], driver_in: Optional[str], lines_covered: Optional[str]
+) -> str:
     lines = lines_covered or "linha nao informada"
-    return f"PREFIXO {vehicle_in} - ATENDERA AS LINHAS : {lines}"
+    parts = []
+    if vehicle_in:
+        parts.append(f"PREFIXO {vehicle_in}")
+    if driver_in:
+        parts.append(f"MOTORISTA {driver_in}")
+    title = " - ".join(parts) if parts else "TROCA OPERACIONAL"
+    return f"{title} - ATENDERA AS LINHAS : {lines}"
 
 
 @router.get("/count", response_model=CountResponse)
@@ -66,12 +81,24 @@ async def create_swap(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if body.vehicle_out == body.vehicle_in:
+    vehicle_out = clean_optional(body.vehicle_out)
+    vehicle_in = clean_optional(body.vehicle_in)
+    driver_out = clean_optional(body.driver_out)
+    driver_in = clean_optional(body.driver_in)
+    if vehicle_out and vehicle_in and vehicle_out == vehicle_in:
         raise HTTPException(
             status_code=422,
             detail="Os prefixos SAI e ENTRA não podem ser iguais",
         )
     data = body.model_dump()
+    data.update(
+        {
+            "vehicle_out": vehicle_out,
+            "vehicle_in": vehicle_in,
+            "driver_out": driver_out,
+            "driver_in": driver_in,
+        }
+    )
     if body.schedule_line_id:
         schedule_line = (
             db.query(ScheduleLine)
@@ -92,11 +119,19 @@ async def create_swap(
         data["unit"] = schedule_line.unit
         data["client_name"] = schedule_line.client_name
         data["vehicle_out"] = data["vehicle_out"] or schedule_line.prefix_code
+        data["driver_out"] = data["driver_out"] or schedule_line.driver_name
         data["lines_covered"] = data.get("lines_covered") or format_lines_covered(
             schedule_line.direction, schedule_line.line_code
         )
+    if not data.get("vehicle_out"):
+        raise HTTPException(status_code=422, detail="Informe o prefixo de origem")
+    if not data.get("vehicle_in") and not data.get("driver_in"):
+        raise HTTPException(
+            status_code=422,
+            detail="Informe o prefixo substituto ou o motorista substituto",
+        )
     data["whatsapp_text"] = build_swap_whatsapp_text(
-        data["vehicle_in"], data.get("lines_covered")
+        data.get("vehicle_in"), data.get("driver_in"), data.get("lines_covered")
     )
     swap = Swap(**data, created_by=current_user.id)
     db.add(swap)
@@ -160,10 +195,15 @@ async def swaps_whatsapp_text(
             "text": "Nenhuma troca registrada para os filtros informados.",
         }
 
-    # Agrupa linhas por vehicle_in (prefixo substituto)
+    # Agrupa linhas por prefixo e/ou motorista substituto.
     groups: dict[str, list[str]] = {}
     for swap in swaps:
-        key = swap.vehicle_in
+        labels = []
+        if swap.vehicle_in:
+            labels.append(f"PREFIXO {swap.vehicle_in}")
+        if swap.driver_in:
+            labels.append(f"MOTORISTA {swap.driver_in}")
+        key = " - ".join(labels) if labels else "TROCA OPERACIONAL"
         line = swap.lines_covered or "linha nao informada"
         groups.setdefault(key, []).append(line)
 
@@ -178,8 +218,8 @@ async def swaps_whatsapp_text(
     )
     header = f"TROCAS NA ESCALA DIA {date_label}"
     body_lines = [
-        f"PREFIXO {vehicle} - ATENDERA AS LINHAS : {' - '.join(lines)}"
-        for vehicle, lines in groups.items()
+        f"{label} - ATENDERA AS LINHAS : {' - '.join(lines)}"
+        for label, lines in groups.items()
     ]
     text = header + "\n\n" + "\n".join(body_lines)
 
@@ -218,13 +258,26 @@ async def update_swap(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão"
         )
-    if body.vehicle_out and body.vehicle_in and body.vehicle_out == body.vehicle_in:
+    vehicle_out = clean_optional(body.vehicle_out)
+    vehicle_in = clean_optional(body.vehicle_in)
+    if vehicle_out and vehicle_in and vehicle_out == vehicle_in:
         raise HTTPException(
             status_code=422, detail="Os prefixos SAI e ENTRA não podem ser iguais"
         )
     update_data = body.model_dump(exclude_unset=True)
+    for key in ["vehicle_out", "vehicle_in", "driver_out", "driver_in"]:
+        if key in update_data:
+            update_data[key] = clean_optional(update_data[key])
     for field, value in update_data.items():
         setattr(swap, field, value)
+    if not swap.vehicle_in and not swap.driver_in:
+        raise HTTPException(
+            status_code=422,
+            detail="Informe o prefixo substituto ou o motorista substituto",
+        )
+    swap.whatsapp_text = build_swap_whatsapp_text(
+        swap.vehicle_in, swap.driver_in, swap.lines_covered
+    )
     ensure_unit_access(current_user, swap.unit)
     db.add(
         AuditLog(
