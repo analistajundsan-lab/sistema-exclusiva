@@ -43,6 +43,7 @@ export function OnCall() {
   // Estado do card com troca inline aberta
   const [swapOpenId, setSwapOpenId] = useState<number | null>(null)
   const [swapVehicle, setSwapVehicle] = useState('')
+  const [swapDriver, setSwapDriver] = useState('')
   const [swapReason, setSwapReason] = useState('')
   const [swapSaving, setSwapSaving] = useState(false)
 
@@ -72,12 +73,13 @@ export function OnCall() {
   const openSwap = (line: ScheduleLine) => {
     setSwapOpenId(line.id)
     setSwapVehicle('')
+    setSwapDriver('')
     setSwapReason('')
     setActionError(null)
   }
 
   const handleCreateSwap = async (line: ScheduleLine) => {
-    if (!swapVehicle.trim()) return
+    if (!swapVehicle.trim() && !swapDriver.trim()) return
     setSwapSaving(true)
     setActionError(null)
     try {
@@ -87,12 +89,15 @@ export function OnCall() {
       await swapsList.createSwap({
         schedule_line_id: line.id,
         vehicle_out: line.prefix_code,
-        vehicle_in: swapVehicle.trim(),
+        vehicle_in: swapVehicle.trim() || undefined,
+        driver_out: line.driver_name,
+        driver_in: swapDriver.trim() || undefined,
         reason: swapReason || undefined,
         lines_covered: `${line.direction} - ${line.line_code}`,
       } as any)
       setSwapOpenId(null)
       setSwapVehicle('')
+      setSwapDriver('')
       setSwapReason('')
       setActionMessage('Troca registrada! Copie o texto no painel lateral para enviar no WhatsApp.')
     } catch (e: any) {
@@ -297,33 +302,45 @@ export function OnCall() {
                   key={line.id}
                   className="border border-gray-100 dark:border-gray-700 rounded-2xl p-4 hover:shadow-sm transition-shadow bg-gray-50/50 dark:bg-gray-700/30"
                 >
-                  {/* Topo do card */}
+                  {/* Topo do card — badges */}
                   <div className="flex flex-wrap items-center gap-2 mb-3">
                     <span className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300">
+                      <Bus size={10} />
+                      L - {line.line_code}
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
                       <Clock size={11} />
                       {line.start_time} – {line.end_time}
                     </span>
                     <span className="rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
                       {line.direction}
                     </span>
-                    <span className="flex items-center gap-1 font-mono text-xs font-bold text-brand-700 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 px-2.5 py-1 rounded-full">
-                      <Bus size={10} /> {line.line_code}
-                    </span>
+                  </div>
+
+                  {/* Prefixo destaque + cliente */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-1">
+                        Prefixo
+                      </p>
+                      <p className="text-3xl font-black text-brand-800 dark:text-brand-300 leading-none tracking-tight">
+                        {line.prefix_code}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0 max-w-[55%]">
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 leading-tight">
+                        {line.client_name}
+                      </p>
+                    </div>
                   </div>
 
                   {/* Dados da linha */}
-                  <div className="mb-3">
-                    <p className="font-bold text-gray-900 dark:text-gray-100 text-sm">
-                      {line.client_name}
-                      <span className="ml-2 text-xs font-normal text-gray-400 dark:text-gray-500">
-                        Prefixo {line.prefix_code}
-                      </span>
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1">
+                  <div className="mb-3 space-y-0.5">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <MapPin size={11} className="shrink-0" />
                       {line.route_name}
                     </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
                       <User size={11} className="shrink-0" />
                       {line.driver_name}
                     </p>
@@ -362,21 +379,29 @@ export function OnCall() {
                       <div className="flex items-center gap-2 mb-1">
                         <ArrowLeftRight size={14} className="text-accent-600 dark:text-accent-400" />
                         <p className="text-xs font-bold text-accent-700 dark:text-accent-300 uppercase tracking-wide">
-                          Prefixo substituto
+                          Troca operacional
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <input
                           autoFocus
                           value={swapVehicle}
                           onChange={e => setSwapVehicle(e.target.value)}
-                          placeholder="Ex: 4521"
-                          className="flex-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          placeholder="Prefixo substituto (opcional)"
+                          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         />
+                        <input
+                          value={swapDriver}
+                          onChange={e => setSwapDriver(e.target.value)}
+                          placeholder="Motorista substituto (opcional)"
+                          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        />
+                      </div>
+                      <div className="flex gap-2">
                         <button
                           onClick={() => handleCreateSwap(line)}
-                          disabled={swapSaving || !swapVehicle.trim()}
-                          className="bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 whitespace-nowrap"
+                          disabled={swapSaving || (!swapVehicle.trim() && !swapDriver.trim())}
+                          className="flex-1 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 whitespace-nowrap"
                         >
                           {swapSaving ? 'Salvando...' : 'Salvar troca'}
                         </button>
@@ -435,10 +460,21 @@ export function OnCall() {
                 >
                   <div className="mb-2">
                     <p className="text-sm font-bold text-brand-800 dark:text-brand-300 flex items-center gap-1.5">
-                      <span className="font-mono">{swap.vehicle_out}</span>
-                      <ChevronRight size={13} />
-                      <span className="font-mono">{swap.vehicle_in}</span>
+                      {swap.vehicle_in ? (
+                        <>
+                          <span className="font-mono">{swap.vehicle_out}</span>
+                          <ChevronRight size={13} />
+                          <span className="font-mono">{swap.vehicle_in}</span>
+                        </>
+                      ) : (
+                        <span className="font-mono">Prefixo mantido {swap.vehicle_out}</span>
+                      )}
                     </p>
+                    {swap.driver_in && (
+                      <p className="text-xs text-brand-700 dark:text-brand-300 mt-0.5 flex items-center gap-1">
+                        <User size={10} /> {swap.driver_out ? `${swap.driver_out} -> ` : ''}{swap.driver_in}
+                      </p>
+                    )}
                     {swap.lines_covered && (
                       <p className="text-xs text-brand-600 dark:text-brand-400 mt-0.5 flex items-center gap-1">
                         <Bus size={10} /> {swap.lines_covered}
