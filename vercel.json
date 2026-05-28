@@ -11,6 +11,6 @@
   ],
   "env": {
     "VITE_DEMO_MODE": "false",
-    "VITE_API_URL": "https://exclusiva-backend-bbzf.onrender.com"
+    "VITE_API_URL": "https://sistema-exclusiva.fly.dev"
   }
 }

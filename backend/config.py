@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5174",
         "http://localhost:3000",
         "https://sistema-exclusiva-pied.vercel.app",
+        "https://sistema-exclusiva.fly.dev",
     ]
     ALLOWED_ORIGIN_REGEX: str | None = None
 

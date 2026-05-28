@@ -1,4 +1,4 @@
-app = "sistema-exclusiva-api"
+app = "sistema-exclusiva"
 primary_region = "gru"
 
 [build]
