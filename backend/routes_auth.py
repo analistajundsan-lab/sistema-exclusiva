@@ -44,33 +44,41 @@ def get_client_ip(request: Request) -> str:
 
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
+    import logging
+    logger = logging.getLogger(__name__)
     client_ip = get_client_ip(req)
 
-    if not await rate_limit(f"login:{client_ip}", max_requests=5, window_seconds=60):
-        await rate_limit_metric("/auth/login")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Muitas tentativas de login. Tente novamente em 1 minuto.",
-        )
+    try:
+        if not await rate_limit(f"login:{client_ip}", max_requests=5, window_seconds=60):
+            await rate_limit_metric("/auth/login")
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Muitas tentativas de login. Tente novamente em 1 minuto.",
+            )
 
-    cpf_hash = hash_cpf(request.cpf)
-    user = db.query(User).filter(User.cpf_hash == cpf_hash).first()
+        cpf_hash = hash_cpf(request.cpf)
+        user = db.query(User).filter(User.cpf_hash == cpf_hash).first()
 
-    if not user or not verify_password(request.password, user.password_hash):
-        await auth_metrics(False)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas"
-        )
+        if not user or not verify_password(request.password, user.password_hash):
+            await auth_metrics(False)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas"
+            )
 
-    if not user.is_active:
-        await auth_metrics(False)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Usuário inativo"
-        )
+        if not user.is_active:
+            await auth_metrics(False)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Usuário inativo"
+            )
 
-    access_token, refresh_token = create_tokens(user)
-    await auth_metrics(True)
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+        access_token, refresh_token = create_tokens(user)
+        await auth_metrics(True)
+        return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {type(e).__name__}: {e}", exc_info=True)
+        raise
 
 
 @router.get("/me", response_model=UserResponse)

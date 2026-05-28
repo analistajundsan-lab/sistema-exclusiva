@@ -49,13 +49,19 @@ async def metrics_middleware(request: Request, call_next):
 
 async def auth_metrics(success: bool):
     """Record authentication attempts."""
-    status = "success" if success else "failed"
-    auth_attempts_total.labels(status=status).inc()
+    try:
+        status = "success" if success else "failed"
+        auth_attempts_total.labels(status=status).inc()
+    except Exception as e:
+        logger.error(f"Failed to record auth metrics: {e}")
 
 
 async def rate_limit_metric(endpoint: str):
     """Record rate limit hits."""
-    rate_limit_hits_total.labels(endpoint=endpoint).inc()
+    try:
+        rate_limit_hits_total.labels(endpoint=endpoint).inc()
+    except Exception as e:
+        logger.error(f"Failed to record rate limit metric: {e}")
 
 
 class DBMetricsContext:
