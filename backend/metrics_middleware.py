@@ -1,7 +1,7 @@
 import logging
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import Request
 from observability import (
     http_requests_total,
@@ -33,7 +33,7 @@ async def metrics_middleware(request: Request, call_next):
     # Structured log
     logger.info(
         {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "method": method,
             "path": path,
             "status_code": status,
