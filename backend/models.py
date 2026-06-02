@@ -189,7 +189,7 @@ class VehicleChecklist(Base):
     auditor_name = Column(String(255), nullable=False)
     garagem = Column(String(80), nullable=False, index=True)
     prefixo = Column(String(20), nullable=False, index=True)
-    tipo = Column(String(20), nullable=False)  # AVULSO | MENSAL
+    tipo = Column(String(20), nullable=False)  # AVULSO | MENSAL | DOCUMENTOS
 
     # Câmeras (MENSAL)
     camera_frontal = Column(String(30))
@@ -212,6 +212,7 @@ class VehicleChecklist(Base):
     emtu_status = Column(String(50))  # SIM_LOCALIZADO | DANIFICADO | NAO_LOCALIZADO
     artesp_status = Column(String(50))  # SIM_EM_DIA | VENCIDO | NAO_LOCALIZADO
     emdec_status = Column(String(50))  # SIM_EM_DIA | VENCIDO | NAO_LOCALIZADO
+    bolsa_documentos = Column(String(20))  # TEM | NAO_TEM
 
     # Materiais gráficos (MENSAL)
     qr_code = Column(Boolean)

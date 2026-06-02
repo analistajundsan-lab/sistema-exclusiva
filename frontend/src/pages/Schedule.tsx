@@ -82,7 +82,7 @@ export function Schedule() {
   const role = useAuthStore(s => s.role)
   const unit = useAuthStore(s => s.userUnit)
   const isAdmin = role === 'admin'
-  const canEdit = role === 'admin' || role === 'gerente'
+  const canEdit = role === 'admin'
   const isReadOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(role || '')
   const lockedUnit = isReadOnly && unit ? unit : null
 
@@ -210,7 +210,6 @@ export function Schedule() {
   const handleDownload = async () => {
     const params = new URLSearchParams()
     if (search.schedule_date) params.set('schedule_date', search.schedule_date)
-    params.set('unit', activeTab)
     try {
       const res = await api.get(`/schedule/download?${params.toString()}`, {
         responseType: 'blob',

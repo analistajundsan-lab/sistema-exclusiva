@@ -24,6 +24,7 @@ export interface ChecklistData {
   emtu_status?: string
   artesp_status?: string
   emdec_status?: string
+  bolsa_documentos?: string
   qr_code?: boolean
   adesivo_leitor?: boolean
   placa_senha_wifi?: boolean
@@ -76,6 +77,7 @@ export function useChecklist() {
     prefixo?: string
     garagem?: string
     tipo?: string
+    situacao?: string
     data_inicio?: string
     data_fim?: string
     skip?: number
@@ -90,10 +92,19 @@ export function useChecklist() {
     return res.data as ChecklistData
   }
 
+  const deleteChecklist = async (id: number) => {
+    await api.delete(`/checklist/${id}`)
+  }
+
   const listGaragens = async (): Promise<string[]> => {
     const res = await api.get('/checklist/garagens')
     return res.data as string[]
   }
 
-  return { createChecklist, updateChecklist, listChecklists, getChecklist, listGaragens, loading, error }
+  const hasChecklistToday = async (prefixo: string, garagem?: string): Promise<boolean> => {
+    const res = await api.get('/checklist/exists-today', { params: { prefixo, garagem } })
+    return Boolean(res.data?.exists)
+  }
+
+  return { createChecklist, updateChecklist, deleteChecklist, listChecklists, getChecklist, listGaragens, hasChecklistToday, loading, error }
 }

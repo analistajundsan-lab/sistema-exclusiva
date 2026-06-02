@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Layout } from '../components/Layout'
 import { useIncidents } from '../hooks/useIncidents'
-import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react'
 
 export function Incidents() {
   const { incidents, loading, error, total, page, totalPages, setPage, createIncident } = useIncidents()
@@ -13,7 +13,32 @@ export function Incidents() {
   const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const handleSubmit = async () => {
+  const incidentText = (incident: {
+    prefix_code: string
+    incident_type: string
+    line?: string
+    direction?: string
+    victim_status?: string
+    description?: string
+  }) => {
+    const parts = [
+      'OCORRENCIA OPERACIONAL',
+      `Tipo: ${incident.incident_type}`,
+      `Prefixo: ${incident.prefix_code}`,
+    ]
+    if (incident.line) parts.push(`Linha: ${incident.line}`)
+    if (incident.direction) parts.push(`Sentido: ${incident.direction}`)
+    if (incident.victim_status === 'com_vitimas') parts.push('Vitimas: com vitimas')
+    if (incident.victim_status === 'sem_vitimas') parts.push('Vitimas: sem vitimas')
+    if (incident.description) parts.push('', incident.description)
+    return parts.join('\n')
+  }
+
+  const sendWhatsApp = (text: string) => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleSubmit = async (sendAfterSave = false) => {
     if (!form.prefix_code || !form.incident_type) {
       setFormError('Preencha prefixo e tipo.')
       return
@@ -21,9 +46,10 @@ export function Incidents() {
     setSaving(true)
     setFormError(null)
     try {
-      await createIncident({ ...form, status: 'aberto' } as any)
+      const created = await createIncident({ ...form, status: 'aberto' } as any)
       setModal(false)
       setForm({ prefix_code: '', incident_type: '', line: '', direction: '', description: '', victim_status: '' })
+      if (sendAfterSave) sendWhatsApp(incidentText(created))
     } catch (e: any) {
       setFormError(e?.response?.data?.detail || 'Erro ao registrar ocorrência.')
     } finally {
@@ -31,7 +57,7 @@ export function Incidents() {
     }
   }
 
-  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
 
   const incidentTypeColor: Record<string, string> = {
     Avaria: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
@@ -89,7 +115,7 @@ export function Incidents() {
                     <div className="flex items-center gap-1.5"><Hash size={12} /> Prefixo</div>
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Tipo
+                    Tipo de Ocorrência
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     <div className="flex items-center gap-1.5"><Bus size={12} /> Linha</div>
@@ -103,12 +129,15 @@ export function Incidents() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     <div className="flex items-center gap-1.5"><Clock size={12} /> Horário</div>
                   </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    WhatsApp
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
                 {incidents.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">
+                    <td colSpan={7} className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">
                       <AlertTriangle size={24} className="mx-auto mb-2 opacity-30" />
                       Nenhuma ocorrência registrada hoje.
                     </td>
@@ -137,8 +166,17 @@ export function Incidents() {
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
-                        {new Date(i.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(i.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <button
+                        onClick={() => sendWhatsApp(incidentText(i))}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-xs font-semibold"
+                      >
+                        <MessageCircle size={12} />
+                        WhatsApp
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -213,7 +251,7 @@ export function Incidents() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-                      Tipo *
+                      Tipo de Ocorrência *
                     </label>
                     <select
                       name="incident_type"
@@ -245,13 +283,17 @@ export function Incidents() {
                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
                       Sentido
                     </label>
-                    <input
+                    <select
                       name="direction"
                       value={form.direction}
                       onChange={handle}
                       className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
-                      placeholder="Ex: ENTRADA"
-                    />
+                    >
+                      <option value="">Selecione...</option>
+                      <option value="ENTRADA">ENTRADA</option>
+                      <option value="SAIDA">SAIDA</option>
+                      <option value="EM DESLOCAMENTO">EM DESLOCAMENTO</option>
+                    </select>
                   </div>
                 </div>
 
@@ -295,12 +337,20 @@ export function Incidents() {
                     Cancelar
                   </button>
                   <button
-                    onClick={handleSubmit}
+                    onClick={() => handleSubmit(false)}
                     disabled={saving}
                     className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all disabled:opacity-50"
                   >
                     <Plus size={15} />
                     {saving ? 'Registrando...' : 'Registrar'}
+                  </button>
+                  <button
+                    onClick={() => handleSubmit(true)}
+                    disabled={saving || !form.prefix_code || !form.incident_type}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all disabled:opacity-50"
+                  >
+                    <MessageCircle size={15} />
+                    WhatsApp
                   </button>
                 </div>
               </div>

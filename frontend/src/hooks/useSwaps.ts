@@ -22,6 +22,7 @@ export interface SwapFilters {
   vehicle_out?: string
   vehicle_in?: string
   unit?: string
+  schedule_date?: string
   schedule_line_id?: number
 }
 
@@ -40,6 +41,7 @@ export function useSwaps(initialFilters?: SwapFilters) {
     if (f.vehicle_out) p.vehicle_out = f.vehicle_out
     if (f.vehicle_in) p.vehicle_in = f.vehicle_in
     if (f.unit) p.unit = f.unit
+    if (f.schedule_date) p.schedule_date = f.schedule_date
     if (f.schedule_line_id) p.schedule_line_id = String(f.schedule_line_id)
     return p
   }

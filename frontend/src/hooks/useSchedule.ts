@@ -50,6 +50,7 @@ export interface ScheduleFilters {
   driver_name?: string
   prefix_code?: string
   status?: string
+  start_in_minutes?: string
 }
 
 const PAGE_SIZE = 100

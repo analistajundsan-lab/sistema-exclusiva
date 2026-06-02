@@ -5,7 +5,7 @@ import { useChecklist, ChecklistData } from '../hooks/useChecklist'
 import { useAuthStore } from '../store/auth'
 import {
   ClipboardList, Plus, Search, X, ChevronDown, ChevronUp,
-  Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus, Pencil,
+  Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus, Pencil, Trash2,
 } from 'lucide-react'
 
 function hasPendency(c: ChecklistData): 'red' | 'amber' | 'ok' {
@@ -22,7 +22,8 @@ function hasPendency(c: ChecklistData): 'red' | 'amber' | 'ok' {
     c.artesp_status === 'NAO_LOCALIZADO' ||
     c.emdec_status === 'NAO_LOCALIZADO' ||
     c.emtu_status === 'NAO_LOCALIZADO' ||
-    c.emtu_status === 'DANIFICADO'
+    c.emtu_status === 'DANIFICADO' ||
+    c.bolsa_documentos === 'NAO_TEM'
   ) return 'amber'
   if (c.licenciamento?.includes('NAO_IMPRIMIR_NOVAMENTE')) return 'amber'
   if (c.wifi_status?.some(w => w !== 'SIM_FUNCIONAL')) return 'amber'
@@ -49,8 +50,27 @@ const STATUS_LABELS: Record<string, string> = {
   NAO_FUNCIONA_FRETADAO: 'Não funciona no Fretadão',
   SIM_VENCIDO: 'Sim — vencido',
   NAO_COLOCAR_NOVO: 'Não — colocar novo',
+  TEM: 'Tem',
+  NAO_TEM: 'Não tem',
   NA: 'N/A',
 }
+
+const SITUATION_FILTER_OPTIONS = [
+  { value: 'WIFI_PROBLEMA', label: 'Problema de rede/Wi-Fi' },
+  { value: 'DOCUMENTO_FALTANDO', label: 'Algum documento faltando' },
+  { value: 'DOCUMENTO_VENCIDO', label: 'Algum documento vencido' },
+  { value: 'CAMERA_VISITA_TECNICA', label: 'Câmera em visita técnica' },
+  { value: 'CRLV_FALTANDO', label: 'CRLV não localizado' },
+  { value: 'CRLV_VENCIDO', label: 'CRLV vencido' },
+  { value: 'EMTU_FALTANDO', label: 'EMTU não localizado' },
+  { value: 'EMTU_DANIFICADO', label: 'EMTU danificado' },
+  { value: 'ARTESP_FALTANDO', label: 'ARTESP não localizado' },
+  { value: 'ARTESP_VENCIDO', label: 'ARTESP vencido' },
+  { value: 'EMDEC_FALTANDO', label: 'EMDEC não localizado' },
+  { value: 'EMDEC_VENCIDO', label: 'EMDEC vencido' },
+  { value: 'BOLSA_DOCUMENTOS_NAO_TEM', label: 'Bolsa de documentos faltando' },
+  { value: 'CHECKLIST_FISICO_PENDENTE', label: 'Checklist físico pendente' },
+]
 
 const lbl = (v?: string | null) => (v ? STATUS_LABELS[v] ?? v : null)
 const lblList = (arr?: string[] | null) => arr?.length ? arr.map(v => STATUS_LABELS[v] ?? v).join(' · ') : null
@@ -90,16 +110,17 @@ function CameraRow({ label: lbl2, value }: { label: string; value?: string | nul
   )
 }
 
-function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
+function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
   c: ChecklistData
   expanded: boolean
   onToggle: () => void
   isAdmin: boolean
   onEdit: () => void
+  onDelete: () => void
 }) {
   const status = hasPendency(c)
   const date = new Date(c.created_at).toLocaleString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
   })
 
   const statusConfig = {
@@ -112,7 +133,7 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
 
   const hasCameras = [c.camera_frontal, c.camera_lateral_esq, c.camera_lateral_dir, c.camera_fadiga, c.camera_ip_motorista, c.camera_salao].some(Boolean)
   const hasAcessorios = c.tem_leitor_embarque != null || c.ar_condicionado != null
-  const hasDocs = c.crlv_status || c.emtu_status || c.artesp_status || c.emdec_status || (c.checklist_colocado?.length) || c.licenciamento?.length || c.cartao_artesp
+  const hasDocs = c.crlv_status || c.emtu_status || c.artesp_status || c.emdec_status || c.bolsa_documentos || (c.checklist_colocado?.length) || c.licenciamento?.length || c.cartao_artesp
   const hasMateriais = c.qr_code != null || c.adesivo_leitor != null || c.placa_senha_wifi != null
 
   const docHighlight = (v?: string | null) =>
@@ -150,12 +171,20 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
         <div className="px-4 pb-4 space-y-4 border-t border-gray-100 dark:border-gray-800 pt-3">
 
           {isAdmin && (
-            <button
-              onClick={e => { e.stopPropagation(); onEdit() }}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-brand-700 text-brand-700 dark:text-brand-400 dark:border-brand-500 font-semibold text-xs w-full justify-center hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
-            >
-              <Pencil size={13} /> Editar este checklist
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={e => { e.stopPropagation(); onEdit() }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-brand-700 text-brand-700 dark:text-brand-400 dark:border-brand-500 font-semibold text-xs w-full justify-center hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+              >
+                <Pencil size={13} /> Editar este checklist
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); onDelete() }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-red-500 text-red-600 dark:text-red-400 dark:border-red-500 font-semibold text-xs w-full justify-center hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <Trash2 size={13} /> Excluir checklist
+              </button>
+            </div>
           )}
 
           {c.tipo === 'MENSAL' && (
@@ -184,23 +213,6 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
                 </div>
               )}
 
-              {/* Documentos */}
-              {hasDocs && (
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <FileText size={10} /> Documentos
-                  </p>
-                  <SectionRow title="CRLV" value={lbl(c.crlv_status)} highlight={docHighlight(c.crlv_status)} />
-                  <SectionRow title="EMTU (QR code)" value={lbl(c.emtu_status)} highlight={docHighlight(c.emtu_status)} />
-                  <SectionRow title="ARTESP" value={lbl(c.artesp_status)} highlight={docHighlight(c.artesp_status)} />
-                  <SectionRow title="EMDEC" value={lbl(c.emdec_status)} highlight={docHighlight(c.emdec_status)} />
-                  <SectionRow title="Checklist físico" value={lblList(c.checklist_colocado)} />
-                  {/* legado */}
-                  {c.licenciamento?.length ? <SectionRow title="Licenciamento" value={lblList(c.licenciamento) + (c.licenciamento_outro ? ` (${c.licenciamento_outro})` : '')} /> : null}
-                  {c.cartao_artesp ? <SectionRow title="Cartão ARTESP" value={lbl(c.cartao_artesp)} /> : null}
-                </div>
-              )}
-
               {/* Materiais Gráficos */}
               {hasMateriais && (
                 <div>
@@ -211,6 +223,24 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
                 </div>
               )}
             </>
+          )}
+
+          {/* Documentos */}
+          {(c.tipo === 'MENSAL' || c.tipo === 'DOCUMENTOS') && hasDocs && (
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <FileText size={10} /> Documentos
+              </p>
+              <SectionRow title="CRLV" value={lbl(c.crlv_status)} highlight={docHighlight(c.crlv_status)} />
+              <SectionRow title="EMTU (QR code)" value={lbl(c.emtu_status)} highlight={docHighlight(c.emtu_status)} />
+              <SectionRow title="ARTESP" value={lbl(c.artesp_status)} highlight={docHighlight(c.artesp_status)} />
+              <SectionRow title="EMDEC" value={lbl(c.emdec_status)} highlight={docHighlight(c.emdec_status)} />
+              <SectionRow title="Checklist físico" value={lblList(c.checklist_colocado)} />
+              <SectionRow title="Bolsa de documentos" value={lbl(c.bolsa_documentos)} highlight={c.bolsa_documentos === 'NAO_TEM' ? 'amber' : c.bolsa_documentos === 'TEM' ? 'green' : undefined} />
+              {/* legado */}
+              {c.licenciamento?.length ? <SectionRow title="Licenciamento" value={lblList(c.licenciamento) + (c.licenciamento_outro ? ` (${c.licenciamento_outro})` : '')} /> : null}
+              {c.cartao_artesp ? <SectionRow title="Cartão ARTESP" value={lbl(c.cartao_artesp)} /> : null}
+            </div>
           )}
 
           {/* Wi-Fi */}
@@ -256,7 +286,7 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit }: {
 export function ChecklistConsulta() {
   const navigate = useNavigate()
   const { role } = useAuthStore()
-  const { listChecklists } = useChecklist()
+  const { listChecklists, deleteChecklist } = useChecklist()
   const isAdmin = role === 'admin'
 
   const [items, setItems] = useState<ChecklistData[]>([])
@@ -265,6 +295,7 @@ export function ChecklistConsulta() {
 
   const [prefixo, setPrefixo] = useState('')
   const [tipo, setTipo] = useState('')
+  const [situacao, setSituacao] = useState('')
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
 
@@ -274,6 +305,7 @@ export function ChecklistConsulta() {
       const data = await listChecklists({
         prefixo: prefixo || undefined,
         tipo: tipo || undefined,
+        situacao: situacao || undefined,
         data_inicio: dataInicio || undefined,
         data_fim: dataFim || undefined,
         limit: 100,
@@ -282,17 +314,24 @@ export function ChecklistConsulta() {
     } catch { /* ignore */ } finally {
       setLoadingList(false)
     }
-  }, [prefixo, tipo, dataInicio, dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [prefixo, tipo, situacao, dataInicio, dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
-  const clearFilters = () => { setPrefixo(''); setTipo(''); setDataInicio(''); setDataFim('') }
-  const hasFilters = prefixo || tipo || dataInicio || dataFim
+  const clearFilters = () => { setPrefixo(''); setTipo(''); setSituacao(''); setDataInicio(''); setDataFim('') }
+  const hasFilters = prefixo || tipo || situacao || dataInicio || dataFim
 
-  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
 
   const handleEdit = (c: ChecklistData) => {
     navigate('/checklist/novo', { state: { editData: c } })
+  }
+
+  const handleDelete = async (c: ChecklistData) => {
+    const ok = confirm(`Excluir checklist do prefixo ${c.prefixo}?`)
+    if (!ok) return
+    await deleteChecklist(c.id)
+    setItems(items => items.filter(item => item.id !== c.id))
   }
 
   return (
@@ -337,8 +376,19 @@ export function ChecklistConsulta() {
             <option value="">Todos</option>
             <option value="AVULSO">Avulso</option>
             <option value="MENSAL">Mensal</option>
+            <option value="DOCUMENTOS">Documentos</option>
           </select>
         </div>
+        <select
+          value={situacao}
+          onChange={e => setSituacao(e.target.value)}
+          className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300"
+        >
+          <option value="">Filtrar por situação específica</option>
+          {SITUATION_FILTER_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
         <div className="flex gap-2">
           <input
             type="date"
@@ -379,6 +429,7 @@ export function ChecklistConsulta() {
               onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
               isAdmin={isAdmin}
               onEdit={() => handleEdit(c)}
+              onDelete={() => handleDelete(c)}
             />
           ))}
         </div>

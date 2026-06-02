@@ -262,7 +262,7 @@ export function Users() {
                       </span>
                     </td>
                     <td className="px-4 py-2 border dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(u.created_at).toLocaleDateString('pt-BR')}
+                      {new Date(u.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                     </td>
                     <td className="px-4 py-2 border dark:border-gray-600">
                       <div className="flex flex-col gap-1">

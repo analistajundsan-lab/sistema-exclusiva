@@ -67,6 +67,9 @@ def migrate_existing_sqlite() -> None:
             "vehicle_checklists", "artesp_status", "artesp_status VARCHAR(50)"
         )
         ensure_column("vehicle_checklists", "emdec_status", "emdec_status VARCHAR(50)")
+        ensure_column(
+            "vehicle_checklists", "bolsa_documentos", "bolsa_documentos VARCHAR(20)"
+        )
 
 
 def upsert_admin(

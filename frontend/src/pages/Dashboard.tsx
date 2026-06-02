@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
+import { DEFAULT_OPERATION_DATE } from '../config/demo'
 import { AlertTriangle, ArrowLeftRight, Building2, RefreshCw, TrendingUp } from 'lucide-react'
 
-const TODAY = new Date().toISOString().split('T')[0]
+const TODAY = DEFAULT_OPERATION_DATE
 
 interface DirectionStats {
   entrada: number
@@ -58,6 +59,7 @@ export function Dashboard() {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
+      timeZone: 'America/Sao_Paulo',
     })
   }, [selectedDate])
 

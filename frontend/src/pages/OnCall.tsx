@@ -30,14 +30,16 @@ export function OnCall() {
     status: 'pendente',
   })
   const [autoMode, setAutoMode] = useState(true)
+  const lineSearch = filters.line_code?.trim()
 
   const pendingFilters = useMemo(() => ({
     ...filters,
-    ...(autoMode ? { start_in_minutes: '40' } : {}),
-  }), [filters, autoMode])
+    line_code: lineSearch || undefined,
+    ...(autoMode && !lineSearch ? { start_in_minutes: '40' } : {}),
+  }), [filters, autoMode, lineSearch])
 
   const pending = useSchedule(pendingFilters)
-  const swapsList = useSwaps({ unit: filters.unit })
+  const swapsList = useSwaps({ unit: filters.unit, schedule_date: filters.schedule_date })
   const canManageLines = role === 'admin' || role === 'gerente' || role === 'supervisao' || role === 'supervisor'
 
   // Estado do card com troca inline aberta
@@ -88,6 +90,7 @@ export function OnCall() {
       // 2. Registrar a troca
       await swapsList.createSwap({
         schedule_line_id: line.id,
+        schedule_date: filters.schedule_date,
         vehicle_out: line.prefix_code,
         vehicle_in: swapVehicle.trim() || undefined,
         driver_out: line.driver_name,
@@ -159,7 +162,7 @@ export function OnCall() {
     }
   }
 
-  const allConfirmed = !pending.loading && pending.lines.length === 0
+  const allConfirmed = !lineSearch && !pending.loading && pending.lines.length === 0
 
   return (
     <Layout>
@@ -178,7 +181,7 @@ export function OnCall() {
         {/* Filtros */}
         <form
           onSubmit={handleFilter}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 grid grid-cols-1 md:grid-cols-[180px_240px_auto_auto] gap-3 items-end"
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 grid grid-cols-1 md:grid-cols-[160px_220px_170px_auto_auto] gap-3 items-end"
         >
           <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Data
@@ -199,6 +202,16 @@ export function OnCall() {
               {(role === 'admin' ? ALL_UNITS : availableUnits).map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </label>
+          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            Linha
+            <input
+              value={filters.line_code || ''}
+              onChange={e => setFilters(s => ({ ...s, line_code: e.target.value }))}
+              placeholder="Ex: 3534"
+              inputMode="numeric"
+              className="mt-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-normal"
+            />
+          </label>
           <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide flex flex-col justify-end">
             <span className="mb-1.5">Próximas 40 min</span>
             <button
@@ -208,8 +221,9 @@ export function OnCall() {
                 setAutoMode(next)
                 pending.applyFilters({
                   ...filters,
-                  ...(next ? { start_in_minutes: '40' } : {}),
-                } as any)
+                  line_code: filters.line_code?.trim() || undefined,
+                  ...(next && !filters.line_code?.trim() ? { start_in_minutes: '40' } : {}),
+                })
               }}
               className={`relative inline-flex h-10 w-16 items-center rounded-xl text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 ${autoMode ? 'bg-brand-700 dark:bg-brand-600 border-brand-700' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'} border`}
             >
@@ -268,7 +282,7 @@ export function OnCall() {
               <div>
                 <h2 className="font-bold text-gray-900 dark:text-gray-100">Linhas pendentes</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {autoMode ? 'Iniciando nos próximos 40 min.' : 'Todas as pendentes da unidade.'}
+                  {lineSearch ? `Busca pela linha ${lineSearch}.` : autoMode ? 'Iniciando nos próximos 40 min.' : 'Todas as pendentes da unidade.'}
                 </p>
               </div>
               {pending.total > 0 ? (
@@ -299,7 +313,7 @@ export function OnCall() {
                 <div className="text-center py-10">
                   <Bus size={28} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
                   <p className="text-sm text-gray-400 dark:text-gray-500">
-                    {autoMode ? 'Nenhuma linha iniciando nos próximos 40 min.' : 'Nenhuma linha pendente.'}
+                    {lineSearch ? 'Nenhuma linha pendente encontrada para essa busca.' : autoMode ? 'Nenhuma linha iniciando nos próximos 40 min.' : 'Nenhuma linha pendente.'}
                   </p>
                 </div>
               )}
@@ -310,43 +324,39 @@ export function OnCall() {
                   className="border border-gray-100 dark:border-gray-700 rounded-2xl p-4 hover:shadow-sm transition-shadow bg-gray-50/50 dark:bg-gray-700/30"
                 >
                   {/* Topo do card — badges */}
-                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <span className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300">
-                      <Bus size={10} />
+                  <div className="flex flex-wrap items-center gap-2.5 mb-3">
+                    <span className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-base sm:text-lg font-black bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 leading-none">
+                      <Bus size={15} />
                       L - {line.line_code}
                     </span>
-                    <span className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-                      <Clock size={11} />
+                    <span className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-base sm:text-lg font-black bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 leading-none">
+                      <Clock size={15} />
                       {line.start_time} – {line.end_time}
                     </span>
-                    <span className="rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                    <span className="rounded-full px-3 py-1.5 text-sm font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
                       {line.direction}
                     </span>
                   </div>
 
                   {/* Prefixo destaque + cliente */}
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-1">
-                        Prefixo
-                      </p>
-                      <p className="text-3xl font-black text-brand-800 dark:text-brand-300 leading-none tracking-tight">
-                        {line.prefix_code}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0 max-w-[55%]">
-                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 leading-tight">
-                        {line.client_name}
-                      </p>
-                    </div>
+                  <div className="mb-2">
+                    <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-brand-800 dark:text-brand-300">
+                      <span className="text-sm font-bold uppercase tracking-wide">Prefixo</span>
+                      <span className="text-2xl sm:text-3xl font-black leading-none tracking-tight">{line.prefix_code}</span>
+                    </p>
                   </div>
 
                   {/* Dados da linha */}
-                  <div className="mb-3 space-y-0.5">
-                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <MapPin size={11} className="shrink-0" />
-                      {line.route_name}
-                    </p>
+                  <div className="mb-3 space-y-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      <p className="font-semibold text-gray-700 dark:text-gray-200 leading-tight">
+                        {line.client_name}
+                      </p>
+                      <p className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                        <MapPin size={11} className="shrink-0" />
+                        {line.route_name}
+                      </p>
+                    </div>
                     <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
                       <User size={11} className="shrink-0" />
                       {line.driver_name}
@@ -492,7 +502,7 @@ export function OnCall() {
                     )}
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1">
                       <Clock size={10} />
-                      {new Date(swap.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(swap.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                     </p>
                   </div>
                   {swap.whatsapp_text && (

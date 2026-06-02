@@ -2,10 +2,12 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
@@ -42,6 +44,12 @@ from turn_reference_data import EXCLUDED_TURN_LINES, TURN_REFERENCE
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
 MAX_IMPORT_BYTES = 8 * 1024 * 1024
+BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
+UNIT_SHEET_TITLES = {
+    "Jundiai": "jundiai",
+    "Caieiras": "caieiras",
+    "Santana de Parnaiba": "santana",
+}
 
 
 async def parse_upload_file(file: UploadFile):
@@ -182,8 +190,11 @@ def apply_start_window(
     if start_in_minutes is None:
         return query
 
-    brt = timezone(timedelta(hours=-3))
-    now_brt = now_brt or datetime.now(brt)
+    now_brt = now_brt or datetime.now(BRASILIA_TZ)
+    if now_brt.tzinfo is None:
+        now_brt = now_brt.replace(tzinfo=BRASILIA_TZ)
+    else:
+        now_brt = now_brt.astimezone(BRASILIA_TZ)
     cutoff_brt = now_brt + timedelta(minutes=start_in_minutes)
     now_str = now_brt.strftime("%H:%M")
     cutoff_str = cutoff_brt.strftime("%H:%M")
@@ -211,6 +222,61 @@ def safe_xlsx_text(value):
     if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
         return f"'{value}"
     return value
+
+
+def block_client_label(line: ScheduleLine) -> str:
+    prefix = "E/" if line.direction.upper().startswith("E") else "S/" if line.direction.upper().startswith("S") else ""
+    return f"{prefix} {line.client_name}".strip()
+
+
+def write_block_schedule_sheet(ws, lines: list[ScheduleLine]) -> None:
+    header_fill = PatternFill("solid", fgColor="D9EAF7")
+    vehicle_fill = PatternFill("solid", fgColor="FCE4D6")
+    thin = Side(style="thin", color="D9D9D9")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    ws.cell(row=1, column=3, value="MOTORISTA")
+    ws.cell(row=1, column=3).font = Font(bold=True)
+    ws.cell(row=1, column=3).fill = header_fill
+    ws.cell(row=1, column=3).alignment = Alignment(horizontal="center")
+    ws.column_dimensions["A"].width = 10
+    ws.column_dimensions["B"].width = 4
+    ws.column_dimensions["C"].width = 28
+    ws.column_dimensions["D"].width = 4
+
+    next_row = 4
+    fallback_rows: dict[tuple[str, str], int] = {}
+    used_columns: set[int] = set()
+
+    for line in sorted(lines, key=lambda item: (item.source_row or 99999, item.source_col or 99999, item.start_time, item.line_code)):
+        row = line.source_row or fallback_rows.setdefault(
+            (line.prefix_code, line.driver_name),
+            next_row,
+        )
+        if not line.source_row and row == next_row:
+            next_row += 4
+        col = line.source_col or 5
+        used_columns.add(col)
+
+        ws.cell(row=row, column=1, value=safe_xlsx_text(line.prefix_code))
+        ws.cell(row=row, column=3, value=safe_xlsx_text(line.driver_name))
+        ws.cell(row=row, column=col, value=f"{line.start_time} - {line.end_time}")
+        ws.cell(row=row + 1, column=col, value=safe_xlsx_text(block_client_label(line)))
+        ws.cell(row=row + 2, column=col, value=safe_xlsx_text(f"L - {line.line_code}"))
+        ws.cell(row=row + 3, column=col, value=safe_xlsx_text(line.route_name or ""))
+
+        for r in range(row, row + 4):
+            for c in (1, 3, col):
+                cell = ws.cell(row=r, column=c)
+                cell.border = border
+                cell.alignment = Alignment(wrap_text=True, vertical="center")
+        ws.cell(row=row, column=1).fill = vehicle_fill
+        ws.cell(row=row, column=1).font = Font(bold=True)
+        ws.cell(row=row, column=3).font = Font(bold=True)
+        ws.cell(row=row, column=col).font = Font(bold=True)
+
+    for col in sorted(used_columns):
+        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = 22
 
 
 def normalize_line_code(value: str) -> str:
@@ -250,9 +316,11 @@ def empty_direction_stats() -> dict:
     }
 
 
-def add_direction_stats(bucket: dict, line: ScheduleLine) -> None:
+def add_direction_stats(
+    bucket: dict, line: ScheduleLine, operation_date: Optional[date] = None
+) -> None:
     direction = (line.direction or "").upper()
-    is_confirmed = line.status == ScheduleLineStatus.CONFIRMADA
+    is_confirmed = status_for_operation_date(line, operation_date) == ScheduleLineStatus.CONFIRMADA
     if direction == "ENTRADA":
         bucket["entrada"] += 1
         bucket["confirmed_entrada" if is_confirmed else "pending_entrada"] += 1
@@ -261,6 +329,51 @@ def add_direction_stats(bucket: dict, line: ScheduleLine) -> None:
         bucket["confirmed_saida" if is_confirmed else "pending_saida"] += 1
     bucket["total"] += 1
     bucket["_lines"].add(normalize_line_code(line.line_code))
+
+
+def status_for_operation_date(
+    line: ScheduleLine, operation_date: Optional[date] = None
+) -> ScheduleLineStatus:
+    if (
+        operation_date
+        and operation_date == datetime.now(BRASILIA_TZ).date()
+        and line.status == ScheduleLineStatus.CONFIRMADA
+        and line.confirmed_at
+    ):
+        confirmed_at = line.confirmed_at
+        if confirmed_at.tzinfo is None:
+            confirmed_at = confirmed_at.replace(tzinfo=timezone.utc)
+        confirmed_date = confirmed_at.astimezone(BRASILIA_TZ).date()
+        if confirmed_date != operation_date:
+            return ScheduleLineStatus.PENDENTE
+    return line.status
+
+
+def line_response_for_operation_date(
+    line: ScheduleLine, operation_date: Optional[date] = None
+) -> dict:
+    return {
+        "id": line.id,
+        "schedule_date": line.schedule_date,
+        "unit": line.unit,
+        "prefix_code": line.prefix_code,
+        "driver_name": line.driver_name,
+        "line_code": line.line_code,
+        "direction": line.direction,
+        "client_name": line.client_name,
+        "route_name": line.route_name,
+        "start_time": line.start_time,
+        "end_time": line.end_time,
+        "status": status_for_operation_date(line, operation_date),
+        "notes": line.notes,
+        "confirmed_by": line.confirmed_by,
+        "confirmed_at": line.confirmed_at,
+        "source_sheet": line.source_sheet,
+        "source_row": line.source_row,
+        "source_col": line.source_col,
+        "created_by": line.created_by,
+        "created_at": line.created_at,
+    }
 
 
 def public_direction_stats(bucket: dict) -> dict:
@@ -386,7 +499,7 @@ async def count_schedule_lines(
         line_code,
         driver_name,
         prefix_code,
-        status,
+        None if schedule_date and status else status,
     )
     query = apply_schedule_date_scope(db, query, schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
@@ -395,6 +508,14 @@ async def count_schedule_lines(
     if start_time_lt:
         query = query.filter(ScheduleLine.start_time < start_time_lt)
     query = apply_start_window(query, start_in_minutes, schedule_date)
+    if schedule_date and status:
+        return {
+            "total": sum(
+                1
+                for line in query.all()
+                if status_for_operation_date(line, schedule_date) == status
+            )
+        }
     return {"total": query.count()}
 
 
@@ -421,19 +542,24 @@ async def list_schedule_lines(
         line_code,
         driver_name,
         prefix_code,
-        status,
+        None if schedule_date and status else status,
     )
     query = apply_schedule_date_scope(db, query, schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
     query = apply_start_window(query, start_in_minutes, schedule_date)
-    return (
-        query.order_by(
-            ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
-        )
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    rows = query.order_by(
+        ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
+    ).all()
+    if schedule_date and status:
+        rows = [
+            line
+            for line in rows
+            if status_for_operation_date(line, schedule_date) == status
+        ]
+    rows = rows[skip : skip + limit]
+    if schedule_date:
+        return [line_response_for_operation_date(line, schedule_date) for line in rows]
+    return rows
 
 
 @router.patch("/lines/{line_id}", response_model=ScheduleLineResponse)
@@ -441,7 +567,7 @@ async def update_schedule_line(
     line_id: int,
     body: ScheduleLineUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ADMIN)),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
@@ -655,7 +781,7 @@ async def schedule_dashboard_turns(
 
         if line_code in EXCLUDED_TURN_LINES:
             client = normalize_dashboard_client(line.client_name)
-            add_direction_stats(excluded_found[client], line)
+            add_direction_stats(excluded_found[client], line, schedule_date)
             continue
 
         reference = TURN_REFERENCE.get(line_code)
@@ -664,14 +790,14 @@ async def schedule_dashboard_turns(
             client = reference["client"]
             if turn not in unit_data["turns"]:
                 unit_data["turns"][turn] = empty_direction_stats()
-            add_direction_stats(unit_data["turns"][turn], line)
-            add_direction_stats(client_index[client], line)
+            add_direction_stats(unit_data["turns"][turn], line, schedule_date)
+            add_direction_stats(client_index[client], line, schedule_date)
         else:
             client = normalize_dashboard_client(line.client_name)
-            add_direction_stats(unit_data["client_cards"][client], line)
-            add_direction_stats(client_index[client], line)
+            add_direction_stats(unit_data["client_cards"][client], line, schedule_date)
+            add_direction_stats(client_index[client], line, schedule_date)
 
-        add_direction_stats(unit_data["total"], line)
+        add_direction_stats(unit_data["total"], line, schedule_date)
 
     response_units = []
     for unit_name in sorted(units):
@@ -766,9 +892,7 @@ async def schedule_whatsapp_text(
 async def delete_schedule_line(
     line_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(
-        require_role(UserRole.ADMIN, UserRole.GERENTE, UserRole.SUPERVISAO)
-    ),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
@@ -796,7 +920,7 @@ async def download_schedule(
         require_role(UserRole.ADMIN, UserRole.GERENTE, UserRole.SUPERVISAO)
     ),
 ):
-    """Gera planilha XLSX no formato linear (aba ATUALIZAR) com os dados atuais."""
+    """Gera planilha XLSX no formato em blocos, semelhante ao arquivo importado."""
     query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
     if unit:
@@ -807,36 +931,18 @@ async def download_schedule(
     ).all()
 
     wb = Workbook()
-    ws = wb.active
-    ws.title = "ATUALIZAR"
-    ws.append(
-        [
-            "PREFIXO",
-            "MOTORISTA",
-            "LINHA",
-            "SENTIDO",
-            "CLIENTE",
-            "ROTA",
-            "INICIO",
-            "FIM",
-            "UNIDADE",
-        ]
-    )
-
-    for line in lines:
-        ws.append(
-            [
-                safe_xlsx_text(line.prefix_code),
-                safe_xlsx_text(line.driver_name),
-                safe_xlsx_text(line.line_code),
-                safe_xlsx_text(line.direction),
-                safe_xlsx_text(line.client_name),
-                safe_xlsx_text(line.route_name),
-                line.start_time,
-                line.end_time,
-                safe_xlsx_text(line.unit),
-            ]
-        )
+    default_ws = wb.active
+    wb.remove(default_ws)
+    selected_units = [unit] if unit else list(UNIT_SHEET_TITLES)
+    for unit_name in selected_units:
+        sheet_lines = [line for line in lines if line.unit == unit_name]
+        if not sheet_lines and unit:
+            continue
+        ws = wb.create_sheet(UNIT_SHEET_TITLES.get(unit_name, unit_name.lower()))
+        write_block_schedule_sheet(ws, sheet_lines)
+    if not wb.worksheets:
+        ws = wb.create_sheet(UNIT_SHEET_TITLES.get(unit or "Caieiras", "caieiras"))
+        write_block_schedule_sheet(ws, [])
 
     output = BytesIO()
     wb.save(output)

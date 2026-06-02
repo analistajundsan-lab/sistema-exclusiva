@@ -1,4 +1,5 @@
-from datetime import date as date_type
+from datetime import date as date_type, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
@@ -10,6 +11,26 @@ from schemas import CountResponse, IncidentCreate, IncidentResponse, IncidentUpd
 from typing import List, Optional
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
+BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def format_incident_whatsapp_text(incident: Incident) -> str:
+    parts = [
+        "OCORRENCIA OPERACIONAL",
+        f"Tipo: {incident.incident_type}",
+        f"Prefixo: {incident.prefix_code}",
+    ]
+    if incident.line:
+        parts.append(f"Linha: {incident.line}")
+    if incident.direction:
+        parts.append(f"Sentido: {incident.direction}")
+    if incident.victim_status == "com_vitimas":
+        parts.append("Vitimas: com vitimas")
+    elif incident.victim_status == "sem_vitimas":
+        parts.append("Vitimas: sem vitimas")
+    if incident.description:
+        parts.extend(["", incident.description])
+    return "\n".join(parts)
 
 
 @router.get("/count", response_model=CountResponse)
@@ -32,7 +53,7 @@ async def count_incidents(
     if status:
         query = query.filter(Incident.status == status)
     if today:
-        query = query.filter(func.date(Incident.created_at) == date_type.today())
+        query = query.filter(func.date(Incident.created_at) == datetime.now(BRASILIA_TZ).date())
     return {"total": query.count()}
 
 
@@ -81,10 +102,24 @@ async def list_incidents(
     if status:
         query = query.filter(Incident.status == status)
     if today:
-        query = query.filter(func.date(Incident.created_at) == date_type.today())
+        query = query.filter(func.date(Incident.created_at) == datetime.now(BRASILIA_TZ).date())
     if incident_date:
         query = query.filter(func.date(Incident.created_at) == incident_date)
     return query.offset(skip).limit(limit).all()
+
+
+@router.get("/{incident_id}/whatsapp/text")
+async def incident_whatsapp_text(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    incident = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrencia nao encontrada"
+        )
+    return {"text": format_incident_whatsapp_text(incident)}
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)

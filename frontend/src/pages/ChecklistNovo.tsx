@@ -62,13 +62,18 @@ const WIFI_OPTIONS = [
   { value: 'NAO_FUNCIONA_FRETADAO', label: 'Não funciona no app Fretadão' },
 ]
 
+const BOLSA_DOCUMENTOS_OPTIONS = [
+  { value: 'TEM', label: 'Tem' },
+  { value: 'NAO_TEM', label: 'Não tem' },
+]
+
 interface Form {
   garagem: string; prefixo: string; tipo: string
   camera_frontal: string; camera_lateral_esq: string; camera_lateral_dir: string
   camera_fadiga: string; camera_ip_motorista: string; camera_salao: string
   tem_leitor_embarque: boolean | undefined; ar_condicionado: boolean | undefined
   checklist_colocado: string[]
-  crlv_status: string; emtu_status: string; artesp_status: string; emdec_status: string
+  crlv_status: string; emtu_status: string; artesp_status: string; emdec_status: string; bolsa_documentos: string
   qr_code: boolean | undefined; adesivo_leitor: boolean | undefined; placa_senha_wifi: boolean | undefined
   wifi_status: string[]; wifi_outro: string
   observacoes: string; evidencias: string[]
@@ -80,7 +85,7 @@ const INITIAL: Form = {
   camera_fadiga: '', camera_ip_motorista: '', camera_salao: '',
   tem_leitor_embarque: undefined, ar_condicionado: undefined,
   checklist_colocado: [],
-  crlv_status: '', emtu_status: '', artesp_status: '', emdec_status: '',
+  crlv_status: '', emtu_status: '', artesp_status: '', emdec_status: '', bolsa_documentos: '',
   qr_code: undefined, adesivo_leitor: undefined, placa_senha_wifi: undefined,
   wifi_status: [], wifi_outro: '',
   observacoes: '', evidencias: [],
@@ -104,6 +109,7 @@ function fromExisting(d: ChecklistData): Form {
     emtu_status: d.emtu_status || '',
     artesp_status: d.artesp_status || '',
     emdec_status: d.emdec_status || '',
+    bolsa_documentos: d.bolsa_documentos || '',
     qr_code: d.qr_code,
     adesivo_leitor: d.adesivo_leitor,
     placa_senha_wifi: d.placa_senha_wifi,
@@ -217,7 +223,7 @@ export function ChecklistNovo() {
   const editData: ChecklistData | undefined = (location.state as any)?.editData
 
   const { userUnit, userUnits, displayName, userName, role } = useAuthStore()
-  const { createChecklist, updateChecklist, listGaragens, loading, error } = useChecklist()
+  const { createChecklist, updateChecklist, listGaragens, hasChecklistToday, loading, error } = useChecklist()
   const fileRef = useRef<HTMLInputElement>(null)
   const [allGaragens, setAllGaragens] = useState<string[]>([])
 
@@ -235,21 +241,39 @@ export function ChecklistNovo() {
   const [step, setStep] = useState(0)
   const [done, setDone] = useState(false)
   const [imgLoading, setImgLoading] = useState(false)
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
+  const [duplicateError, setDuplicateError] = useState('')
 
   const isEdit = Boolean(editData)
-  const steps = form.tipo === 'AVULSO' ? [0, 3, 4] : [0, 1, 2, 3, 4]
+  const steps = form.tipo === 'AVULSO' ? [0, 3, 4] : form.tipo === 'DOCUMENTOS' ? [0, 2, 4] : [0, 1, 2, 3, 4]
   const stepIdx = steps.indexOf(step)
   const isLast = stepIdx === steps.length - 1
 
-  const set = (key: keyof Form, value: unknown) => setForm(f => ({ ...f, [key]: value }))
+  const set = (key: keyof Form, value: unknown) => {
+    if (key === 'prefixo' || key === 'garagem') setDuplicateError('')
+    setForm(f => ({ ...f, [key]: value }))
+  }
 
   const canNext = () => {
     if (step === 0) return form.prefixo.trim().length > 0 && form.tipo !== '' && form.garagem !== ''
     return true
   }
 
-  const next = () => {
+  const next = async () => {
     if (!canNext()) return
+    if (!isEdit && step === 0) {
+      setCheckingDuplicate(true)
+      setDuplicateError('')
+      try {
+        const exists = await hasChecklistToday(form.prefixo.trim(), form.garagem)
+        if (exists) {
+          setDuplicateError('CHECK-LIST REALIZADO HOJE')
+          return
+        }
+      } finally {
+        setCheckingDuplicate(false)
+      }
+    }
     if (isLast) { handleSubmit(); return }
     setStep(steps[stepIdx + 1])
   }
@@ -408,8 +432,8 @@ export function ChecklistNovo() {
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Tipo de Checklist *</label>
-              <div className="grid grid-cols-2 gap-3">
-                {(['AVULSO', 'MENSAL'] as const).map(t => (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {(['AVULSO', 'MENSAL', 'DOCUMENTOS'] as const).map(t => (
                   <button
                     key={t}
                     type="button"
@@ -424,10 +448,17 @@ export function ChecklistNovo() {
                     {t}
                     {t === 'AVULSO' && <span className="block text-[10px] font-normal mt-0.5 opacity-70">Apenas Wi-Fi</span>}
                     {t === 'MENSAL' && <span className="block text-[10px] font-normal mt-0.5 opacity-70">Completo</span>}
+                    {t === 'DOCUMENTOS' && <span className="block text-[10px] font-normal mt-0.5 opacity-70">Apenas documentos</span>}
                   </button>
                 ))}
               </div>
             </div>
+
+            {duplicateError && (
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm font-bold text-center">
+                {duplicateError}
+              </div>
+            )}
           </>
         )}
 
@@ -524,6 +555,11 @@ export function ChecklistNovo() {
                 </div>
               ))}
             </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Bolsa de documentos</p>
+              <RadioCard options={BOLSA_DOCUMENTOS_OPTIONS} selected={form.bolsa_documentos} onChange={v => set('bolsa_documentos', v)} />
+            </div>
           </>
         )}
 
@@ -613,10 +649,10 @@ export function ChecklistNovo() {
         <button
           type="button"
           onClick={next}
-          disabled={!canNext() || loading}
+          disabled={!canNext() || loading || checkingDuplicate}
           className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-brand-700 hover:bg-brand-800 disabled:opacity-40 text-white font-semibold text-sm transition-all"
         >
-          {loading ? 'Salvando...' : isLast ? (
+          {loading ? 'Salvando...' : checkingDuplicate ? 'Verificando...' : isLast ? (
             <><CheckCircle2 size={16} /> {isEdit ? 'Salvar Edição' : 'Salvar Checklist'}</>
           ) : (
             <>Próximo <ChevronRight size={16} /></>

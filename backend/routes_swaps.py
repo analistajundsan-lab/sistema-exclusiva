@@ -2,6 +2,7 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from auth import (
@@ -63,6 +64,7 @@ def build_swap_whatsapp_text(
 async def count_swaps(
     vehicle_out: Optional[str] = None,
     vehicle_in: Optional[str] = None,
+    schedule_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -72,6 +74,8 @@ async def count_swaps(
         query = query.filter(Swap.vehicle_out.ilike(f"%{vehicle_out}%"))
     if vehicle_in:
         query = query.filter(Swap.vehicle_in.ilike(f"%{vehicle_in}%"))
+    if schedule_date:
+        query = query.filter(Swap.schedule_date == schedule_date)
     return {"total": query.count()}
 
 
@@ -115,7 +119,7 @@ async def create_swap(
                 status_code=422,
                 detail="A troca so pode ser criada para linha confirmada",
             )
-        data["schedule_date"] = schedule_line.schedule_date
+        data["schedule_date"] = body.schedule_date or schedule_line.schedule_date
         data["unit"] = schedule_line.unit
         data["client_name"] = schedule_line.client_name
         data["vehicle_out"] = data["vehicle_out"] or schedule_line.prefix_code
@@ -155,7 +159,10 @@ async def list_swaps(
     limit: int = Query(50, ge=1, le=500),
     vehicle_out: Optional[str] = None,
     vehicle_in: Optional[str] = None,
+    driver_name: Optional[str] = None,
+    line: Optional[str] = None,
     unit: Optional[str] = None,
+    schedule_date: Optional[date] = None,
     schedule_line_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -166,8 +173,19 @@ async def list_swaps(
         query = query.filter(Swap.vehicle_out.ilike(f"%{vehicle_out}%"))
     if vehicle_in:
         query = query.filter(Swap.vehicle_in.ilike(f"%{vehicle_in}%"))
+    if driver_name:
+        query = query.filter(
+            or_(
+                Swap.driver_out.ilike(f"%{driver_name}%"),
+                Swap.driver_in.ilike(f"%{driver_name}%"),
+            )
+        )
+    if line:
+        query = query.filter(Swap.lines_covered.ilike(f"%{line}%"))
     if unit:
         query = query.filter(Swap.unit.ilike(f"%{unit}%"))
+    if schedule_date:
+        query = query.filter(Swap.schedule_date == schedule_date)
     if schedule_line_id:
         query = query.filter(Swap.schedule_line_id == schedule_line_id)
     return query.offset(skip).limit(limit).all()

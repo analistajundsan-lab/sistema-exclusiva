@@ -10,6 +10,7 @@ export interface Incident {
   description?: string
   line?: string
   direction?: string
+  victim_status?: string
   status: IncidentStatus
   created_by: number
   created_at: string

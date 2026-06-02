@@ -139,6 +139,85 @@ class TestIncidents:
         data = response.json()
         assert len(data) > 0
 
+
+class TestChecklist:
+    def test_create_document_checklist_with_bolsa_documentos(self, auth_token):
+        response = client.post(
+            "/checklist/",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "garagem": "JUNDIAI",
+                "prefixo": "1234",
+                "tipo": "DOCUMENTOS",
+                "crlv_status": "SIM_EM_DIA",
+                "emtu_status": "SIM_LOCALIZADO",
+                "artesp_status": "SIM_EM_DIA",
+                "emdec_status": "SIM_EM_DIA",
+                "bolsa_documentos": "TEM",
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["tipo"] == "DOCUMENTOS"
+        assert data["bolsa_documentos"] == "TEM"
+
+    def test_block_duplicate_checklist_same_day(self, auth_token):
+        payload = {
+            "garagem": "JUNDIAI",
+            "prefixo": "1234",
+            "tipo": "AVULSO",
+            "wifi_status": ["SIM_FUNCIONAL"],
+        }
+
+        first = client.post(
+            "/checklist/",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json=payload,
+        )
+        second = client.post(
+            "/checklist/",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json=payload,
+        )
+
+        assert first.status_code == 201
+        assert second.status_code == 422
+        assert second.json()["detail"] == "CHECK-LIST REALIZADO HOJE"
+
+    def test_filter_checklists_by_wifi_problem(self, auth_token):
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        client.post(
+            "/checklist/",
+            headers=headers,
+            json={
+                "garagem": "JUNDIAI",
+                "prefixo": "1001",
+                "tipo": "AVULSO",
+                "wifi_status": ["SIM_FUNCIONAL"],
+            },
+        )
+        client.post(
+            "/checklist/",
+            headers=headers,
+            json={
+                "garagem": "JUNDIAI",
+                "prefixo": "1002",
+                "tipo": "AVULSO",
+                "wifi_status": ["NAO_SEM_REDE"],
+            },
+        )
+
+        response = client.get(
+            "/checklist/",
+            headers=headers,
+            params={"situacao": "WIFI_PROBLEMA"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert [item["prefixo"] for item in data] == ["1002"]
+
     def test_list_incidents_with_filter(self, auth_token):
         client.post(
             "/incidents/",

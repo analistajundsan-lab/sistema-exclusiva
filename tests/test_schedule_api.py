@@ -1,4 +1,5 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from io import BytesIO
 import hashlib
 import re
@@ -434,8 +435,7 @@ def test_operator_receives_schedule_imported_by_admin(admin_token, operator_toke
 def test_start_window_uses_active_import_without_forcing_line_date(
     admin_token, operator_token
 ):
-    brt = timezone(timedelta(hours=-3))
-    now_brt = datetime.now(brt)
+    now_brt = datetime.now(ZoneInfo("America/Sao_Paulo"))
     start_time = (now_brt + timedelta(minutes=10)).strftime("%H:%M")
     end_time = (now_brt + timedelta(minutes=50)).strftime("%H:%M")
     effective_date = now_brt.date() - timedelta(days=1)
@@ -690,10 +690,10 @@ def test_download_xlsx_with_auth_header_after_schedule_change(admin_token):
     )
 
     wb = openpyxl.load_workbook(BytesIO(response.content))
-    ws = wb["ATUALIZAR"]
-    rows = list(ws.iter_rows(values_only=True))
-    assert rows[1][1] == "MOTORISTA ALTERADO"
-    assert rows[1][6] == "04:10"
+    ws = wb["caieiras"]
+    assert ws.cell(row=4, column=3).value == "MOTORISTA ALTERADO"
+    assert ws.cell(row=4, column=7).value == "04:10 - 04:45"
+    assert ws.cell(row=6, column=7).value == "L - 7368"
 
 
 def test_audit_logs_are_listed(admin_token):

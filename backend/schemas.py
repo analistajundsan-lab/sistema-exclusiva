@@ -142,6 +142,7 @@ class IncidentResponse(BaseModel):
 
 class SwapCreate(BaseModel):
     schedule_line_id: Optional[int] = None
+    schedule_date: Optional[date] = None
     vehicle_out: Optional[str] = Field(None, max_length=10)
     vehicle_in: Optional[str] = Field(None, max_length=10)
     driver_out: Optional[str] = Field(None, max_length=255)
@@ -282,7 +283,7 @@ class ScheduleWhatsappResponse(BaseModel):
 class ChecklistCreate(BaseModel):
     garagem: str
     prefixo: str = Field(..., min_length=1, max_length=20)
-    tipo: str  # AVULSO | MENSAL
+    tipo: str  # AVULSO | MENSAL | DOCUMENTOS
 
     camera_frontal: Optional[str] = None
     camera_lateral_esq: Optional[str] = None
@@ -299,6 +300,7 @@ class ChecklistCreate(BaseModel):
     emtu_status: Optional[str] = None
     artesp_status: Optional[str] = None
     emdec_status: Optional[str] = None
+    bolsa_documentos: Optional[str] = None
 
     qr_code: Optional[bool] = None
     adesivo_leitor: Optional[bool] = None
@@ -327,6 +329,7 @@ class ChecklistUpdate(BaseModel):
     emtu_status: Optional[str] = None
     artesp_status: Optional[str] = None
     emdec_status: Optional[str] = None
+    bolsa_documentos: Optional[str] = None
 
     qr_code: Optional[bool] = None
     adesivo_leitor: Optional[bool] = None
@@ -371,6 +374,7 @@ class ChecklistResponse(BaseModel):
     emtu_status: Optional[str] = None
     artesp_status: Optional[str] = None
     emdec_status: Optional[str] = None
+    bolsa_documentos: Optional[str] = None
 
     qr_code: Optional[bool] = None
     adesivo_leitor: Optional[bool] = None
