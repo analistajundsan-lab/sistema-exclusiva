@@ -87,6 +87,18 @@ export function useChecklist() {
     return res.data as ChecklistData[]
   }
 
+  const downloadChecklistReport = async (params?: {
+    prefixo?: string
+    garagem?: string
+    tipo?: string
+    situacao?: string
+    data_inicio?: string
+    data_fim?: string
+  }) => {
+    const res = await api.get('/checklist/download', { params, responseType: 'blob' })
+    return res.data as Blob
+  }
+
   const getChecklist = async (id: number) => {
     const res = await api.get(`/checklist/${id}`)
     return res.data as ChecklistData
@@ -106,5 +118,5 @@ export function useChecklist() {
     return Boolean(res.data?.exists)
   }
 
-  return { createChecklist, updateChecklist, deleteChecklist, listChecklists, getChecklist, listGaragens, hasChecklistToday, loading, error }
+  return { createChecklist, updateChecklist, deleteChecklist, listChecklists, downloadChecklistReport, getChecklist, listGaragens, hasChecklistToday, loading, error }
 }

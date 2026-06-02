@@ -5,7 +5,7 @@ import { useChecklist, ChecklistData } from '../hooks/useChecklist'
 import { useAuthStore } from '../store/auth'
 import {
   ClipboardList, Plus, Search, X, ChevronDown, ChevronUp,
-  Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus, Pencil, Trash2,
+  Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus, Pencil, Trash2, Download,
 } from 'lucide-react'
 
 function hasPendency(c: ChecklistData): 'red' | 'amber' | 'ok' {
@@ -286,11 +286,12 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
 export function ChecklistConsulta() {
   const navigate = useNavigate()
   const { role } = useAuthStore()
-  const { listChecklists, deleteChecklist } = useChecklist()
+  const { listChecklists, deleteChecklist, downloadChecklistReport } = useChecklist()
   const isAdmin = role === 'admin'
 
   const [items, setItems] = useState<ChecklistData[]>([])
   const [loadingList, setLoadingList] = useState(true)
+  const [downloading, setDownloading] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
 
   const [prefixo, setPrefixo] = useState('')
@@ -334,6 +335,33 @@ export function ChecklistConsulta() {
     setItems(items => items.filter(item => item.id !== c.id))
   }
 
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      const blobData = await downloadChecklistReport({
+        prefixo: prefixo || undefined,
+        tipo: tipo || undefined,
+        situacao: situacao || undefined,
+        data_inicio: dataInicio || undefined,
+        data_fim: dataFim || undefined,
+      })
+      const blob = new Blob([blobData], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const date = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).replace(/\//g, '-')
+      link.href = url
+      link.download = `RELATORIO CHECKLIST ${date}.xlsm`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Erro ao baixar o relatório de checklist. Verifique sua permissão e tente novamente.')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <Layout>
       {/* Header */}
@@ -345,14 +373,23 @@ export function ChecklistConsulta() {
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5">{today}</p>
         </div>
-        {(role === 'admin' || role === 'analista') && (
+        <div className="flex gap-2">
           <button
-            onClick={() => navigate('/checklist/novo')}
-            className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="flex items-center gap-2 border-2 border-brand-700 text-brand-700 dark:text-brand-400 dark:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 disabled:opacity-50 rounded-xl px-3 py-2.5 font-semibold text-sm transition-all"
           >
-            <Plus size={16} /> Novo
+            <Download size={16} /> {downloading ? 'Baixando' : 'Relatório'}
           </button>
-        )}
+          {(role === 'admin' || role === 'analista') && (
+            <button
+              onClick={() => navigate('/checklist/novo')}
+              className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all"
+            >
+              <Plus size={16} /> Novo
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}

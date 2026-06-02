@@ -1,7 +1,9 @@
 import pytest
+from io import BytesIO
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+import openpyxl
 from main import app
 from models import Base, User, Incident, Swap, get_db, UserRole
 from auth import hash_password
@@ -217,6 +219,35 @@ class TestChecklist:
         assert response.status_code == 200
         data = response.json()
         assert [item["prefixo"] for item in data] == ["1002"]
+
+    def test_download_checklist_report_has_individual_vehicle_rows(self, auth_token):
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        client.post(
+            "/checklist/",
+            headers=headers,
+            json={
+                "garagem": "JUNDIAI",
+                "prefixo": "2001",
+                "tipo": "DOCUMENTOS",
+                "crlv_status": "NAO_LOCALIZADO",
+                "bolsa_documentos": "NAO_TEM",
+            },
+        )
+
+        response = client.get("/checklist/download", headers=headers)
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith(
+            "application/vnd.ms-excel.sheet.macroEnabled.12"
+        )
+        wb = openpyxl.load_workbook(BytesIO(response.content))
+        ws = wb["Vistorias por carro"]
+        headers_row = [cell.value for cell in ws[1]]
+        values = dict(zip(headers_row, [cell.value for cell in ws[2]]))
+        assert values["Prefixo"] == "2001"
+        assert values["Tipo"] == "DOCUMENTOS"
+        assert values["CRLV"] == "Nao localizado"
+        assert values["Bolsa de documentos"] == "Nao tem"
 
     def test_list_incidents_with_filter(self, auth_token):
         client.post(
