@@ -32,7 +32,13 @@ def ensure_column(table: str, column: str, ddl: str) -> None:
 
 
 def migrate_userrole_enum() -> None:
-    new_values = ["plantonista", "analista", "gerente", "supervisao", "tecnico_seguranca"]
+    new_values = [
+        "plantonista",
+        "analista",
+        "gerente",
+        "supervisao",
+        "tecnico_seguranca",
+    ]
     with engine.begin() as conn:
         for val in new_values:
             try:
@@ -104,21 +110,103 @@ DAILY_SAFETY_ITEMS = [
     ("Espelhos retrovisores e vidros", SafetySeverity.ATTENTION),
     ("Porta e ar condicionado funcionando", SafetySeverity.BLOCKING),
     ("Limpeza externa", SafetySeverity.ATTENTION),
-    ("Avarias no veiculo - informar o Trafego de imediato com fotos", SafetySeverity.BLOCKING),
-    ("Atencao a velocidade no interior do CAD: maximo 20 km/h", SafetySeverity.ATTENTION),
+    (
+        "Avarias no veiculo - informar o Trafego de imediato com fotos",
+        SafetySeverity.BLOCKING,
+    ),
+    (
+        "Atencao a velocidade no interior do CAD: maximo 20 km/h",
+        SafetySeverity.ATTENTION,
+    ),
 ]
 
 
 CAIEIRAS_PREFIXES = [
-    "07", "1120", "1130", "1140", "1150", "1180", "1580", "1590", "1720", "1730",
-    "1740", "1750", "1760", "1770", "1780", "1790", "1800", "1810", "2860", "2870",
-    "2880", "2890", "3010", "3020", "3030", "3040", "3050", "3060", "3070", "3080",
-    "3090", "3100", "3220", "3230", "3240", "3250", "3260", "3270", "3280", "3290",
-    "3300", "3310", "3320", "3330", "3340", "3350", "3360", "3370", "3380", "3390",
-    "3400", "3410", "3420", "3430", "3440", "3450", "3460", "3470", "3480", "3490",
-    "3500", "3510", "3520", "3530", "3540", "3550", "3560", "3570", "3580", "3590",
-    "3600", "3610", "3620", "3630", "3640", "3650", "3660", "3670", "3680", "3690",
-    "3700", "3710", "3720", "3730", "11140",
+    "07",
+    "1120",
+    "1130",
+    "1140",
+    "1150",
+    "1180",
+    "1580",
+    "1590",
+    "1720",
+    "1730",
+    "1740",
+    "1750",
+    "1760",
+    "1770",
+    "1780",
+    "1790",
+    "1800",
+    "1810",
+    "2860",
+    "2870",
+    "2880",
+    "2890",
+    "3010",
+    "3020",
+    "3030",
+    "3040",
+    "3050",
+    "3060",
+    "3070",
+    "3080",
+    "3090",
+    "3100",
+    "3220",
+    "3230",
+    "3240",
+    "3250",
+    "3260",
+    "3270",
+    "3280",
+    "3290",
+    "3300",
+    "3310",
+    "3320",
+    "3330",
+    "3340",
+    "3350",
+    "3360",
+    "3370",
+    "3380",
+    "3390",
+    "3400",
+    "3410",
+    "3420",
+    "3430",
+    "3440",
+    "3450",
+    "3460",
+    "3470",
+    "3480",
+    "3490",
+    "3500",
+    "3510",
+    "3520",
+    "3530",
+    "3540",
+    "3550",
+    "3560",
+    "3570",
+    "3580",
+    "3590",
+    "3600",
+    "3610",
+    "3620",
+    "3630",
+    "3640",
+    "3650",
+    "3660",
+    "3670",
+    "3680",
+    "3690",
+    "3700",
+    "3710",
+    "3720",
+    "3730",
+    "11140",
 ]
 
 
@@ -172,9 +260,16 @@ def seed_safety_domain(db) -> None:
         vehicle.active = True
         db.add(vehicle)
 
-    alert = db.query(UnitAlertSetting).filter(UnitAlertSetting.unit == "CAIEIRAS").first()
+    alert = (
+        db.query(UnitAlertSetting).filter(UnitAlertSetting.unit == "CAIEIRAS").first()
+    )
     if not alert:
-        db.add(UnitAlertSetting(unit="CAIEIRAS", manager_email="gerencia.caieiras@exclusivaturismo.com.br"))
+        db.add(
+            UnitAlertSetting(
+                unit="CAIEIRAS",
+                manager_email="gerencia.caieiras@exclusivaturismo.com.br",
+            )
+        )
 
 
 def upsert_admin(

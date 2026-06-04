@@ -456,7 +456,9 @@ class SafetySubmissionListItem(BaseModel):
 
 
 class SafetyTicketUpdate(BaseModel):
-    status: str = Field(..., pattern="^(open|validated|in_progress|resolved|cancelled)$")
+    status: str = Field(
+        ..., pattern="^(open|validated|in_progress|resolved|cancelled)$"
+    )
     manager_notes: Optional[str] = Field(None, max_length=500)
 
 

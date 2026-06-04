@@ -12,7 +12,12 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
-from auth import apply_user_unit_scope, ensure_unit_access, get_current_user, user_allowed_units
+from auth import (
+    apply_user_unit_scope,
+    ensure_unit_access,
+    get_current_user,
+    user_allowed_units,
+)
 from models import AuditLog, ScheduleLine, User, VehicleChecklist, get_db
 from schemas import ChecklistCreate, ChecklistResponse, ChecklistUpdate
 
@@ -69,7 +74,9 @@ def _apply_situation_filter(query, situacao: Optional[str]):
         VehicleChecklist.wifi_status.ilike("%NAO_SEM_REDE%"),
         VehicleChecklist.wifi_status.ilike("%NAO_APARECE_LISTA%"),
         VehicleChecklist.wifi_status.ilike("%NAO_FUNCIONA_FRETADAO%"),
-        and_(VehicleChecklist.wifi_outro.isnot(None), VehicleChecklist.wifi_outro != ""),
+        and_(
+            VehicleChecklist.wifi_outro.isnot(None), VehicleChecklist.wifi_outro != ""
+        ),
     )
     doc_missing = or_(
         VehicleChecklist.crlv_status == "NAO_LOCALIZADO",
@@ -163,7 +170,11 @@ def _report_status(c: VehicleChecklist) -> str:
     ]
     if any(value == "VISITA_TECNICA" for value in cam_values):
         return "PENDENCIA"
-    if c.crlv_status == "VENCIDO" or c.artesp_status == "VENCIDO" or c.emdec_status == "VENCIDO":
+    if (
+        c.crlv_status == "VENCIDO"
+        or c.artesp_status == "VENCIDO"
+        or c.emdec_status == "VENCIDO"
+    ):
         return "PENDENCIA"
     if (
         c.crlv_status == "NAO_LOCALIZADO"
@@ -235,7 +246,9 @@ def _checklist_report_workbook(checklists: list[VehicleChecklist]) -> BytesIO:
     for cell in ws[1]:
         cell.fill = header_fill
         cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.alignment = Alignment(
+            horizontal="center", vertical="center", wrap_text=True
+        )
 
     for c in checklists:
         created_at = c.created_at.strftime("%d/%m/%Y %H:%M") if c.created_at else ""
@@ -298,9 +311,18 @@ def _checklist_report_workbook(checklists: list[VehicleChecklist]) -> BytesIO:
     legend.append(["Campo", "Como interpretar"])
     legend.append(["Cada linha", "Uma vistoria individual de um carro/prefixo."])
     legend.append(["NAO PREENCHIDO", "O item nao recebeu resposta no checklist."])
-    legend.append(["Situacao geral OK", "Sem pendencias detectadas nos itens preenchidos."])
-    legend.append(["Situacao geral ATENCAO", "Documento faltando/danificado, bolsa ausente ou problema de Wi-Fi."])
-    legend.append(["Situacao geral PENDENCIA", "Camera em visita tecnica ou documento vencido."])
+    legend.append(
+        ["Situacao geral OK", "Sem pendencias detectadas nos itens preenchidos."]
+    )
+    legend.append(
+        [
+            "Situacao geral ATENCAO",
+            "Documento faltando/danificado, bolsa ausente ou problema de Wi-Fi.",
+        ]
+    )
+    legend.append(
+        ["Situacao geral PENDENCIA", "Camera em visita tecnica ou documento vencido."]
+    )
     for cell in legend[1]:
         cell.fill = header_fill
         cell.font = header_font

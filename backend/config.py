@@ -3,15 +3,17 @@ import json
 from pydantic import computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_DEFAULT_ORIGINS = ",".join([
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "http://localhost:3000",
-    "https://sistema-exclusiva-pied.vercel.app",
-    "https://sistema-exclusiva.fly.dev",
-])
+_DEFAULT_ORIGINS = ",".join(
+    [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://localhost:3000",
+        "https://sistema-exclusiva-pied.vercel.app",
+        "https://sistema-exclusiva.fly.dev",
+    ]
+)
 
 
 class Settings(BaseSettings):

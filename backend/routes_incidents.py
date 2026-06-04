@@ -53,7 +53,9 @@ async def count_incidents(
     if status:
         query = query.filter(Incident.status == status)
     if today:
-        query = query.filter(func.date(Incident.created_at) == datetime.now(BRASILIA_TZ).date())
+        query = query.filter(
+            func.date(Incident.created_at) == datetime.now(BRASILIA_TZ).date()
+        )
     return {"total": query.count()}
 
 
@@ -102,7 +104,9 @@ async def list_incidents(
     if status:
         query = query.filter(Incident.status == status)
     if today:
-        query = query.filter(func.date(Incident.created_at) == datetime.now(BRASILIA_TZ).date())
+        query = query.filter(
+            func.date(Incident.created_at) == datetime.now(BRASILIA_TZ).date()
+        )
     if incident_date:
         query = query.filter(func.date(Incident.created_at) == incident_date)
     return query.offset(skip).limit(limit).all()

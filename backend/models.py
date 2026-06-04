@@ -38,6 +38,7 @@ def _clean_db_url(url: str) -> str:
     except Exception:
         return url
 
+
 Base = declarative_base()
 
 
@@ -294,8 +295,12 @@ class SafetyChecklistItem(Base):
     section = Column(String(120), nullable=False, default="Inspecao diaria")
     position = Column(Integer, nullable=False, default=0)
     item_text = Column(String(500), nullable=False)
-    severity = Column(Enum(SafetySeverity), nullable=False, default=SafetySeverity.ATTENTION)
-    answer_type = Column(Enum(SafetyAnswerType), nullable=False, default=SafetyAnswerType.OK_NOT_OK_NA)
+    severity = Column(
+        Enum(SafetySeverity), nullable=False, default=SafetySeverity.ATTENTION
+    )
+    answer_type = Column(
+        Enum(SafetyAnswerType), nullable=False, default=SafetyAnswerType.OK_NOT_OK_NA
+    )
     active = Column(Boolean, default=True, nullable=False, index=True)
 
 
@@ -342,7 +347,12 @@ class MaintenanceTicket(Base):
     unit = Column(String(80), nullable=False, index=True)
     vehicle_id = Column(Integer, nullable=False, index=True)
     source_submission_id = Column(Integer, nullable=False, index=True)
-    status = Column(Enum(MaintenanceTicketStatus), nullable=False, default=MaintenanceTicketStatus.OPEN, index=True)
+    status = Column(
+        Enum(MaintenanceTicketStatus),
+        nullable=False,
+        default=MaintenanceTicketStatus.OPEN,
+        index=True,
+    )
     blocking_items = Column(Text)
     manager_validated_by = Column(Integer, index=True)
     manager_validated_at = Column(DateTime)
@@ -362,7 +372,10 @@ class UnitAlertSetting(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-_database_url = settings.DATABASE_URL or "postgresql://postgres:postgres@localhost:5432/sistema_exclusiva"
+_database_url = (
+    settings.DATABASE_URL
+    or "postgresql://postgres:postgres@localhost:5432/sistema_exclusiva"
+)
 engine = create_engine(_clean_db_url(_database_url), pool_pre_ping=True, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

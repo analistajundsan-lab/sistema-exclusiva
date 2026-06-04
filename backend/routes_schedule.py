@@ -225,7 +225,11 @@ def safe_xlsx_text(value):
 
 
 def block_client_label(line: ScheduleLine) -> str:
-    prefix = "E/" if line.direction.upper().startswith("E") else "S/" if line.direction.upper().startswith("S") else ""
+    prefix = (
+        "E/"
+        if line.direction.upper().startswith("E")
+        else "S/" if line.direction.upper().startswith("S") else ""
+    )
     return f"{prefix} {line.client_name}".strip()
 
 
@@ -248,7 +252,15 @@ def write_block_schedule_sheet(ws, lines: list[ScheduleLine]) -> None:
     fallback_rows: dict[tuple[str, str], int] = {}
     used_columns: set[int] = set()
 
-    for line in sorted(lines, key=lambda item: (item.source_row or 99999, item.source_col or 99999, item.start_time, item.line_code)):
+    for line in sorted(
+        lines,
+        key=lambda item: (
+            item.source_row or 99999,
+            item.source_col or 99999,
+            item.start_time,
+            item.line_code,
+        ),
+    ):
         row = line.source_row or fallback_rows.setdefault(
             (line.prefix_code, line.driver_name),
             next_row,
@@ -320,7 +332,9 @@ def add_direction_stats(
     bucket: dict, line: ScheduleLine, operation_date: Optional[date] = None
 ) -> None:
     direction = (line.direction or "").upper()
-    is_confirmed = status_for_operation_date(line, operation_date) == ScheduleLineStatus.CONFIRMADA
+    is_confirmed = (
+        status_for_operation_date(line, operation_date) == ScheduleLineStatus.CONFIRMADA
+    )
     if direction == "ENTRADA":
         bucket["entrada"] += 1
         bucket["confirmed_entrada" if is_confirmed else "pending_entrada"] += 1

@@ -45,11 +45,14 @@ def get_client_ip(request: Request) -> str:
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     import logging
+
     logger = logging.getLogger(__name__)
     client_ip = get_client_ip(req)
 
     try:
-        if not await rate_limit(f"login:{client_ip}", max_requests=5, window_seconds=60):
+        if not await rate_limit(
+            f"login:{client_ip}", max_requests=5, window_seconds=60
+        ):
             await rate_limit_metric("/auth/login")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,

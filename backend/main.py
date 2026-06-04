@@ -49,7 +49,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     """
     logger.error(
         "Erro nao tratado em %s %s: %s",
-        request.method, request.url.path, exc, exc_info=True,
+        request.method,
+        request.url.path,
+        exc,
+        exc_info=True,
     )
     response = JSONResponse(
         status_code=500,
@@ -61,6 +64,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
+
 
 if settings.EXPOSE_METRICS:
     metrics_app = make_asgi_app()

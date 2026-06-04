@@ -49,7 +49,9 @@ def _today_brasilia() -> date_type:
 
 def _require_safety_user(user: User) -> None:
     if user.role.value not in SAFETY_ROLES:
-        raise HTTPException(status_code=403, detail="Acesso restrito a seguranca do trabalho")
+        raise HTTPException(
+            status_code=403, detail="Acesso restrito a seguranca do trabalho"
+        )
 
 
 def _active_template(db: Session) -> SafetyChecklistTemplate:
@@ -63,7 +65,9 @@ def _active_template(db: Session) -> SafetyChecklistTemplate:
         .first()
     )
     if not template:
-        raise HTTPException(status_code=404, detail="Template de check-list nao configurado")
+        raise HTTPException(
+            status_code=404, detail="Template de check-list nao configurado"
+        )
     return template
 
 
@@ -82,25 +86,35 @@ def _item_response(item: SafetyChecklistItem) -> PublicSafetyChecklistItem:
     )
 
 
-def _submission_status(items_by_id: dict[int, SafetyChecklistItem], answers) -> SafetySubmissionStatus:
+def _submission_status(
+    items_by_id: dict[int, SafetyChecklistItem], answers
+) -> SafetySubmissionStatus:
     has_attention = False
     for answer in answers:
         if answer.answer != "not_ok":
             continue
         item = items_by_id.get(answer.item_id)
         if not item:
-            raise HTTPException(status_code=422, detail=f"Item invalido: {answer.item_id}")
+            raise HTTPException(
+                status_code=422, detail=f"Item invalido: {answer.item_id}"
+            )
         if item.severity == SafetySeverity.BLOCKING:
             return SafetySubmissionStatus.BLOCKING
         has_attention = True
-    return SafetySubmissionStatus.ATTENTION if has_attention else SafetySubmissionStatus.OK
+    return (
+        SafetySubmissionStatus.ATTENTION if has_attention else SafetySubmissionStatus.OK
+    )
 
 
-@router.get("/public/checklists/{vehicle_token}", response_model=PublicSafetyChecklistResponse)
+@router.get(
+    "/public/checklists/{vehicle_token}", response_model=PublicSafetyChecklistResponse
+)
 async def public_checklist(vehicle_token: str, db: Session = Depends(get_db)):
     vehicle = (
         db.query(SafetyVehicle)
-        .filter(SafetyVehicle.public_token == vehicle_token, SafetyVehicle.active.is_(True))
+        .filter(
+            SafetyVehicle.public_token == vehicle_token, SafetyVehicle.active.is_(True)
+        )
         .first()
     )
     if not vehicle:
@@ -108,7 +122,10 @@ async def public_checklist(vehicle_token: str, db: Session = Depends(get_db)):
     template = _active_template(db)
     items = (
         db.query(SafetyChecklistItem)
-        .filter(SafetyChecklistItem.template_id == template.id, SafetyChecklistItem.active.is_(True))
+        .filter(
+            SafetyChecklistItem.template_id == template.id,
+            SafetyChecklistItem.active.is_(True),
+        )
         .order_by(SafetyChecklistItem.position.asc())
         .all()
     )
@@ -133,15 +150,21 @@ async def create_public_submission(
     db: Session = Depends(get_db),
 ):
     client_ip = request.client.host if request.client else "unknown"
-    allowed = await rate_limit(f"safety:{vehicle_token}:{client_ip}", max_requests=10, window_seconds=3600)
+    allowed = await rate_limit(
+        f"safety:{vehicle_token}:{client_ip}", max_requests=10, window_seconds=3600
+    )
     if not allowed:
-        raise HTTPException(status_code=429, detail="Muitas tentativas. Tente novamente mais tarde.")
+        raise HTTPException(
+            status_code=429, detail="Muitas tentativas. Tente novamente mais tarde."
+        )
     if not body.declaration_accepted:
         raise HTTPException(status_code=422, detail="Declaracao obrigatoria")
 
     vehicle = (
         db.query(SafetyVehicle)
-        .filter(SafetyVehicle.public_token == vehicle_token, SafetyVehicle.active.is_(True))
+        .filter(
+            SafetyVehicle.public_token == vehicle_token, SafetyVehicle.active.is_(True)
+        )
         .first()
     )
     if not vehicle:
@@ -149,7 +172,10 @@ async def create_public_submission(
     template = _active_template(db)
     items = (
         db.query(SafetyChecklistItem)
-        .filter(SafetyChecklistItem.template_id == template.id, SafetyChecklistItem.active.is_(True))
+        .filter(
+            SafetyChecklistItem.template_id == template.id,
+            SafetyChecklistItem.active.is_(True),
+        )
         .all()
     )
     items_by_id = {item.id: item for item in items}
@@ -173,7 +199,9 @@ async def create_public_submission(
     for answer in body.answers:
         item = items_by_id.get(answer.item_id)
         if not item:
-            raise HTTPException(status_code=422, detail=f"Item invalido: {answer.item_id}")
+            raise HTTPException(
+                status_code=422, detail=f"Item invalido: {answer.item_id}"
+            )
         db.add(
             DriverChecklistAnswer(
                 submission_id=submission.id,
@@ -239,22 +267,43 @@ async def safety_dashboard(
     tickets = apply_user_unit_scope(tickets, MaintenanceTicket.unit, current_user)
     vehicles = apply_user_unit_scope(vehicles, SafetyVehicle.unit, current_user)
 
-    today_submissions = submissions.filter(func.date(DriverChecklistSubmission.submitted_at) == today)
-    submitted_vehicle_ids = {row[0] for row in today_submissions.with_entities(DriverChecklistSubmission.vehicle_id).all()}
+    today_submissions = submissions.filter(
+        func.date(DriverChecklistSubmission.submitted_at) == today
+    )
+    submitted_vehicle_ids = {
+        row[0]
+        for row in today_submissions.with_entities(
+            DriverChecklistSubmission.vehicle_id
+        ).all()
+    }
     vehicle_ids = {row[0] for row in vehicles.with_entities(SafetyVehicle.id).all()}
     latest_blocking = (
-        submissions.filter(DriverChecklistSubmission.overall_status == SafetySubmissionStatus.BLOCKING)
+        submissions.filter(
+            DriverChecklistSubmission.overall_status == SafetySubmissionStatus.BLOCKING
+        )
         .order_by(DriverChecklistSubmission.submitted_at.desc())
         .first()
     )
     days_without_blocking = 0
     if latest_blocking and latest_blocking.submitted_at:
-        days_without_blocking = max(0, (today - latest_blocking.submitted_at.date()).days)
+        days_without_blocking = max(
+            0, (today - latest_blocking.submitted_at.date()).days
+        )
 
     return SafetyDashboardResponse(
         days_without_blocking=days_without_blocking,
-        active_blocking_tickets=tickets.filter(MaintenanceTicket.status.in_([MaintenanceTicketStatus.OPEN, MaintenanceTicketStatus.VALIDATED, MaintenanceTicketStatus.IN_PROGRESS])).count(),
-        resolved_tickets=tickets.filter(MaintenanceTicket.status == MaintenanceTicketStatus.RESOLVED).count(),
+        active_blocking_tickets=tickets.filter(
+            MaintenanceTicket.status.in_(
+                [
+                    MaintenanceTicketStatus.OPEN,
+                    MaintenanceTicketStatus.VALIDATED,
+                    MaintenanceTicketStatus.IN_PROGRESS,
+                ]
+            )
+        ).count(),
+        resolved_tickets=tickets.filter(
+            MaintenanceTicket.status == MaintenanceTicketStatus.RESOLVED
+        ).count(),
         submissions_today=today_submissions.count(),
         vehicles_without_checklist_today=len(vehicle_ids - submitted_vehicle_ids),
     )
@@ -268,9 +317,11 @@ async def list_safety_submissions(
     current_user: User = Depends(get_current_user),
 ):
     _require_safety_user(current_user)
-    query = db.query(DriverChecklistSubmission, SafetyVehicle).join(
-        SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id
-    ).order_by(DriverChecklistSubmission.submitted_at.desc())
+    query = (
+        db.query(DriverChecklistSubmission, SafetyVehicle)
+        .join(SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id)
+        .order_by(DriverChecklistSubmission.submitted_at.desc())
+    )
     query = apply_user_unit_scope(query, SafetyVehicle.unit, current_user)
     if unit:
         ensure_unit_access(current_user, unit)
@@ -298,9 +349,11 @@ async def list_safety_tickets(
     current_user: User = Depends(get_current_user),
 ):
     _require_safety_user(current_user)
-    query = db.query(MaintenanceTicket, SafetyVehicle).join(
-        SafetyVehicle, SafetyVehicle.id == MaintenanceTicket.vehicle_id
-    ).order_by(MaintenanceTicket.created_at.desc())
+    query = (
+        db.query(MaintenanceTicket, SafetyVehicle)
+        .join(SafetyVehicle, SafetyVehicle.id == MaintenanceTicket.vehicle_id)
+        .order_by(MaintenanceTicket.created_at.desc())
+    )
     query = apply_user_unit_scope(query, MaintenanceTicket.unit, current_user)
     return [
         SafetyTicketListItem(
@@ -325,9 +378,12 @@ async def update_safety_ticket(
     current_user: User = Depends(get_current_user),
 ):
     _require_safety_user(current_user)
-    row = db.query(MaintenanceTicket, SafetyVehicle).join(
-        SafetyVehicle, SafetyVehicle.id == MaintenanceTicket.vehicle_id
-    ).filter(MaintenanceTicket.id == ticket_id).first()
+    row = (
+        db.query(MaintenanceTicket, SafetyVehicle)
+        .join(SafetyVehicle, SafetyVehicle.id == MaintenanceTicket.vehicle_id)
+        .filter(MaintenanceTicket.id == ticket_id)
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Ticket nao encontrado")
     ticket, vehicle = row
@@ -357,10 +413,14 @@ async def export_safety_submissions(
     current_user: User = Depends(get_current_user),
 ):
     _require_safety_user(current_user)
-    rows = db.query(DriverChecklistSubmission, SafetyVehicle).join(
-        SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id
-    ).order_by(DriverChecklistSubmission.submitted_at.desc())
-    rows = apply_user_unit_scope(rows, SafetyVehicle.unit, current_user).limit(5000).all()
+    rows = (
+        db.query(DriverChecklistSubmission, SafetyVehicle)
+        .join(SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id)
+        .order_by(DriverChecklistSubmission.submitted_at.desc())
+    )
+    rows = (
+        apply_user_unit_scope(rows, SafetyVehicle.unit, current_user).limit(5000).all()
+    )
     data = [
         [
             submission.id,
@@ -368,12 +428,24 @@ async def export_safety_submissions(
             vehicle.prefix,
             submission.driver_name,
             submission.driver_registration,
-            submission.submitted_at.strftime("%d/%m/%Y %H:%M") if submission.submitted_at else "",
+            (
+                submission.submitted_at.strftime("%d/%m/%Y %H:%M")
+                if submission.submitted_at
+                else ""
+            ),
             submission.overall_status.value,
         ]
         for submission, vehicle in rows
     ]
-    headers = ["ID", "Unidade", "Prefixo", "Motorista", "Matricula", "Data/Hora", "Status"]
+    headers = [
+        "ID",
+        "Unidade",
+        "Prefixo",
+        "Motorista",
+        "Matricula",
+        "Data/Hora",
+        "Status",
+    ]
     filename_date = datetime.now(BRASILIA_TZ).strftime("%d-%m-%Y")
     if format == "xlsx":
         wb = Workbook()
@@ -388,7 +460,9 @@ async def export_safety_submissions(
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="checklist-seguranca-{filename_date}.xlsx"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="checklist-seguranca-{filename_date}.xlsx"'
+            },
         )
 
     output = io.StringIO()
@@ -398,5 +472,7 @@ async def export_safety_submissions(
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8-sig")),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="checklist-seguranca-{filename_date}.csv"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="checklist-seguranca-{filename_date}.csv"'
+        },
     )
