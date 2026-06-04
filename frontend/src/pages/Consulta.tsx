@@ -153,7 +153,7 @@ export function Consulta() {
             Consulta
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Pesquise escala, confirmacoes, trocas, ocorrencias e checklist por data, prefixo, linha ou motorista.
+            Pesquise escala, confirmacoes, trocas, ocorrencias e vistoria por data, prefixo, linha ou motorista.
           </p>
         </div>
 
@@ -301,8 +301,8 @@ export function Consulta() {
 
             <ResultSection
               icon={<ClipboardList size={16} className="text-brand-600 dark:text-brand-400" />}
-              title={`Checklists (${checklists.length})`}
-              empty="Nenhum checklist encontrado."
+              title={`Vistorias (${checklists.length})`}
+              empty="Nenhuma vistoria encontrada."
             >
               {checklists.map(check => (
                 <div key={check.id} className="px-5 py-3.5 hover:bg-gray-50/70 dark:hover:bg-gray-700/30 transition-colors">

@@ -22,14 +22,15 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/incidents', label: 'Ocorrências', icon: AlertTriangle },
   { to: '/schedule', label: 'Escala', icon: Calendar, roles: ['admin', 'gerente', 'supervisao', 'supervisor', 'plantonista', 'analista'] },
   { to: '/consulta', label: 'Consulta', icon: Search },
-  { to: '/checklist', label: 'Checklist', icon: ClipboardList, roles: ['admin', 'analista'] },
+  { to: '/vistoria', label: 'Vistoria', icon: ClipboardList, roles: ['admin', 'analista'] },
+  { to: '/checklist', label: 'Check-list ST', icon: ClipboardCheck, roles: ['admin', 'gerente', 'supervisao', 'tecnico_seguranca'] },
   { to: '/audit', label: 'Auditoria', icon: Shield, roles: ['admin'] },
   { to: '/users', label: 'Usuários', icon: Users, roles: ['admin'] },
 ]
 
 export function Layout({ children }: { children: ReactNode }) {
   const { logout, role } = useAuth()
-  const { userName, displayName, photoUrl } = useAuthStore()
+  const { userName, displayName, photoUrl, hasFullAccess } = useAuthStore()
   const { dark, toggle } = useThemeStore()
   const navigate = useNavigate()
   const location = useLocation()
@@ -61,7 +62,7 @@ export function Layout({ children }: { children: ReactNode }) {
     .split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || '?'
 
   const visibleNav = NAV_ITEMS.filter(item =>
-    !item.roles || item.roles.includes(role || '')
+    hasFullAccess || !item.roles || item.roles.includes(role || '')
   )
 
   const isActive = (to: string) =>
@@ -70,6 +71,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const roleLabel: Record<string, string> = {
     admin: 'Administrador', gerente: 'Gerente', supervisao: 'Supervisão',
     analista: 'Analista', plantonista: 'Plantonista',
+    tecnico_seguranca: 'Seguranca do Trabalho',
     supervisor: 'Supervisor', operator: 'Operador',
   }
 

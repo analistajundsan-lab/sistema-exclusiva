@@ -12,6 +12,7 @@ from routes_swaps import router as swaps_router
 from routes_schedule import router as schedule_router
 from routes_audit import router as audit_router
 from routes_checklist import router as checklist_router
+from routes_safety import router as safety_router
 from rate_limit import init_redis
 from metrics_middleware import metrics_middleware
 from prometheus_client import make_asgi_app
@@ -132,6 +133,7 @@ app.include_router(swaps_router)
 app.include_router(schedule_router)
 app.include_router(audit_router)
 app.include_router(checklist_router)
+app.include_router(safety_router)
 
 
 @app.get("/health")

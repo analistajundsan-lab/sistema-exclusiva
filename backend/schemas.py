@@ -13,6 +13,7 @@ class UserRole(str, Enum):
     ANALISTA = "analista"
     GERENTE = "gerente"
     SUPERVISAO = "supervisao"
+    TECNICO_SEGURANCA = "tecnico_seguranca"
 
 
 class IncidentStatus(str, Enum):
@@ -73,6 +74,7 @@ class UserResponse(BaseModel):
     is_active: bool
     must_change_password: bool
     can_delete_history: bool
+    has_full_access: bool = False
     unit: Optional[str] = None
     units: Optional[str] = None
     display_name: Optional[str] = None
@@ -393,3 +395,85 @@ class ChecklistResponse(BaseModel):
     evidencias: Optional[List[str]] = None
 
     created_at: datetime
+
+
+class SafetyVehicleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    prefix: str
+    plate: Optional[str] = None
+    unit: str
+    active: bool
+    public_token: str
+
+
+class PublicSafetyChecklistItem(BaseModel):
+    id: int
+    section: str
+    position: int
+    item_text: str
+    severity: str
+    answer_type: str
+
+
+class PublicSafetyChecklistResponse(BaseModel):
+    vehicle: SafetyVehicleResponse
+    template_id: int
+    template_title: str
+    template_version: int
+    items: List[PublicSafetyChecklistItem]
+
+
+class PublicSafetyAnswerCreate(BaseModel):
+    item_id: int
+    answer: str = Field(..., pattern="^(ok|not_ok|na)$")
+    observation: Optional[str] = Field(None, max_length=500)
+
+
+class PublicSafetySubmissionCreate(BaseModel):
+    driver_name: str = Field(..., min_length=3, max_length=255)
+    driver_registration: str = Field(..., min_length=1, max_length=60)
+    declaration_accepted: bool
+    answers: List[PublicSafetyAnswerCreate] = Field(..., min_length=1)
+
+
+class PublicSafetySubmissionResponse(BaseModel):
+    id: int
+    overall_status: str
+    maintenance_ticket_id: Optional[int] = None
+    message: str
+
+
+class SafetySubmissionListItem(BaseModel):
+    id: int
+    prefix: str
+    unit: str
+    driver_name: str
+    driver_registration: str
+    overall_status: str
+    submitted_at: datetime
+
+
+class SafetyTicketUpdate(BaseModel):
+    status: str = Field(..., pattern="^(open|validated|in_progress|resolved|cancelled)$")
+    manager_notes: Optional[str] = Field(None, max_length=500)
+
+
+class SafetyTicketListItem(BaseModel):
+    id: int
+    unit: str
+    prefix: str
+    status: str
+    blocking_items: List[str]
+    source_submission_id: int
+    created_at: datetime
+    manager_notes: Optional[str] = None
+
+
+class SafetyDashboardResponse(BaseModel):
+    days_without_blocking: int
+    active_blocking_tickets: int
+    resolved_tickets: int
+    submissions_today: int
+    vehicles_without_checklist_today: int

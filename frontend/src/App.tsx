@@ -14,6 +14,8 @@ import { ChangePassword } from "./pages/ChangePassword"
 import { Profile } from "./pages/Profile";
 import { ChecklistConsulta } from "./pages/ChecklistConsulta";
 import { ChecklistNovo } from "./pages/ChecklistNovo";
+import { Safety } from "./pages/Safety";
+import { PublicSafetyChecklist } from "./pages/PublicSafetyChecklist";
 
 function InactivityGuard({ children }: { children: React.ReactNode }) {
   useInactivityTimer()
@@ -31,8 +33,9 @@ const ADMIN_ROLES = ['admin']
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
+  const hasFullAccess = useAuthStore((s) => s.hasFullAccess);
   if (!token) return <Navigate to="/login" replace />;
-  if (!ADMIN_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
+  if (!hasFullAccess && !ADMIN_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
   return <InactivityGuard>{children}</InactivityGuard>;
 }
 
@@ -42,6 +45,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/v/:token" element={<PublicSafetyChecklist />} />
         <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
         <Route path="/" element={<AdminRoute><Dashboard /></AdminRoute>} />
         <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
@@ -52,8 +56,10 @@ export default function App() {
         <Route path="/swaps" element={<ProtectedRoute><Swaps /></ProtectedRoute>} />
         <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-        <Route path="/checklist" element={<ProtectedRoute><ChecklistConsulta /></ProtectedRoute>} />
-        <Route path="/checklist/novo" element={<ProtectedRoute><ChecklistNovo /></ProtectedRoute>} />
+        <Route path="/vistoria" element={<ProtectedRoute><ChecklistConsulta /></ProtectedRoute>} />
+        <Route path="/vistoria/novo" element={<ProtectedRoute><ChecklistNovo /></ProtectedRoute>} />
+        <Route path="/checklist" element={<ProtectedRoute><Safety /></ProtectedRoute>} />
+        <Route path="/checklist/novo" element={<Navigate to="/vistoria/novo" replace />} />
         <Route path="*" element={<Navigate to="/on-call" replace />} />
       </Routes>
     </BrowserRouter>

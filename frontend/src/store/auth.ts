@@ -7,6 +7,7 @@ interface UserProfile {
   photo_url: string | null
   unit: string | null
   units: string | null
+  has_full_access?: boolean
 }
 
 interface AuthState {
@@ -19,6 +20,7 @@ interface AuthState {
   photoUrl: string | null
   userUnit: string | null
   userUnits: string[] | null
+  hasFullAccess: boolean
   setAuth: (token: string, role: string, refreshToken?: string) => void
   setUserProfile: (profile: UserProfile) => void
   logout: () => void
@@ -40,6 +42,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   photoUrl: localStorage.getItem('photoUrl'),
   userUnit: localStorage.getItem('userUnit'),
   userUnits: parseUnits(localStorage.getItem('userUnits')),
+  hasFullAccess: localStorage.getItem('hasFullAccess') === 'true',
   setAuth: (token, role, refreshToken) => {
     localStorage.setItem('token', token)
     localStorage.setItem('role', role)
@@ -53,6 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('photoUrl', profile.photo_url || '')
     localStorage.setItem('userUnit', profile.unit || '')
     localStorage.setItem('userUnits', profile.units || '')
+    localStorage.setItem('hasFullAccess', profile.has_full_access ? 'true' : 'false')
     set({
       userId: profile.id,
       userName: profile.name,
@@ -60,6 +64,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       photoUrl: profile.photo_url,
       userUnit: profile.unit,
       userUnits: parseUnits(profile.units),
+      hasFullAccess: !!profile.has_full_access,
     })
   },
   logout: () => {
@@ -72,6 +77,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('photoUrl')
     localStorage.removeItem('userUnit')
     localStorage.removeItem('userUnits')
+    localStorage.removeItem('hasFullAccess')
     set({
       token: null,
       refreshToken: null,
@@ -82,6 +88,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       photoUrl: null,
       userUnit: null,
       userUnits: null,
+      hasFullAccess: false,
     })
   },
 }))

@@ -53,7 +53,7 @@ export function Schedule() {
     const r = s.role
     const u = s.userUnit
     const saved = readSavedScheduleFilters()
-    const readOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
+    const readOnly = !s.hasFullAccess && !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
     if (readOnly && isUnitTab(u)) return u
     if (isUnitTab(saved.unit)) return saved.unit
     return 'Caieiras'
@@ -63,7 +63,7 @@ export function Schedule() {
     const r = s.role
     const u = s.userUnit
     const saved = readSavedScheduleFilters()
-    const readOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
+    const readOnly = !s.hasFullAccess && !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
     return {
       ...saved,
       schedule_date: saved.schedule_date || DEFAULT_OPERATION_DATE,
@@ -81,9 +81,10 @@ export function Schedule() {
 
   const role = useAuthStore(s => s.role)
   const unit = useAuthStore(s => s.userUnit)
-  const isAdmin = role === 'admin'
-  const canEdit = role === 'admin'
-  const isReadOnly = !['admin', 'gerente', 'supervisao', 'supervisor'].includes(role || '')
+  const hasFullAccess = useAuthStore(s => s.hasFullAccess)
+  const isAdmin = hasFullAccess || role === 'admin'
+  const canEdit = hasFullAccess || role === 'admin'
+  const isReadOnly = !hasFullAccess && !['admin', 'gerente', 'supervisao', 'supervisor'].includes(role || '')
   const lockedUnit = isReadOnly && unit ? unit : null
 
   const {

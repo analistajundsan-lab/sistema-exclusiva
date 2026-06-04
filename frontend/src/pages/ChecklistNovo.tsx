@@ -294,7 +294,7 @@ export function ChecklistNovo() {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
     if (form.evidencias.length + files.length > 2) {
-      alert('Máximo de 2 fotos por checklist.')
+      alert('Máximo de 2 fotos por vistoria.')
       return
     }
     setImgLoading(true)
@@ -317,7 +317,7 @@ export function ChecklistNovo() {
             <CheckCircle2 size={32} className="text-green-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            {isEdit ? 'Checklist atualizado!' : 'Checklist salvo!'}
+            {isEdit ? 'Vistoria atualizada!' : 'Vistoria salva!'}
           </h2>
           <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
             Veículo <strong>{form.prefixo.toUpperCase()}</strong> — {form.garagem}
@@ -327,10 +327,10 @@ export function ChecklistNovo() {
               <button
                 onClick={() => { setForm({ ...INITIAL, garagem: form.garagem }); setStep(0); setDone(false) }}
                 className="px-5 py-2.5 border-2 border-brand-700 text-brand-700 rounded-xl font-semibold text-sm"
-              >Novo Checklist</button>
+              >Nova Vistoria</button>
             )}
             <button
-              onClick={() => navigate('/checklist')}
+              onClick={() => navigate('/vistoria')}
               className="px-5 py-2.5 bg-brand-700 text-white rounded-xl font-semibold text-sm"
             >Ver Consulta</button>
           </div>
@@ -343,13 +343,13 @@ export function ChecklistNovo() {
     <Layout>
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => navigate('/checklist')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
+        <button onClick={() => navigate('/vistoria')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
           <ChevronLeft size={20} />
         </button>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             {isEdit ? <Pencil size={20} className="text-brand-700" /> : <ClipboardList size={20} className="text-brand-700" />}
-            {isEdit ? `Editar Checklist #${editData?.id}` : 'Novo Checklist'}
+            {isEdit ? `Editar Vistoria #${editData?.id}` : 'Nova Vistoria'}
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {displayName || userName}
@@ -431,7 +431,7 @@ export function ChecklistNovo() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Tipo de Checklist *</label>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Tipo de Vistoria *</label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {(['AVULSO', 'MENSAL', 'DOCUMENTOS'] as const).map(t => (
                   <button
@@ -653,7 +653,7 @@ export function ChecklistNovo() {
           className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-brand-700 hover:bg-brand-800 disabled:opacity-40 text-white font-semibold text-sm transition-all"
         >
           {loading ? 'Salvando...' : checkingDuplicate ? 'Verificando...' : isLast ? (
-            <><CheckCircle2 size={16} /> {isEdit ? 'Salvar Edição' : 'Salvar Checklist'}</>
+            <><CheckCircle2 size={16} /> {isEdit ? 'Salvar Edição' : 'Salvar Vistoria'}</>
           ) : (
             <>Próximo <ChevronRight size={16} /></>
           )}

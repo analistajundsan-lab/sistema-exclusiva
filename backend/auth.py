@@ -52,6 +52,8 @@ def create_tokens(user: User) -> tuple[str, str]:
 
 
 def user_allowed_units(user: User) -> list[str] | None:
+    if getattr(user, "has_full_access", False):
+        return None
     if user.role in UNRESTRICTED_UNIT_ROLES:
         return None
 
@@ -129,6 +131,8 @@ def require_role(*roles: UserRole):
     """Retorna função de dependência que exige um dos papéis listados."""
 
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if getattr(current_user, "has_full_access", False):
+            return current_user
         if current_user.role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

@@ -176,13 +176,13 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
                 onClick={e => { e.stopPropagation(); onEdit() }}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-brand-700 text-brand-700 dark:text-brand-400 dark:border-brand-500 font-semibold text-xs w-full justify-center hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
               >
-                <Pencil size={13} /> Editar este checklist
+                <Pencil size={13} /> Editar esta vistoria
               </button>
               <button
                 onClick={e => { e.stopPropagation(); onDelete() }}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-red-500 text-red-600 dark:text-red-400 dark:border-red-500 font-semibold text-xs w-full justify-center hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               >
-                <Trash2 size={13} /> Excluir checklist
+                <Trash2 size={13} /> Excluir vistoria
               </button>
             </div>
           )}
@@ -285,9 +285,9 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
 
 export function ChecklistConsulta() {
   const navigate = useNavigate()
-  const { role } = useAuthStore()
+  const { role, hasFullAccess } = useAuthStore()
   const { listChecklists, deleteChecklist, downloadChecklistReport } = useChecklist()
-  const isAdmin = role === 'admin'
+  const isAdmin = hasFullAccess || role === 'admin'
 
   const [items, setItems] = useState<ChecklistData[]>([])
   const [loadingList, setLoadingList] = useState(true)
@@ -325,11 +325,11 @@ export function ChecklistConsulta() {
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
 
   const handleEdit = (c: ChecklistData) => {
-    navigate('/checklist/novo', { state: { editData: c } })
+    navigate('/vistoria/novo', { state: { editData: c } })
   }
 
   const handleDelete = async (c: ChecklistData) => {
-    const ok = confirm(`Excluir checklist do prefixo ${c.prefixo}?`)
+    const ok = confirm(`Excluir vistoria do prefixo ${c.prefixo}?`)
     if (!ok) return
     await deleteChecklist(c.id)
     setItems(items => items.filter(item => item.id !== c.id))
@@ -356,7 +356,7 @@ export function ChecklistConsulta() {
       link.remove()
       URL.revokeObjectURL(url)
     } catch {
-      alert('Erro ao baixar o relatório de checklist. Verifique sua permissão e tente novamente.')
+      alert('Erro ao baixar o relatório de vistoria. Verifique sua permissão e tente novamente.')
     } finally {
       setDownloading(false)
     }
@@ -369,7 +369,7 @@ export function ChecklistConsulta() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <ClipboardList size={22} className="text-brand-700" />
-            Checklist
+            Vistoria
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5">{today}</p>
         </div>
@@ -381,9 +381,9 @@ export function ChecklistConsulta() {
           >
             <Download size={16} /> {downloading ? 'Baixando' : 'Relatório'}
           </button>
-          {(role === 'admin' || role === 'analista') && (
+          {(hasFullAccess || role === 'admin' || role === 'analista') && (
             <button
-              onClick={() => navigate('/checklist/novo')}
+              onClick={() => navigate('/vistoria/novo')}
               className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all"
             >
               <Plus size={16} /> Novo
@@ -453,7 +453,7 @@ export function ChecklistConsulta() {
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-center text-gray-400">
           <ClipboardList size={40} className="mb-3 opacity-30" />
-          <p className="font-medium">Nenhum checklist encontrado</p>
+          <p className="font-medium">Nenhuma vistoria encontrada</p>
           <p className="text-sm mt-1">Use os filtros acima ou registre um novo</p>
         </div>
       ) : (

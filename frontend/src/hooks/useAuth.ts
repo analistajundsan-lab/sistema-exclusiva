@@ -22,6 +22,7 @@ export function useAuth() {
         photo_url: me.data.photo_url,
         unit: me.data.unit,
         units: me.data.units,
+        has_full_access: me.data.has_full_access,
       })
       return { ok: true, mustChangePassword: !!me.data.must_change_password }
     } catch (err: any) {

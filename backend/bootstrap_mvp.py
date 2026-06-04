@@ -3,7 +3,21 @@ from datetime import datetime, timezone
 from sqlalchemy import inspect, text
 
 from auth import hash_password
-from models import AuditLog, SessionLocal, User, UserRole, engine
+import hashlib
+
+from models import (
+    AuditLog,
+    SafetyAnswerType,
+    SafetyChecklistItem,
+    SafetyChecklistTemplate,
+    SafetySeverity,
+    SafetyVehicle,
+    SessionLocal,
+    UnitAlertSetting,
+    User,
+    UserRole,
+    engine,
+)
 from routes_auth import hash_cpf
 
 TEMP_PASSWORD = "Exclusiva@2026"
@@ -18,7 +32,7 @@ def ensure_column(table: str, column: str, ddl: str) -> None:
 
 
 def migrate_userrole_enum() -> None:
-    new_values = ["plantonista", "analista", "gerente", "supervisao"]
+    new_values = ["plantonista", "analista", "gerente", "supervisao", "tecnico_seguranca"]
     with engine.begin() as conn:
         for val in new_values:
             try:
@@ -70,6 +84,97 @@ def migrate_existing_sqlite() -> None:
         ensure_column(
             "vehicle_checklists", "bolsa_documentos", "bolsa_documentos VARCHAR(20)"
         )
+
+
+DAILY_SAFETY_ITEMS = [
+    ("Faixas refletivas", SafetySeverity.ATTENTION),
+    ("Adesivos ARTESP, EMTU e Fretadao", SafetySeverity.ATTENTION),
+    ("Freios funcionando e regulados", SafetySeverity.BLOCKING),
+    ("Luzes do salao, setas e pisca-alerta", SafetySeverity.BLOCKING),
+    ("Luzes de lanternas e farois funcionando", SafetySeverity.BLOCKING),
+    ("Pneus, ponto TWI e porcas", SafetySeverity.BLOCKING),
+    ("Extintores dentro da validade e carregados", SafetySeverity.BLOCKING),
+    ("Agua, nivel de oleo e combustivel", SafetySeverity.BLOCKING),
+    ("Funcionamento do motor", SafetySeverity.BLOCKING),
+    ("Limpador de para-brisa", SafetySeverity.BLOCKING),
+    ("Funcionamento da buzina e luzes do painel", SafetySeverity.BLOCKING),
+    ("Alcool em gel", SafetySeverity.ATTENTION),
+    ("Limpeza interna do salao e cortinas", SafetySeverity.ATTENTION),
+    ("Cintos de seguranca funcionando e sobre o banco", SafetySeverity.BLOCKING),
+    ("Espelhos retrovisores e vidros", SafetySeverity.ATTENTION),
+    ("Porta e ar condicionado funcionando", SafetySeverity.BLOCKING),
+    ("Limpeza externa", SafetySeverity.ATTENTION),
+    ("Avarias no veiculo - informar o Trafego de imediato com fotos", SafetySeverity.BLOCKING),
+    ("Atencao a velocidade no interior do CAD: maximo 20 km/h", SafetySeverity.ATTENTION),
+]
+
+
+CAIEIRAS_PREFIXES = [
+    "07", "1120", "1130", "1140", "1150", "1180", "1580", "1590", "1720", "1730",
+    "1740", "1750", "1760", "1770", "1780", "1790", "1800", "1810", "2860", "2870",
+    "2880", "2890", "3010", "3020", "3030", "3040", "3050", "3060", "3070", "3080",
+    "3090", "3100", "3220", "3230", "3240", "3250", "3260", "3270", "3280", "3290",
+    "3300", "3310", "3320", "3330", "3340", "3350", "3360", "3370", "3380", "3390",
+    "3400", "3410", "3420", "3430", "3440", "3450", "3460", "3470", "3480", "3490",
+    "3500", "3510", "3520", "3530", "3540", "3550", "3560", "3570", "3580", "3590",
+    "3600", "3610", "3620", "3630", "3640", "3650", "3660", "3670", "3680", "3690",
+    "3700", "3710", "3720", "3730", "11140",
+]
+
+
+def _vehicle_token(prefix: str) -> str:
+    digest = hashlib.sha256(f"safety-caieiras-{prefix}".encode("utf-8")).hexdigest()
+    return digest[:24]
+
+
+def seed_safety_domain(db) -> None:
+    template = (
+        db.query(SafetyChecklistTemplate)
+        .filter(
+            SafetyChecklistTemplate.form_type == "daily_vehicle",
+            SafetyChecklistTemplate.version == 1,
+        )
+        .first()
+    )
+    if not template:
+        template = SafetyChecklistTemplate(
+            form_type="daily_vehicle",
+            version=1,
+            title="Check-list diario de veiculos - Seguranca do Trabalho",
+            active=True,
+        )
+        db.add(template)
+        db.flush()
+
+    for position, (item_text, severity) in enumerate(DAILY_SAFETY_ITEMS, start=1):
+        item = (
+            db.query(SafetyChecklistItem)
+            .filter(
+                SafetyChecklistItem.template_id == template.id,
+                SafetyChecklistItem.position == position,
+            )
+            .first()
+        )
+        if not item:
+            item = SafetyChecklistItem(template_id=template.id, position=position)
+        item.section = "Inspecao diaria"
+        item.item_text = item_text
+        item.severity = severity
+        item.answer_type = SafetyAnswerType.OK_NOT_OK_NA
+        item.active = True
+        db.add(item)
+
+    for prefix in CAIEIRAS_PREFIXES:
+        vehicle = db.query(SafetyVehicle).filter(SafetyVehicle.prefix == prefix).first()
+        if not vehicle:
+            vehicle = SafetyVehicle(prefix=prefix, unit="CAIEIRAS")
+        vehicle.public_token = _vehicle_token(prefix)
+        vehicle.active = True
+        db.add(vehicle)
+
+    alert = db.query(UnitAlertSetting).filter(UnitAlertSetting.unit == "CAIEIRAS").first()
+    if not alert:
+        db.add(UnitAlertSetting(unit="CAIEIRAS", manager_email="gerencia.caieiras@exclusivaturismo.com.br"))
 
 
 def upsert_admin(
@@ -125,6 +230,7 @@ def main() -> None:
         db.query(User).filter(User.cpf_hash != vinicius_hash).update(
             {User.can_delete_history: False}
         )
+        seed_safety_domain(db)
         db.commit()
         print(
             f"Admins atualizados. Senha temporaria: {TEMP_PASSWORD}. {datetime.now(timezone.utc).isoformat()}"
