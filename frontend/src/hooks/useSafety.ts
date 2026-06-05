@@ -53,6 +53,10 @@ export interface SafetyTicket {
   source_submission_id: number
   created_at: string
   manager_notes?: string
+  email_sent: boolean
+  sst_approved: boolean
+  sst_approved_notes?: string
+  sst_approved_at?: string
 }
 
 export async function getPublicSafetyChecklist(token: string) {
@@ -92,5 +96,19 @@ export async function listSafetyVehicles() {
 
 export async function updateSafetyTicket(id: number, status: SafetyTicket['status'], manager_notes?: string) {
   const res = await api.patch<SafetyTicket>(`/safety/maintenance/${id}`, { status, manager_notes })
+  return res.data
+}
+
+export async function approveTicketForSST(id: number, notes?: string) {
+  const res = await api.post<SafetyTicket>(`/safety/maintenance/${id}/approve-sst`, { notes })
+  return res.data
+}
+
+export async function getSSTView() {
+  const res = await api.get<{
+    submissions: SafetySubmission[]
+    tickets: SafetyTicket[]
+    is_tecnico: boolean
+  }>('/safety/sst-view')
   return res.data
 }

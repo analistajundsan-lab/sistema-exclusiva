@@ -12,6 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import apply_user_unit_scope, ensure_unit_access, get_current_user
+from email_service import send_ficha_tecnica, send_sst_approval_notification
 from models import (
     DriverChecklistAnswer,
     DriverChecklistSubmission,
@@ -22,7 +23,9 @@ from models import (
     SafetySeverity,
     SafetySubmissionStatus,
     SafetyVehicle,
+    UnitAlertSetting,
     User,
+    UserRole,
     get_db,
 )
 from rate_limit import rate_limit
@@ -36,11 +39,13 @@ from schemas import (
     SafetyTicketListItem,
     SafetyTicketUpdate,
     SafetyVehicleResponse,
+    SSTApprovalRequest,
 )
 
 router = APIRouter(tags=["safety"])
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
-SAFETY_ROLES = {"admin", "gerente", "supervisao", "tecnico_seguranca"}
+SAFETY_ROLES = {"admin", "gerente", "supervisao", "tecnico_seguranca", "engenheiro_seguranca"}
+APPROVAL_ROLES = {"admin", "gerente"}
 
 
 def _today_brasilia() -> date_type:
@@ -69,6 +74,23 @@ def _active_template(db: Session) -> SafetyChecklistTemplate:
             status_code=404, detail="Template de check-list nao configurado"
         )
     return template
+
+
+def _ticket_response(ticket: MaintenanceTicket, prefix: str) -> SafetyTicketListItem:
+    return SafetyTicketListItem(
+        id=ticket.id,
+        unit=ticket.unit,
+        prefix=prefix,
+        status=ticket.status.value,
+        blocking_items=json.loads(ticket.blocking_items or "[]"),
+        source_submission_id=ticket.source_submission_id,
+        created_at=ticket.created_at,
+        manager_notes=ticket.manager_notes,
+        email_sent=bool(ticket.email_sent),
+        sst_approved=bool(ticket.sst_approved),
+        sst_approved_notes=ticket.sst_approved_notes,
+        sst_approved_at=ticket.sst_approved_at,
+    )
 
 
 def _vehicle_response(vehicle: SafetyVehicle) -> SafetyVehicleResponse:
@@ -221,10 +243,32 @@ async def create_public_submission(
             source_submission_id=submission.id,
             status=MaintenanceTicketStatus.OPEN,
             blocking_items=json.dumps(blocking_items, ensure_ascii=False),
+            email_sent=False,
         )
         db.add(ticket)
         db.flush()
         ticket_id = ticket.id
+
+        # Busca o email da gerência da unidade para enviar a ficha técnica
+        alert_setting = (
+            db.query(UnitAlertSetting)
+            .filter(UnitAlertSetting.unit == vehicle.unit)
+            .first()
+        )
+        if alert_setting and alert_setting.manager_email:
+            sent = send_ficha_tecnica(
+                manager_email=alert_setting.manager_email,
+                ticket_id=ticket.id,
+                unit=vehicle.unit,
+                prefix=vehicle.prefix,
+                plate=vehicle.plate,
+                driver_name=submission.driver_name,
+                driver_registration=submission.driver_registration,
+                submitted_at=submission.submitted_at,
+                blocking_items=blocking_items,
+            )
+            ticket.email_sent = sent
+            ticket.email_sent_at = datetime.now(BRASILIA_TZ).replace(tzinfo=None) if sent else None
 
     db.commit()
     message = {
@@ -356,16 +400,7 @@ async def list_safety_tickets(
     )
     query = apply_user_unit_scope(query, MaintenanceTicket.unit, current_user)
     return [
-        SafetyTicketListItem(
-            id=ticket.id,
-            unit=ticket.unit,
-            prefix=vehicle.prefix,
-            status=ticket.status.value,
-            blocking_items=json.loads(ticket.blocking_items or "[]"),
-            source_submission_id=ticket.source_submission_id,
-            created_at=ticket.created_at,
-            manager_notes=ticket.manager_notes,
-        )
+        _ticket_response(ticket, vehicle.prefix)
         for ticket, vehicle in query.limit(500).all()
     ]
 
@@ -394,16 +429,124 @@ async def update_safety_ticket(
     ticket.manager_validated_at = datetime.now(BRASILIA_TZ).replace(tzinfo=None)
     db.commit()
     db.refresh(ticket)
-    return SafetyTicketListItem(
-        id=ticket.id,
-        unit=ticket.unit,
-        prefix=vehicle.prefix,
-        status=ticket.status.value,
-        blocking_items=json.loads(ticket.blocking_items or "[]"),
-        source_submission_id=ticket.source_submission_id,
-        created_at=ticket.created_at,
-        manager_notes=ticket.manager_notes,
+    return _ticket_response(ticket, vehicle.prefix)
+
+
+@router.post("/safety/maintenance/{ticket_id}/approve-sst", response_model=SafetyTicketListItem)
+async def approve_ticket_for_sst(
+    ticket_id: int,
+    body: SSTApprovalRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role.value not in APPROVAL_ROLES and not getattr(current_user, "has_full_access", False):
+        raise HTTPException(status_code=403, detail="Apenas gerentes podem aprovar para SST")
+
+    row = (
+        db.query(MaintenanceTicket, SafetyVehicle)
+        .join(SafetyVehicle, SafetyVehicle.id == MaintenanceTicket.vehicle_id)
+        .filter(MaintenanceTicket.id == ticket_id)
+        .first()
     )
+    if not row:
+        raise HTTPException(status_code=404, detail="Ticket nao encontrado")
+    ticket, vehicle = row
+    ensure_unit_access(current_user, ticket.unit)
+
+    if ticket.sst_approved:
+        raise HTTPException(status_code=400, detail="Ticket ja aprovado para SST")
+
+    ticket.sst_approved = True
+    ticket.sst_approved_by = current_user.id
+    ticket.sst_approved_at = datetime.now(BRASILIA_TZ).replace(tzinfo=None)
+    ticket.sst_approved_notes = body.notes
+    ticket.status = MaintenanceTicketStatus.VALIDATED
+    db.flush()
+
+    # Notifica técnicos/engenheiros da unidade via email
+    sst_users = (
+        db.query(User)
+        .filter(
+            User.is_active.is_(True),
+            User.role.in_([UserRole.TECNICO_SEGURANCA, UserRole.ENGENHEIRO_SEGURANCA]),
+        )
+        .all()
+    )
+    sst_emails = [
+        u.email for u in sst_users
+        if u.email and (
+            u.role == UserRole.ENGENHEIRO_SEGURANCA
+            or (u.unit and u.unit == ticket.unit)
+            or (u.units and ticket.unit in u.units)
+        )
+    ]
+    if sst_emails:
+        blocking_items = json.loads(ticket.blocking_items or "[]")
+        send_sst_approval_notification(
+            sst_emails=sst_emails,
+            ticket_id=ticket.id,
+            unit=ticket.unit,
+            prefix=vehicle.prefix,
+            blocking_items=blocking_items,
+            approver_name=current_user.display_name or current_user.name,
+            notes=body.notes,
+        )
+
+    db.commit()
+    db.refresh(ticket)
+    return _ticket_response(ticket, vehicle.prefix)
+
+
+@router.get("/safety/sst-view", response_model=dict)
+async def sst_view(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Visão consultiva para Técnico/Engenheiro: submissões + tickets aprovados pela gerência."""
+    _require_safety_user(current_user)
+
+    submissions_q = (
+        db.query(DriverChecklistSubmission, SafetyVehicle)
+        .join(SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id)
+        .order_by(DriverChecklistSubmission.submitted_at.desc())
+    )
+    submissions_q = apply_user_unit_scope(submissions_q, SafetyVehicle.unit, current_user)
+
+    tickets_q = (
+        db.query(MaintenanceTicket, SafetyVehicle)
+        .join(SafetyVehicle, SafetyVehicle.id == MaintenanceTicket.vehicle_id)
+        .order_by(MaintenanceTicket.created_at.desc())
+    )
+    tickets_q = apply_user_unit_scope(tickets_q, MaintenanceTicket.unit, current_user)
+
+    # Técnico vê apenas tickets aprovados pela gerência
+    is_tecnico = current_user.role.value == "tecnico_seguranca"
+    if is_tecnico:
+        tickets_q = tickets_q.filter(MaintenanceTicket.sst_approved.is_(True))
+
+    submissions = [
+        {
+            "id": s.id,
+            "prefix": v.prefix,
+            "unit": v.unit,
+            "driver_name": s.driver_name,
+            "driver_registration": s.driver_registration,
+            "overall_status": s.overall_status.value,
+            "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+        }
+        for s, v in submissions_q.limit(200).all()
+    ]
+
+    tickets = [
+        {
+            **_ticket_response(t, v.prefix).model_dump(),
+            "created_at": (t.created_at.isoformat() if t.created_at else None),
+            "sst_approved_at": (t.sst_approved_at.isoformat() if t.sst_approved_at else None),
+        }
+        for t, v in tickets_q.limit(200).all()
+    ]
+
+    return {"submissions": submissions, "tickets": tickets, "is_tecnico": is_tecnico}
 
 
 @router.get("/safety/submissions/export")

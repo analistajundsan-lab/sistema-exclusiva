@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
     EXPOSE_METRICS: bool = True
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "noreply@exclusivaturismo.com.br"
 
     # str field avoids pydantic-settings v2 JSON-parsing a list before validators run
     ALLOWED_ORIGINS_RAW: str = _DEFAULT_ORIGINS

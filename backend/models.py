@@ -385,6 +385,12 @@ class MaintenanceTicket(Base):
     manager_validated_by = Column(Integer, index=True)
     manager_validated_at = Column(DateTime)
     manager_notes = Column(String(500))
+    email_sent = Column(Boolean, default=False, nullable=False)
+    email_sent_at = Column(DateTime)
+    sst_approved = Column(Boolean, default=False, nullable=False, index=True)
+    sst_approved_by = Column(Integer, index=True)
+    sst_approved_at = Column(DateTime)
+    sst_approved_notes = Column(String(500))
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

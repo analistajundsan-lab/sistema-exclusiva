@@ -500,6 +500,14 @@ class SafetyTicketListItem(BaseModel):
     source_submission_id: int
     created_at: datetime
     manager_notes: Optional[str] = None
+    email_sent: bool = False
+    sst_approved: bool = False
+    sst_approved_notes: Optional[str] = None
+    sst_approved_at: Optional[datetime] = None
+
+
+class SSTApprovalRequest(BaseModel):
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class SafetyDashboardResponse(BaseModel):

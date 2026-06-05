@@ -85,6 +85,13 @@ def migrate_existing_sqlite() -> None:
         ensure_column("swaps", "driver_out", "driver_out VARCHAR(255)")
         ensure_column("swaps", "driver_in", "driver_in VARCHAR(255)")
         ensure_column("swaps", "whatsapp_text", "whatsapp_text VARCHAR(1000)")
+    if "maintenance_tickets" in tables:
+        ensure_column("maintenance_tickets", "email_sent", "email_sent BOOLEAN DEFAULT FALSE")
+        ensure_column("maintenance_tickets", "email_sent_at", "email_sent_at TIMESTAMP")
+        ensure_column("maintenance_tickets", "sst_approved", "sst_approved BOOLEAN DEFAULT FALSE")
+        ensure_column("maintenance_tickets", "sst_approved_by", "sst_approved_by INTEGER")
+        ensure_column("maintenance_tickets", "sst_approved_at", "sst_approved_at TIMESTAMP")
+        ensure_column("maintenance_tickets", "sst_approved_notes", "sst_approved_notes VARCHAR(500)")
     if "incidents" in tables:
         ensure_column("incidents", "victim_status", "victim_status VARCHAR(20)")
         ensure_column("incidents", "unit", "unit VARCHAR(80)")
@@ -279,12 +286,9 @@ def seed_safety_domain(db) -> None:
         db.query(UnitAlertSetting).filter(UnitAlertSetting.unit == "CAIEIRAS").first()
     )
     if not alert:
-        db.add(
-            UnitAlertSetting(
-                unit="CAIEIRAS",
-                manager_email="gerencia.caieiras@exclusivaturismo.com.br",
-            )
-        )
+        alert = UnitAlertSetting(unit="CAIEIRAS")
+        db.add(alert)
+    alert.manager_email = "jerusa@exclusivaturismo.com.br"
 
 
 def upsert_admin(

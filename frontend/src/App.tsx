@@ -21,6 +21,7 @@ import { SSTSinistros } from "./pages/SSTSinistros";
 import { SSTOcorrencias } from "./pages/SSTOcorrencias";
 import { SSTLiberacao } from "./pages/SSTLiberacao";
 import { SSTSaude } from "./pages/SSTSaude";
+import { SSTChecklistView } from "./pages/SSTChecklistView";
 
 function InactivityGuard({ children }: { children: React.ReactNode }) {
   useInactivityTimer()
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="/sst/ocorrencias" element={<SSTRoute><SSTOcorrencias /></SSTRoute>} />
         <Route path="/sst/liberacao" element={<SSTRoute><SSTLiberacao /></SSTRoute>} />
         <Route path="/sst/saude" element={<SSTRoute><SSTSaude /></SSTRoute>} />
+        <Route path="/sst/checklist" element={<SSTRoute><SSTChecklistView /></SSTRoute>} />
         <Route path="*" element={<Navigate to="/on-call" replace />} />
       </Routes>
     </BrowserRouter>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
-import { AlertTriangle, CheckCircle2, ClipboardList, Download, ExternalLink, Link as LinkIcon, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ClipboardList, Download, ExternalLink, Link as LinkIcon, Mail, ShieldCheck, UserCheck, X } from 'lucide-react'
 import {
+  approveTicketForSST,
   getSafetyDashboard,
   listSafetySubmissions,
   listSafetyTickets,
@@ -12,6 +13,7 @@ import {
   SafetyVehicle,
   updateSafetyTicket,
 } from '../hooks/useSafety'
+import { useAuthStore } from '../store/auth'
 import api from '../api/client'
 
 const statusLabel: Record<string, string> = {
@@ -26,11 +28,18 @@ const statusLabel: Record<string, string> = {
 }
 
 export function Safety() {
+  const role = useAuthStore((s) => s.role)
+  const hasFullAccess = useAuthStore((s) => s.hasFullAccess)
+  const canApprove = hasFullAccess || role === 'admin' || role === 'gerente'
+
   const [dashboard, setDashboard] = useState<SafetyDashboard | null>(null)
   const [submissions, setSubmissions] = useState<SafetySubmission[]>([])
   const [tickets, setTickets] = useState<SafetyTicket[]>([])
   const [vehicles, setVehicles] = useState<SafetyVehicle[]>([])
   const [loading, setLoading] = useState(true)
+  const [approvalModal, setApprovalModal] = useState<SafetyTicket | null>(null)
+  const [approvalNotes, setApprovalNotes] = useState('')
+  const [approving, setApproving] = useState(false)
 
   const load = async () => {
     const [dash, subs, ticketRows, vehicleRows] = await Promise.all([
@@ -64,6 +73,19 @@ export function Safety() {
   const markTicket = async (ticket: SafetyTicket, status: SafetyTicket['status']) => {
     await updateSafetyTicket(ticket.id, status, ticket.manager_notes)
     await load()
+  }
+
+  const handleApprove = async () => {
+    if (!approvalModal) return
+    setApproving(true)
+    try {
+      await approveTicketForSST(approvalModal.id, approvalNotes || undefined)
+      setApprovalModal(null)
+      setApprovalNotes('')
+      await load()
+    } finally {
+      setApproving(false)
+    }
   }
 
   return (
@@ -103,9 +125,21 @@ export function Safety() {
               {tickets.length === 0 ? <Empty text="Nenhum ticket encontrado." /> : tickets.map(ticket => (
                 <div key={ticket.id} className="border-b border-gray-100 py-3 last:border-0 dark:border-gray-700">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-gray-100">Prefixo {ticket.prefix} - {ticket.unit}</p>
-                      <p className="text-xs text-gray-500">{statusLabel[ticket.status]}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Prefixo {ticket.prefix} — {ticket.unit}</p>
+                        {ticket.email_sent && (
+                          <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            <Mail size={10} /> E-mail enviado
+                          </span>
+                        )}
+                        {ticket.sst_approved && (
+                          <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            <UserCheck size={10} /> Aprovado SST
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{statusLabel[ticket.status]} · #{ticket.id}</p>
                     </div>
                     <select
                       value={ticket.status}
@@ -120,8 +154,19 @@ export function Safety() {
                     </select>
                   </div>
                   <ul className="mt-2 space-y-1 text-sm text-red-700 dark:text-red-300">
-                    {ticket.blocking_items.map(item => <li key={item}>- {item}</li>)}
+                    {ticket.blocking_items.map(item => <li key={item}>⚠ {item}</li>)}
                   </ul>
+                  {canApprove && !ticket.sst_approved && (
+                    <button
+                      onClick={() => { setApprovalModal(ticket); setApprovalNotes('') }}
+                      className="mt-2 flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-800"
+                    >
+                      <UserCheck size={13} /> Aprovar para SST
+                    </button>
+                  )}
+                  {ticket.sst_approved && ticket.sst_approved_notes && (
+                    <p className="mt-1 text-xs text-gray-500 italic">Obs: {ticket.sst_approved_notes}</p>
+                  )}
                 </div>
               ))}
             </Panel>
@@ -169,6 +214,52 @@ export function Safety() {
               ))}
             </div>
           </Panel>
+        </div>
+      )}
+
+      {/* Modal de aprovação para SST */}
+      {approvalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 dark:bg-gray-900">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Aprovar Ticket #{approvalModal.id} para SST
+              </h2>
+              <button onClick={() => setApprovalModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              Veículo <strong>{approvalModal.prefix}</strong> — {approvalModal.unit}.
+              Ao aprovar, o Técnico/Engenheiro de Segurança será notificado por e-mail.
+            </p>
+            <label className="block">
+              <span className="text-xs font-medium text-gray-500">Observações (opcional)</span>
+              <textarea
+                value={approvalNotes}
+                onChange={e => setApprovalNotes(e.target.value)}
+                rows={3}
+                placeholder="Observações para o SST..."
+                className="input w-full mt-1 resize-none"
+              />
+            </label>
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setApprovalModal(null)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleApprove}
+                disabled={approving}
+                className="flex items-center gap-2 rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50"
+              >
+                <UserCheck size={15} />
+                {approving ? 'Aprovando...' : 'Confirmar Aprovação'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </Layout>
