@@ -16,6 +16,11 @@ import { ChecklistConsulta } from "./pages/ChecklistConsulta";
 import { ChecklistNovo } from "./pages/ChecklistNovo";
 import { Safety } from "./pages/Safety";
 import { PublicSafetyChecklist } from "./pages/PublicSafetyChecklist";
+import { SSTDashboard } from "./pages/SSTDashboard";
+import { SSTSinistros } from "./pages/SSTSinistros";
+import { SSTOcorrencias } from "./pages/SSTOcorrencias";
+import { SSTLiberacao } from "./pages/SSTLiberacao";
+import { SSTSaude } from "./pages/SSTSaude";
 
 function InactivityGuard({ children }: { children: React.ReactNode }) {
   useInactivityTimer()
@@ -29,6 +34,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 const ADMIN_ROLES = ['admin']
+const SST_ROLES = ['admin', 'tecnico_seguranca', 'engenheiro_seguranca']
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -36,6 +42,15 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const hasFullAccess = useAuthStore((s) => s.hasFullAccess);
   if (!token) return <Navigate to="/login" replace />;
   if (!hasFullAccess && !ADMIN_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
+  return <InactivityGuard>{children}</InactivityGuard>;
+}
+
+function SSTRoute({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.role);
+  const hasFullAccess = useAuthStore((s) => s.hasFullAccess);
+  if (!token) return <Navigate to="/login" replace />;
+  if (!hasFullAccess && !SST_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
   return <InactivityGuard>{children}</InactivityGuard>;
 }
 
@@ -60,6 +75,11 @@ export default function App() {
         <Route path="/vistoria/novo" element={<ProtectedRoute><ChecklistNovo /></ProtectedRoute>} />
         <Route path="/checklist" element={<ProtectedRoute><Safety /></ProtectedRoute>} />
         <Route path="/checklist/novo" element={<Navigate to="/vistoria/novo" replace />} />
+        <Route path="/sst" element={<SSTRoute><SSTDashboard /></SSTRoute>} />
+        <Route path="/sst/sinistros" element={<SSTRoute><SSTSinistros /></SSTRoute>} />
+        <Route path="/sst/ocorrencias" element={<SSTRoute><SSTOcorrencias /></SSTRoute>} />
+        <Route path="/sst/liberacao" element={<SSTRoute><SSTLiberacao /></SSTRoute>} />
+        <Route path="/sst/saude" element={<SSTRoute><SSTSaude /></SSTRoute>} />
         <Route path="*" element={<Navigate to="/on-call" replace />} />
       </Routes>
     </BrowserRouter>

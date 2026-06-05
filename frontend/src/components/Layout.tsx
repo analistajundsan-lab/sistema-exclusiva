@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardCheck, AlertTriangle,
   Calendar, Shield, Users, LogOut, Sun, Moon,
-  User, ChevronRight, Bus, Search, ClipboardList, Download, type LucideIcon,
+  User, ChevronRight, Bus, Search, ClipboardList, Download, Heart, UserCheck, type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthStore } from '../store/auth'
@@ -16,6 +16,8 @@ interface NavItem {
   roles?: string[]
 }
 
+const SST_ROLES = ['admin', 'tecnico_seguranca', 'engenheiro_seguranca']
+
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { to: '/on-call', label: 'Confirmação', icon: ClipboardCheck },
@@ -23,7 +25,12 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/schedule', label: 'Escala', icon: Calendar, roles: ['admin', 'gerente', 'supervisao', 'supervisor', 'plantonista', 'analista'] },
   { to: '/consulta', label: 'Consulta', icon: Search },
   { to: '/vistoria', label: 'Vistoria', icon: ClipboardList, roles: ['admin', 'analista'] },
-  { to: '/checklist', label: 'Check-list ST', icon: ClipboardCheck, roles: ['admin', 'gerente', 'supervisao', 'tecnico_seguranca'] },
+  { to: '/checklist', label: 'Check-list ST', icon: ClipboardCheck, roles: ['admin', 'gerente', 'supervisao', 'tecnico_seguranca', 'engenheiro_seguranca'] },
+  { to: '/sst', label: 'SST Dashboard', icon: Shield, roles: SST_ROLES },
+  { to: '/sst/sinistros', label: 'Sinistros', icon: AlertTriangle, roles: SST_ROLES },
+  { to: '/sst/ocorrencias', label: 'Ocorr. SST', icon: ClipboardList, roles: SST_ROLES },
+  { to: '/sst/liberacao', label: 'Liberação', icon: UserCheck, roles: SST_ROLES },
+  { to: '/sst/saude', label: 'Saúde', icon: Heart, roles: SST_ROLES },
   { to: '/audit', label: 'Auditoria', icon: Shield, roles: ['admin'] },
   { to: '/users', label: 'Usuários', icon: Users, roles: ['admin'] },
 ]
@@ -71,7 +78,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const roleLabel: Record<string, string> = {
     admin: 'Administrador', gerente: 'Gerente', supervisao: 'Supervisão',
     analista: 'Analista', plantonista: 'Plantonista',
-    tecnico_seguranca: 'Seguranca do Trabalho',
+    tecnico_seguranca: 'Técnico de Segurança',
+    engenheiro_seguranca: 'Engenheiro de Segurança',
     supervisor: 'Supervisor', operator: 'Operador',
   }
 

@@ -14,6 +14,7 @@ UNRESTRICTED_UNIT_ROLES = {
     UserRole.GERENTE,
     UserRole.SUPERVISAO,
     UserRole.SUPERVISOR,
+    UserRole.ENGENHEIRO_SEGURANCA,
 }
 
 

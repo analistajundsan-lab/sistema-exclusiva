@@ -14,6 +14,7 @@ class UserRole(str, Enum):
     GERENTE = "gerente"
     SUPERVISAO = "supervisao"
     TECNICO_SEGURANCA = "tecnico_seguranca"
+    ENGENHEIRO_SEGURANCA = "engenheiro_seguranca"
 
 
 class IncidentStatus(str, Enum):
@@ -107,6 +108,27 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=8)
 
 
+class SinistroStatus(str, Enum):
+    ABERTO = "aberto"
+    EM_ANALISE = "em_analise"
+    AGUARDANDO_DOCUMENTOS = "aguardando_documentos"
+    EM_INVESTIGACAO = "em_investigacao"
+    ENCERRADO = "encerrado"
+
+
+class LiberacaoStatus(str, Enum):
+    PENDENTE = "pendente"
+    LIBERADO = "liberado"
+    LIBERADO_COM_RESTRICAO = "liberado_com_restricao"
+    NAO_LIBERADO = "nao_liberado"
+
+
+class SaudeStatus(str, Enum):
+    EM_ACOMPANHAMENTO = "em_acompanhamento"
+    ENCAMINHADO = "encaminhado"
+    RESOLVIDO = "resolvido"
+
+
 class IncidentCreate(BaseModel):
     prefix_code: str = Field(..., min_length=1, max_length=10)
     incident_type: str
@@ -114,6 +136,7 @@ class IncidentCreate(BaseModel):
     line: Optional[str] = None
     direction: Optional[str] = None
     victim_status: Optional[str] = None
+    unit: Optional[str] = Field(None, max_length=80)
     status: IncidentStatus = IncidentStatus.ABERTO
 
 
@@ -137,7 +160,13 @@ class IncidentResponse(BaseModel):
     line: Optional[str] = None
     direction: Optional[str] = None
     victim_status: Optional[str] = None
+    unit: Optional[str] = None
     status: IncidentStatus = IncidentStatus.ABERTO
+    sst_forwarded: bool = False
+    sst_forwarded_at: Optional[datetime] = None
+    sst_forwarded_by: Optional[int] = None
+    sst_forward_reason: Optional[str] = None
+    sst_forward_priority: Optional[str] = None
     created_by: int
     created_at: datetime
 
@@ -479,3 +508,252 @@ class SafetyDashboardResponse(BaseModel):
     resolved_tickets: int
     submissions_today: int
     vehicles_without_checklist_today: int
+
+
+# ── SST Schemas ────────────────────────────────────────────────────────────────
+
+class SinistroCreate(BaseModel):
+    unit: str = Field(..., max_length=80)
+    empresa: Optional[str] = Field(None, max_length=120)
+    prefixo: Optional[str] = Field(None, max_length=20)
+    placa: Optional[str] = Field(None, max_length=20)
+    modelo: Optional[str] = Field(None, max_length=120)
+    frota: Optional[str] = Field(None, max_length=50)
+    condutor_nome: Optional[str] = Field(None, max_length=255)
+    condutor_matricula: Optional[str] = Field(None, max_length=60)
+    condutor_cpf: Optional[str] = Field(None, max_length=15)
+    condutor_tempo_empresa: Optional[str] = Field(None, max_length=50)
+    data_ocorrencia: date
+    hora_ocorrencia: Optional[str] = Field(None, max_length=5)
+    local_ocorrencia: Optional[str] = Field(None, max_length=255)
+    cidade: Optional[str] = Field(None, max_length=120)
+    estado: Optional[str] = Field(None, max_length=2)
+    tipo_sinistro: str = Field(..., max_length=80)
+    descricao: Optional[str] = None
+    danos_identificados: Optional[List[str]] = None
+    evidencias: Optional[List[str]] = None
+    envolvidos: Optional[List[str]] = None
+    status: SinistroStatus = SinistroStatus.ABERTO
+
+
+class SinistroUpdate(BaseModel):
+    empresa: Optional[str] = Field(None, max_length=120)
+    prefixo: Optional[str] = Field(None, max_length=20)
+    placa: Optional[str] = Field(None, max_length=20)
+    modelo: Optional[str] = Field(None, max_length=120)
+    frota: Optional[str] = Field(None, max_length=50)
+    condutor_nome: Optional[str] = Field(None, max_length=255)
+    condutor_matricula: Optional[str] = Field(None, max_length=60)
+    condutor_cpf: Optional[str] = Field(None, max_length=15)
+    condutor_tempo_empresa: Optional[str] = Field(None, max_length=50)
+    data_ocorrencia: Optional[date] = None
+    hora_ocorrencia: Optional[str] = Field(None, max_length=5)
+    local_ocorrencia: Optional[str] = Field(None, max_length=255)
+    cidade: Optional[str] = Field(None, max_length=120)
+    estado: Optional[str] = Field(None, max_length=2)
+    tipo_sinistro: Optional[str] = Field(None, max_length=80)
+    descricao: Optional[str] = None
+    danos_identificados: Optional[List[str]] = None
+    evidencias: Optional[List[str]] = None
+    envolvidos: Optional[List[str]] = None
+    status: Optional[SinistroStatus] = None
+
+
+class SinistroResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    numero: Optional[str] = None
+    unit: str
+    empresa: Optional[str] = None
+    prefixo: Optional[str] = None
+    placa: Optional[str] = None
+    modelo: Optional[str] = None
+    frota: Optional[str] = None
+    condutor_nome: Optional[str] = None
+    condutor_matricula: Optional[str] = None
+    condutor_cpf: Optional[str] = None
+    condutor_tempo_empresa: Optional[str] = None
+    data_ocorrencia: date
+    hora_ocorrencia: Optional[str] = None
+    local_ocorrencia: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    tipo_sinistro: str
+    descricao: Optional[str] = None
+    danos_identificados: Optional[List[str]] = None
+    evidencias: Optional[List[str]] = None
+    envolvidos: Optional[List[str]] = None
+    status: SinistroStatus
+    created_by: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class SinistroHistoricoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    sinistro_id: int
+    user_id: int
+    campo: Optional[str] = None
+    valor_anterior: Optional[str] = None
+    valor_novo: Optional[str] = None
+    descricao: Optional[str] = None
+    created_at: datetime
+
+
+class SSTForwardRequest(BaseModel):
+    reason: str = Field(..., max_length=500)
+    priority: str = Field(..., pattern="^(baixa|media|alta|urgente)$")
+
+
+class LiberacaoCreate(BaseModel):
+    unit: str = Field(..., max_length=80)
+    condutor_nome: str = Field(..., max_length=255)
+    condutor_matricula: Optional[str] = Field(None, max_length=60)
+    motivo_avaliacao: str = Field(..., max_length=100)
+    documentacao_ok: Optional[bool] = None
+    treinamentos_ok: Optional[bool] = None
+    exames_ok: Optional[bool] = None
+    aso_ok: Optional[bool] = None
+    reciclagem_ok: Optional[bool] = None
+    avaliacoes_sst_ok: Optional[bool] = None
+    resultado: LiberacaoStatus = LiberacaoStatus.PENDENTE
+    observacoes: Optional[str] = None
+    restricoes: Optional[str] = None
+    evidencias: Optional[List[str]] = None
+
+
+class LiberacaoUpdate(BaseModel):
+    condutor_nome: Optional[str] = Field(None, max_length=255)
+    condutor_matricula: Optional[str] = Field(None, max_length=60)
+    motivo_avaliacao: Optional[str] = Field(None, max_length=100)
+    documentacao_ok: Optional[bool] = None
+    treinamentos_ok: Optional[bool] = None
+    exames_ok: Optional[bool] = None
+    aso_ok: Optional[bool] = None
+    reciclagem_ok: Optional[bool] = None
+    avaliacoes_sst_ok: Optional[bool] = None
+    resultado: Optional[LiberacaoStatus] = None
+    observacoes: Optional[str] = None
+    restricoes: Optional[str] = None
+    evidencias: Optional[List[str]] = None
+
+
+class LiberacaoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    unit: str
+    condutor_nome: str
+    condutor_matricula: Optional[str] = None
+    motivo_avaliacao: str
+    documentacao_ok: Optional[bool] = None
+    treinamentos_ok: Optional[bool] = None
+    exames_ok: Optional[bool] = None
+    aso_ok: Optional[bool] = None
+    reciclagem_ok: Optional[bool] = None
+    avaliacoes_sst_ok: Optional[bool] = None
+    resultado: LiberacaoStatus
+    observacoes: Optional[str] = None
+    restricoes: Optional[str] = None
+    evidencias: Optional[List[str]] = None
+    created_by: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class SaudeCreate(BaseModel):
+    unit: str = Field(..., max_length=80)
+    condutor_nome: str = Field(..., max_length=255)
+    condutor_matricula: Optional[str] = Field(None, max_length=60)
+    data_avaliacao: date
+    tecnico_responsavel: Optional[str] = Field(None, max_length=255)
+    qualidade_sono: Optional[str] = Field(None, max_length=20)
+    fadiga: Optional[str] = Field(None, max_length=20)
+    alimentacao: Optional[str] = Field(None, max_length=20)
+    hidratacao: Optional[str] = Field(None, max_length=20)
+    queixas_fisicas: Optional[str] = None
+    estresse: Optional[str] = Field(None, max_length=20)
+    ansiedade: Optional[str] = Field(None, max_length=20)
+    conflitos_pessoais: Optional[str] = None
+    observacoes_comportamentais: Optional[str] = None
+    jornada_excessiva: Optional[bool] = None
+    queixas_recorrentes: Optional[str] = None
+    historico_ocorrencias: Optional[str] = None
+    necessidade_treinamento: Optional[bool] = None
+    plano_acao: Optional[str] = None
+    encaminhamentos: Optional[List[str]] = None
+    status: SaudeStatus = SaudeStatus.EM_ACOMPANHAMENTO
+
+
+class SaudeUpdate(BaseModel):
+    condutor_nome: Optional[str] = Field(None, max_length=255)
+    condutor_matricula: Optional[str] = Field(None, max_length=60)
+    data_avaliacao: Optional[date] = None
+    tecnico_responsavel: Optional[str] = Field(None, max_length=255)
+    qualidade_sono: Optional[str] = Field(None, max_length=20)
+    fadiga: Optional[str] = Field(None, max_length=20)
+    alimentacao: Optional[str] = Field(None, max_length=20)
+    hidratacao: Optional[str] = Field(None, max_length=20)
+    queixas_fisicas: Optional[str] = None
+    estresse: Optional[str] = Field(None, max_length=20)
+    ansiedade: Optional[str] = Field(None, max_length=20)
+    conflitos_pessoais: Optional[str] = None
+    observacoes_comportamentais: Optional[str] = None
+    jornada_excessiva: Optional[bool] = None
+    queixas_recorrentes: Optional[str] = None
+    historico_ocorrencias: Optional[str] = None
+    necessidade_treinamento: Optional[bool] = None
+    plano_acao: Optional[str] = None
+    encaminhamentos: Optional[List[str]] = None
+    status: Optional[SaudeStatus] = None
+
+
+class SaudeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    unit: str
+    condutor_nome: str
+    condutor_matricula: Optional[str] = None
+    data_avaliacao: date
+    tecnico_responsavel: Optional[str] = None
+    qualidade_sono: Optional[str] = None
+    fadiga: Optional[str] = None
+    alimentacao: Optional[str] = None
+    hidratacao: Optional[str] = None
+    queixas_fisicas: Optional[str] = None
+    estresse: Optional[str] = None
+    ansiedade: Optional[str] = None
+    conflitos_pessoais: Optional[str] = None
+    observacoes_comportamentais: Optional[str] = None
+    jornada_excessiva: Optional[bool] = None
+    queixas_recorrentes: Optional[str] = None
+    historico_ocorrencias: Optional[str] = None
+    necessidade_treinamento: Optional[bool] = None
+    plano_acao: Optional[str] = None
+    encaminhamentos: Optional[List[str]] = None
+    status: SaudeStatus
+    created_by: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class SSTDashboardResponse(BaseModel):
+    total_veiculos: int
+    total_motoristas: int
+    sinistros_mes: int
+    sinistros_ano: int
+    sinistros_investigacao: int
+    sinistros_encerrados: int
+    condutores_bloqueados: int
+    condutores_liberados: int
+    checklists_hoje: int
+    checklists_pendentes: int
+    colisoes: int
+    abalroamentos: int
+    ocorrencias_sst: int
+    top_condutores: List[dict]
+    top_veiculos: List[dict]

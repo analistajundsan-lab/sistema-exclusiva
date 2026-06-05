@@ -51,12 +51,34 @@ class UserRole(str, enum.Enum):
     GERENTE = "gerente"
     SUPERVISAO = "supervisao"
     TECNICO_SEGURANCA = "tecnico_seguranca"
+    ENGENHEIRO_SEGURANCA = "engenheiro_seguranca"
 
 
 class IncidentStatus(str, enum.Enum):
     ABERTO = "aberto"
     EM_ANDAMENTO = "em_andamento"
     FECHADO = "fechado"
+
+
+class SinistroStatus(str, enum.Enum):
+    ABERTO = "aberto"
+    EM_ANALISE = "em_analise"
+    AGUARDANDO_DOCUMENTOS = "aguardando_documentos"
+    EM_INVESTIGACAO = "em_investigacao"
+    ENCERRADO = "encerrado"
+
+
+class LiberacaoStatus(str, enum.Enum):
+    PENDENTE = "pendente"
+    LIBERADO = "liberado"
+    LIBERADO_COM_RESTRICAO = "liberado_com_restricao"
+    NAO_LIBERADO = "nao_liberado"
+
+
+class SaudeStatus(str, enum.Enum):
+    EM_ACOMPANHAMENTO = "em_acompanhamento"
+    ENCAMINHADO = "encaminhado"
+    RESOLVIDO = "resolvido"
 
 
 class ScheduleLineStatus(str, enum.Enum):
@@ -126,9 +148,15 @@ class Incident(Base):
     line = Column(String(50), index=True)
     direction = Column(String(50))
     victim_status = Column(String(20))
+    unit = Column(String(80), index=True)
     status = Column(
         Enum(IncidentStatus), default=IncidentStatus.ABERTO, nullable=False, index=True
     )
+    sst_forwarded = Column(Boolean, default=False, nullable=False, index=True)
+    sst_forwarded_at = Column(DateTime)
+    sst_forwarded_by = Column(Integer, index=True)
+    sst_forward_reason = Column(String(500))
+    sst_forward_priority = Column(String(20))
     created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -368,6 +396,133 @@ class UnitAlertSetting(Base):
     unit = Column(String(80), nullable=False, unique=True, index=True)
     manager_email = Column(String(255), nullable=False)
     copied_emails = Column(Text)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Sinistro(Base):
+    __tablename__ = "sinistros"
+
+    id = Column(Integer, primary_key=True, index=True)
+    numero = Column(String(30), unique=True, index=True)
+    unit = Column(String(80), nullable=False, index=True)
+    empresa = Column(String(120))
+
+    prefixo = Column(String(20), index=True)
+    placa = Column(String(20))
+    modelo = Column(String(120))
+    frota = Column(String(50))
+
+    condutor_nome = Column(String(255), index=True)
+    condutor_matricula = Column(String(60), index=True)
+    condutor_cpf = Column(String(15))
+    condutor_tempo_empresa = Column(String(50))
+
+    data_ocorrencia = Column(Date, nullable=False, index=True)
+    hora_ocorrencia = Column(String(5))
+    local_ocorrencia = Column(String(255))
+    cidade = Column(String(120))
+    estado = Column(String(2))
+
+    tipo_sinistro = Column(String(80), nullable=False)
+    descricao = Column(Text)
+    danos_identificados = Column(Text)  # JSON array
+    evidencias = Column(Text)  # JSON array
+    envolvidos = Column(Text)  # JSON array
+
+    status = Column(
+        Enum(SinistroStatus),
+        default=SinistroStatus.ABERTO,
+        nullable=False,
+        index=True,
+    )
+
+    created_by = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class SinistroHistorico(Base):
+    __tablename__ = "sinistro_historico"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sinistro_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    campo = Column(String(80))
+    valor_anterior = Column(Text)
+    valor_novo = Column(Text)
+    descricao = Column(String(500))
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+class LiberacaoCondutor(Base):
+    __tablename__ = "liberacoes_condutor"
+
+    id = Column(Integer, primary_key=True, index=True)
+    unit = Column(String(80), nullable=False, index=True)
+    condutor_nome = Column(String(255), nullable=False, index=True)
+    condutor_matricula = Column(String(60), index=True)
+    motivo_avaliacao = Column(String(100), nullable=False)
+
+    documentacao_ok = Column(Boolean)
+    treinamentos_ok = Column(Boolean)
+    exames_ok = Column(Boolean)
+    aso_ok = Column(Boolean)
+    reciclagem_ok = Column(Boolean)
+    avaliacoes_sst_ok = Column(Boolean)
+
+    resultado = Column(
+        Enum(LiberacaoStatus),
+        default=LiberacaoStatus.PENDENTE,
+        nullable=False,
+        index=True,
+    )
+    observacoes = Column(Text)
+    restricoes = Column(Text)
+    evidencias = Column(Text)  # JSON array
+
+    created_by = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class SaudeBeEstarCondutor(Base):
+    __tablename__ = "saude_beestar_condutor"
+
+    id = Column(Integer, primary_key=True, index=True)
+    unit = Column(String(80), nullable=False, index=True)
+    condutor_nome = Column(String(255), nullable=False, index=True)
+    condutor_matricula = Column(String(60), index=True)
+    data_avaliacao = Column(Date, nullable=False, index=True)
+    tecnico_responsavel = Column(String(255))
+
+    qualidade_sono = Column(String(20))
+    fadiga = Column(String(20))
+    alimentacao = Column(String(20))
+    hidratacao = Column(String(20))
+    queixas_fisicas = Column(Text)
+
+    estresse = Column(String(20))
+    ansiedade = Column(String(20))
+    conflitos_pessoais = Column(Text)
+    observacoes_comportamentais = Column(Text)
+
+    jornada_excessiva = Column(Boolean)
+    queixas_recorrentes = Column(Text)
+    historico_ocorrencias = Column(Text)
+    necessidade_treinamento = Column(Boolean)
+
+    plano_acao = Column(Text)
+    encaminhamentos = Column(Text)  # JSON array
+
+    status = Column(
+        Enum(SaudeStatus),
+        default=SaudeStatus.EM_ACOMPANHAMENTO,
+        nullable=False,
+        index=True,
+    )
+
+    created_by = Column(Integer, nullable=False, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

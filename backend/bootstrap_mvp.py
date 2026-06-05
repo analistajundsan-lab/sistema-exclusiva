@@ -38,6 +38,7 @@ def migrate_userrole_enum() -> None:
         "gerente",
         "supervisao",
         "tecnico_seguranca",
+        "engenheiro_seguranca",
     ]
     with engine.begin() as conn:
         for val in new_values:
@@ -78,6 +79,12 @@ def migrate_existing_sqlite() -> None:
         ensure_column("swaps", "whatsapp_text", "whatsapp_text VARCHAR(1000)")
     if "incidents" in tables:
         ensure_column("incidents", "victim_status", "victim_status VARCHAR(20)")
+        ensure_column("incidents", "unit", "unit VARCHAR(80)")
+        ensure_column("incidents", "sst_forwarded", "sst_forwarded BOOLEAN DEFAULT 0")
+        ensure_column("incidents", "sst_forwarded_at", "sst_forwarded_at DATETIME")
+        ensure_column("incidents", "sst_forwarded_by", "sst_forwarded_by INTEGER")
+        ensure_column("incidents", "sst_forward_reason", "sst_forward_reason VARCHAR(500)")
+        ensure_column("incidents", "sst_forward_priority", "sst_forward_priority VARCHAR(20)")
     if "schedule_lines" in tables:
         ensure_column("schedule_lines", "import_id", "import_id INTEGER")
     if "vehicle_checklists" in tables:
