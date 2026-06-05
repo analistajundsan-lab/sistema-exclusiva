@@ -32,7 +32,15 @@ def ensure_column(table: str, column: str, ddl: str) -> None:
 
 
 def migrate_userrole_enum() -> None:
+    # SQLAlchemy uses enum .name (uppercase) for PostgreSQL native enums
     new_values = [
+        "PLANTONISTA",
+        "ANALISTA",
+        "GERENTE",
+        "SUPERVISAO",
+        "TECNICO_SEGURANCA",
+        "ENGENHEIRO_SEGURANCA",
+        # lowercase kept for backward compat with any legacy data
         "plantonista",
         "analista",
         "gerente",

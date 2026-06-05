@@ -150,7 +150,7 @@ async def create_user_by_admin(
         email=request.email,
         name=request.name,
         password_hash=hash_password(request.password),
-        role=UserRole(request.role.value),
+        role=request.role,
         unit=request.unit,
         units=request.units,
         must_change_password=True,
@@ -423,7 +423,7 @@ async def admin_update_user(
     if body.units is not None:
         user.units = body.units
     if body.role is not None:
-        user.role = UserRole(body.role.value)
+        user.role = body.role
     if body.is_active is not None:
         if not body.is_active and user.id == current_user.id:
             raise HTTPException(
