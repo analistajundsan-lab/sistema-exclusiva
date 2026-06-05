@@ -531,7 +531,15 @@ _database_url = (
     settings.DATABASE_URL
     or "postgresql://postgres:postgres@localhost:5432/sistema_exclusiva"
 )
-engine = create_engine(_clean_db_url(_database_url), pool_pre_ping=True, echo=False)
+engine = create_engine(
+    _clean_db_url(_database_url),
+    pool_pre_ping=True,
+    echo=False,
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=300,
+    pool_timeout=30,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

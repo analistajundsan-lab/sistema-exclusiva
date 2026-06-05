@@ -1,7 +1,10 @@
 import axios from 'axios'
 import { demoAdapter } from './demo'
 
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000' })
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  timeout: 30000,
+})
 
 // Single promise shared across all concurrent 401s in the same tab.
 // Cross-tab: the other tab will pick up the new token from localStorage on retry.
