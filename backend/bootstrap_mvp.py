@@ -55,10 +55,10 @@ def migrate_existing_sqlite() -> None:
     tables = set(inspector.get_table_names())
     if "users" in tables:
         ensure_column(
-            "users", "must_change_password", "must_change_password BOOLEAN DEFAULT 0"
+            "users", "must_change_password", "must_change_password BOOLEAN DEFAULT FALSE"
         )
         ensure_column(
-            "users", "can_delete_history", "can_delete_history BOOLEAN DEFAULT 0"
+            "users", "can_delete_history", "can_delete_history BOOLEAN DEFAULT FALSE"
         )
         ensure_column("users", "password_changed_at", "password_changed_at DATETIME")
         ensure_column("users", "unit", "unit VARCHAR(80)")
@@ -80,7 +80,7 @@ def migrate_existing_sqlite() -> None:
     if "incidents" in tables:
         ensure_column("incidents", "victim_status", "victim_status VARCHAR(20)")
         ensure_column("incidents", "unit", "unit VARCHAR(80)")
-        ensure_column("incidents", "sst_forwarded", "sst_forwarded BOOLEAN DEFAULT 0")
+        ensure_column("incidents", "sst_forwarded", "sst_forwarded BOOLEAN DEFAULT FALSE")
         ensure_column("incidents", "sst_forwarded_at", "sst_forwarded_at DATETIME")
         ensure_column("incidents", "sst_forwarded_by", "sst_forwarded_by INTEGER")
         ensure_column("incidents", "sst_forward_reason", "sst_forward_reason VARCHAR(500)")

@@ -22,7 +22,8 @@ const ROLES = [
   { value: 'analista', label: 'Analista' },
   { value: 'gerente', label: 'Gerente' },
   { value: 'supervisao', label: 'Supervisão' },
-  { value: 'tecnico_seguranca', label: 'Segurança do Trabalho' },
+  { value: 'tecnico_seguranca', label: 'Técnico de Segurança' },
+  { value: 'engenheiro_seguranca', label: 'Engenheiro de Segurança' },
   { value: 'admin', label: 'Admin' },
   // legados (não exibidos no select de criação, mas mantidos na listagem)
   { value: 'operator', label: 'Operador (legado)' },
@@ -44,7 +45,7 @@ const ROLE_BADGE: Record<string, string> = {
 
 const UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
-const MULTI_UNIT_ROLES = ['plantonista', 'analista', 'tecnico_seguranca']
+const MULTI_UNIT_ROLES = ['plantonista', 'analista', 'tecnico_seguranca', 'engenheiro_seguranca']
 
 type ModalMode = 'create' | 'edit'
 
@@ -324,7 +325,8 @@ export function Users() {
                   <option value="analista">Analista</option>
                   <option value="gerente">Gerente</option>
                   <option value="supervisao">Supervisão</option>
-                  <option value="tecnico_seguranca">Segurança do Trabalho</option>
+                  <option value="tecnico_seguranca">Técnico de Segurança</option>
+                  <option value="engenheiro_seguranca">Engenheiro de Segurança</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>

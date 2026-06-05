@@ -151,6 +151,8 @@ async def create_user_by_admin(
         name=request.name,
         password_hash=hash_password(request.password),
         role=request.role,
+        unit=request.unit,
+        units=request.units,
         must_change_password=True,
         can_delete_history=False,
     )
