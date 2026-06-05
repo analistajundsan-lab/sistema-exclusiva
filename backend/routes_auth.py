@@ -138,11 +138,7 @@ async def create_user_by_admin(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    import logging
-    _log = logging.getLogger(__name__)
-
-    try:
-        cpf_hash = hash_cpf(request.cpf)
+    cpf_hash = hash_cpf(request.cpf)
         existing = db.query(User).filter(User.cpf_hash == cpf_hash).first()
         if existing:
             raise HTTPException(
@@ -154,7 +150,7 @@ async def create_user_by_admin(
             email=request.email,
             name=request.name,
             password_hash=hash_password(request.password),
-            role=request.role,
+            role=UserRole(request.role.value),
             unit=request.unit,
             units=request.units,
             must_change_password=True,
@@ -170,14 +166,9 @@ async def create_user_by_admin(
                 resource_id=user.id,
             )
         )
-        db.commit()
-        db.refresh(user)
-        return user
-    except HTTPException:
-        raise
-    except Exception as exc:
-        _log.error("CRIAR_USUARIO_ERRO: %s: %s", type(exc).__name__, exc, exc_info=True)
-        raise
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -432,7 +423,7 @@ async def admin_update_user(
     if body.units is not None:
         user.units = body.units
     if body.role is not None:
-        user.role = body.role
+        user.role = UserRole(body.role.value)
     if body.is_active is not None:
         if not body.is_active and user.id == current_user.id:
             raise HTTPException(
