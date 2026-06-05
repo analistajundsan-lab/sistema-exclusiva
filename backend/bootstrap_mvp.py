@@ -288,7 +288,7 @@ def seed_safety_domain(db) -> None:
     if not alert:
         alert = UnitAlertSetting(unit="CAIEIRAS")
         db.add(alert)
-    alert.manager_email = "jerusa@exclusivaturismo.com.br"
+    alert.manager_email = "supoperacao@exclusivaturismo.com.br"
 
 
 def upsert_admin(
