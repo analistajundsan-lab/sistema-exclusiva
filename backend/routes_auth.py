@@ -138,37 +138,46 @@ async def create_user_by_admin(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    cpf_hash = hash_cpf(request.cpf)
-    existing = db.query(User).filter(User.cpf_hash == cpf_hash).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="CPF ja cadastrado"
-        )
+    import logging
+    _log = logging.getLogger(__name__)
 
-    user = User(
-        cpf_hash=cpf_hash,
-        email=request.email,
-        name=request.name,
-        password_hash=hash_password(request.password),
-        role=request.role,
-        unit=request.unit,
-        units=request.units,
-        must_change_password=True,
-        can_delete_history=False,
-    )
-    db.add(user)
-    db.flush()
-    db.add(
-        AuditLog(
-            user_id=current_user.id,
-            action="ADMIN_CREATE_USER",
-            resource="user",
-            resource_id=user.id,
+    try:
+        cpf_hash = hash_cpf(request.cpf)
+        existing = db.query(User).filter(User.cpf_hash == cpf_hash).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="CPF ja cadastrado"
+            )
+
+        user = User(
+            cpf_hash=cpf_hash,
+            email=request.email,
+            name=request.name,
+            password_hash=hash_password(request.password),
+            role=request.role,
+            unit=request.unit,
+            units=request.units,
+            must_change_password=True,
+            can_delete_history=False,
         )
-    )
-    db.commit()
-    db.refresh(user)
-    return user
+        db.add(user)
+        db.flush()
+        db.add(
+            AuditLog(
+                user_id=current_user.id,
+                action="ADMIN_CREATE_USER",
+                resource="user",
+                resource_id=user.id,
+            )
+        )
+        db.commit()
+        db.refresh(user)
+        return user
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _log.error("CRIAR_USUARIO_ERRO: %s: %s", type(exc).__name__, exc, exc_info=True)
+        raise
 
 
 @router.post("/refresh", response_model=TokenResponse)
