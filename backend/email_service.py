@@ -174,9 +174,62 @@ def _send(
     pdf_bytes: Optional[bytes] = None,
     pdf_filename: str = "ficha_tecnica.pdf",
 ) -> bool:
-    if not settings.RESEND_API_KEY:
-        logger.warning("RESEND_API_KEY nao configurado — email nao enviado")
+    """Envia email via Gmail SMTP (preferido) ou Resend como fallback."""
+    if settings.SMTP_USER and settings.SMTP_PASSWORD:
+        return _send_smtp(to=to, subject=subject, html=html, pdf_bytes=pdf_bytes, pdf_filename=pdf_filename)
+    if settings.RESEND_API_KEY:
+        return _send_resend(to=to, subject=subject, html=html, pdf_bytes=pdf_bytes, pdf_filename=pdf_filename)
+    logger.warning("Nenhum servico de email configurado (SMTP_USER ou RESEND_API_KEY)")
+    return False
+
+
+def _send_smtp(
+    *,
+    to: list[str],
+    subject: str,
+    html: str,
+    pdf_bytes: Optional[bytes] = None,
+    pdf_filename: str = "ficha_tecnica.pdf",
+) -> bool:
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.application import MIMEApplication
+
+    try:
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = settings.EMAIL_FROM or settings.SMTP_USER
+        msg["To"] = ", ".join(to)
+
+        msg.attach(MIMEText(html, "html", "utf-8"))
+
+        if pdf_bytes:
+            part = MIMEApplication(pdf_bytes, Name=pdf_filename)
+            part["Content-Disposition"] = f'attachment; filename="{pdf_filename}"'
+            msg.attach(part)
+
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            server.sendmail(msg["From"], to, msg.as_bytes())
+
+        logger.info("Email SMTP enviado para %s: %s", to, subject)
+        return True
+    except Exception as exc:
+        logger.error("Falha SMTP ao enviar para %s: %s", to, exc, exc_info=True)
         return False
+
+
+def _send_resend(
+    *,
+    to: list[str],
+    subject: str,
+    html: str,
+    pdf_bytes: Optional[bytes] = None,
+    pdf_filename: str = "ficha_tecnica.pdf",
+) -> bool:
     try:
         import base64
         import resend  # type: ignore
@@ -190,16 +243,13 @@ def _send(
         }
         if pdf_bytes:
             payload["attachments"] = [
-                {
-                    "filename": pdf_filename,
-                    "content": base64.b64encode(pdf_bytes).decode("utf-8"),
-                }
+                {"filename": pdf_filename, "content": base64.b64encode(pdf_bytes).decode("utf-8")}
             ]
         resend.Emails.send(payload)
-        logger.info("Email enviado para %s: %s", to, subject)
+        logger.info("Email Resend enviado para %s: %s", to, subject)
         return True
     except Exception as exc:
-        logger.error("Falha ao enviar email para %s: %s", to, exc, exc_info=True)
+        logger.error("Falha Resend ao enviar para %s: %s", to, exc, exc_info=True)
         return False
 
 
