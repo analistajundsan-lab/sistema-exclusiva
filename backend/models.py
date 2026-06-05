@@ -406,6 +406,35 @@ class UnitAlertSetting(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class OcorrenciaRetorno(Base):
+    """Relatório de ocorrência preenchido pelo plantonista quando o veículo retorna."""
+    __tablename__ = "ocorrencias_retorno"
+
+    id = Column(Integer, primary_key=True, index=True)
+    unit = Column(String(80), nullable=False, index=True)
+    prefixo = Column(String(20), nullable=False, index=True)
+    placa = Column(String(20))
+    modelo = Column(String(120))
+    condutor_nome = Column(String(255), nullable=False, index=True)
+    condutor_matricula = Column(String(60), index=True)
+    data_ocorrencia = Column(Date, nullable=False, index=True)
+    hora_retorno = Column(String(5))
+    historico = Column(Text)
+    servico_mecanico = Column(Text)
+    observacoes = Column(Text)
+    tipo_acidente = Column(String(20))  # INTERNO / EXTERNO
+    boletim_ocorrencia = Column(Boolean, default=False)
+    numero_boletim = Column(String(50))
+    local_avaria = Column(Text)  # JSON array: ["F", "T", "LE", "LD"]
+    nr_interno = Column(String(30))
+    canacem = Column(String(50))
+    responsavel_trafego = Column(String(255))
+    status = Column(String(30), default="aberto", nullable=False, index=True)
+    created_by = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class Sinistro(Base):
     __tablename__ = "sinistros"
 

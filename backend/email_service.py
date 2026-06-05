@@ -166,22 +166,36 @@ def build_ficha_tecnica_html(
 </html>"""
 
 
-def _send(*, to: list[str], subject: str, html: str) -> bool:
+def _send(
+    *,
+    to: list[str],
+    subject: str,
+    html: str,
+    pdf_bytes: Optional[bytes] = None,
+    pdf_filename: str = "ficha_tecnica.pdf",
+) -> bool:
     if not settings.RESEND_API_KEY:
         logger.warning("RESEND_API_KEY nao configurado — email nao enviado")
         return False
     try:
+        import base64
         import resend  # type: ignore
 
         resend.api_key = settings.RESEND_API_KEY
-        resend.Emails.send(
-            {
-                "from": settings.EMAIL_FROM,
-                "to": to,
-                "subject": subject,
-                "html": html,
-            }
-        )
+        payload: dict = {
+            "from": settings.EMAIL_FROM,
+            "to": to,
+            "subject": subject,
+            "html": html,
+        }
+        if pdf_bytes:
+            payload["attachments"] = [
+                {
+                    "filename": pdf_filename,
+                    "content": base64.b64encode(pdf_bytes).decode("utf-8"),
+                }
+            ]
+        resend.Emails.send(payload)
         logger.info("Email enviado para %s: %s", to, subject)
         return True
     except Exception as exc:
@@ -196,6 +210,7 @@ def send_ficha_tecnica(
     unit: str,
     prefix: str,
     plate: Optional[str],
+    model: Optional[str] = None,
     driver_name: str,
     driver_registration: str,
     submitted_at: datetime,
@@ -211,8 +226,27 @@ def send_ficha_tecnica(
         submitted_at=submitted_at,
         blocking_items=blocking_items,
     )
+    # Gera PDF da Comunicação de Acidente para anexar
+    pdf_bytes: Optional[bytes] = None
+    try:
+        from pdf_service import generate_comunicacao_acidente_pdf
+        pdf_bytes = generate_comunicacao_acidente_pdf(
+            ticket_id=ticket_id,
+            unit=unit,
+            prefix=prefix,
+            plate=plate,
+            model=model,
+            driver_name=driver_name,
+            driver_registration=driver_registration,
+            submitted_at=submitted_at,
+            blocking_items=blocking_items,
+        )
+    except Exception as exc:
+        logger.error("Falha ao gerar PDF ficha tecnica: %s", exc, exc_info=True)
+
     subject = f"[IMPEDITIVO] Veículo {prefix} — Unidade {unit} — Ficha Técnica #{ticket_id}"
-    return _send(to=[manager_email], subject=subject, html=html)
+    filename = f"comunicacao_acidente_{prefix}_ticket{ticket_id}.pdf"
+    return _send(to=[manager_email], subject=subject, html=html, pdf_bytes=pdf_bytes, pdf_filename=filename)
 
 
 def send_sst_approval_notification(
@@ -221,6 +255,11 @@ def send_sst_approval_notification(
     ticket_id: int,
     unit: str,
     prefix: str,
+    plate: Optional[str] = None,
+    model: Optional[str] = None,
+    driver_name: str = "",
+    driver_registration: str = "",
+    submitted_at: Optional[datetime] = None,
     blocking_items: list[str],
     approver_name: str,
     notes: Optional[str],
@@ -275,4 +314,24 @@ def send_sst_approval_notification(
 </body>
 </html>"""
     subject = f"[SST] Aprovado para avaliação — Veículo {prefix} Ticket #{ticket_id}"
-    return _send(to=sst_emails, subject=subject, html=html)
+    # Anexa o mesmo PDF da ficha técnica original
+    pdf_bytes: Optional[bytes] = None
+    if submitted_at and driver_name:
+        try:
+            from pdf_service import generate_comunicacao_acidente_pdf
+            pdf_bytes = generate_comunicacao_acidente_pdf(
+                ticket_id=ticket_id,
+                unit=unit,
+                prefix=prefix,
+                plate=plate,
+                model=model,
+                driver_name=driver_name,
+                driver_registration=driver_registration,
+                submitted_at=submitted_at,
+                blocking_items=blocking_items,
+            )
+        except Exception as exc:
+            logger.error("Falha ao gerar PDF para aprovacao SST: %s", exc, exc_info=True)
+
+    filename = f"comunicacao_acidente_{prefix}_ticket{ticket_id}.pdf"
+    return _send(to=sst_emails, subject=subject, html=html, pdf_bytes=pdf_bytes, pdf_filename=filename)
