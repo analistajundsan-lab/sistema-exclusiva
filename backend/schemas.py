@@ -76,6 +76,7 @@ class UserResponse(BaseModel):
     must_change_password: bool
     can_delete_history: bool
     has_full_access: bool = False
+    mfa_enabled: bool = False
     unit: Optional[str] = None
     units: Optional[str] = None
     display_name: Optional[str] = None
@@ -106,6 +107,24 @@ class PasswordReset(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=8)
+
+
+class MfaSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class MfaEnableRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=10)
+
+
+class MfaDisableRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=10)
+
+
+class MfaVerifyRequest(BaseModel):
+    mfa_token: str
+    code: str = Field(..., min_length=6, max_length=10)
 
 
 class SinistroStatus(str, Enum):

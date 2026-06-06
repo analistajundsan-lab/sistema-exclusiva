@@ -69,6 +69,12 @@ def migrate_existing_sqlite() -> None:
         )
         ensure_column(
             "users",
+            "mfa_enabled",
+            "mfa_enabled BOOLEAN DEFAULT FALSE NOT NULL",
+        )
+        ensure_column("users", "mfa_secret", "mfa_secret VARCHAR(64)")
+        ensure_column(
+            "users",
             "must_change_password",
             "must_change_password BOOLEAN DEFAULT FALSE",
         )

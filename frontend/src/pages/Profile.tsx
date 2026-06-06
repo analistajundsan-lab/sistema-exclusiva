@@ -3,6 +3,7 @@ import { Layout } from '../components/Layout'
 import { useAuthStore } from '../store/auth'
 import api from '../api/client'
 import { Camera, Check, AlertCircle, User } from 'lucide-react'
+import { MfaCard } from '../components/MfaCard'
 
 export function Profile() {
   const { userName, displayName, photoUrl, setUserProfile, userId } = useAuthStore()
@@ -198,6 +199,9 @@ export function Profile() {
               </button>
             </form>
           </div>
+
+          {/* MFA card */}
+          <MfaCard />
         </div>
       </div>
     </Layout>

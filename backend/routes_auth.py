@@ -7,6 +7,7 @@ import hmac
 import logging
 import re
 import secrets
+import pyotp
 from typing import List
 from models import User, get_db
 from schemas import (
@@ -14,6 +15,10 @@ from schemas import (
     PasswordChange,
     PasswordReset,
     PasswordResetRequest,
+    MfaSetupResponse,
+    MfaEnableRequest,
+    MfaDisableRequest,
+    MfaVerifyRequest,
     TokenResponse,
     UserCreate,
     UserResponse,
@@ -130,13 +135,38 @@ def _extract_refresh_token(request: Request, authorization: str | None) -> str |
     return request.cookies.get(REFRESH_COOKIE_NAME)
 
 
+MFA_TOKEN_TTL_MINUTES = 5
+MFA_ISSUER = "Sistema Exclusiva"
+
+
+def create_mfa_token(user_id: int) -> str:
+    """Token curto que prova 'senha ok, falta o 2o fator'."""
+    now = datetime.now(timezone.utc)
+    return jwt.encode(
+        {
+            "sub": str(user_id),
+            "type": "mfa",
+            "exp": now + timedelta(minutes=MFA_TOKEN_TTL_MINUTES),
+        },
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+
+def verify_totp(secret: str, code: str) -> bool:
+    if not secret or not code:
+        return False
+    # valid_window=1 tolera leve dessincronizacao de relogio (+-30s).
+    return pyotp.TOTP(secret).verify(code.strip().replace(" ", ""), valid_window=1)
+
+
 def get_client_ip(request: Request) -> str:
     if x_forwarded_for := request.headers.get("x-forwarded-for"):
         return x_forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 async def login(
     request: LoginRequest,
     req: Request,
@@ -195,6 +225,22 @@ async def login(
         if needs_rehash:
             user.cpf_hash = _hash_cpf_secure(request.cpf)
             db.add(user)
+            db.commit()
+
+        # Se o usuario tem MFA ativo, exige o 2o fator antes de emitir tokens.
+        if user.mfa_enabled:
+            db.add(
+                AuditLog(
+                    user_id=user.id,
+                    action="LOGIN_MFA_CHALLENGE",
+                    resource="auth",
+                    resource_id=user.id,
+                    details=client_ip,
+                )
+            )
+            db.commit()
+            await auth_metrics(True)
+            return {"mfa_required": True, "mfa_token": create_mfa_token(user.id)}
 
         db.add(
             AuditLog(
@@ -406,6 +452,143 @@ async def logout(
         db.commit()
 
     return {"message": "Logout efetuado"}
+
+
+@router.post("/mfa/verify", response_model=TokenResponse)
+async def mfa_verify(
+    body: MfaVerifyRequest,
+    req: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Segunda etapa do login: valida o codigo TOTP e emite os tokens."""
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Codigo invalido ou expirado"
+    )
+    try:
+        payload = jwt.decode(
+            body.mfa_token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        if payload.get("type") != "mfa":
+            raise invalid
+        user_id = int(payload.get("sub"))
+    except (JWTError, ValueError, AttributeError):
+        raise invalid
+
+    user = (
+        db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    )  # noqa: E712
+    if not user or not user.mfa_enabled:
+        raise invalid
+
+    if not verify_totp(user.mfa_secret, body.code):
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="LOGIN_MFA_FAILED",
+                resource="auth",
+                details=get_client_ip(req),
+            )
+        )
+        db.commit()
+        raise invalid
+
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="LOGIN_SUCCESS",
+            resource="auth",
+            resource_id=user.id,
+            details=get_client_ip(req),
+        )
+    )
+    access_token, refresh_token = create_tokens(user, db=db, request=req)
+    set_refresh_cookie(response, refresh_token)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/mfa/setup", response_model=MfaSetupResponse)
+async def mfa_setup(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Gera (ou regenera) um segredo TOTP pendente e devolve o otpauth URI."""
+    if current_user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA ja esta ativo. Desative antes de gerar um novo segredo.",
+        )
+    secret = pyotp.random_base32()
+    current_user.mfa_secret = secret
+    db.add(current_user)
+    db.commit()
+    otpauth_uri = pyotp.TOTP(secret).provisioning_uri(
+        name=current_user.email or current_user.name,
+        issuer_name=MFA_ISSUER,
+    )
+    return MfaSetupResponse(secret=secret, otpauth_uri=otpauth_uri)
+
+
+@router.post("/mfa/enable")
+async def mfa_enable(
+    body: MfaEnableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Confirma o codigo do app autenticador e ativa o MFA."""
+    if current_user.mfa_enabled:
+        return {"message": "MFA ja estava ativo"}
+    if not current_user.mfa_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inicie a configuracao do MFA antes de ativar.",
+        )
+    if not verify_totp(current_user.mfa_secret, body.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Codigo invalido"
+        )
+    current_user.mfa_enabled = True
+    db.add(current_user)
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="MFA_ENABLED",
+            resource="user",
+            resource_id=current_user.id,
+        )
+    )
+    db.commit()
+    return {"message": "MFA ativado com sucesso"}
+
+
+@router.post("/mfa/disable")
+async def mfa_disable(
+    body: MfaDisableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Desativa o MFA exigindo um codigo valido do app autenticador."""
+    if not current_user.mfa_enabled:
+        return {"message": "MFA ja estava desativado"}
+    if not verify_totp(current_user.mfa_secret, body.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Codigo invalido"
+        )
+    current_user.mfa_enabled = False
+    current_user.mfa_secret = None
+    db.add(current_user)
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="MFA_DISABLED",
+            resource="user",
+            resource_id=current_user.id,
+        )
+    )
+    db.commit()
+    return {"message": "MFA desativado"}
 
 
 @router.post("/password-reset-request")

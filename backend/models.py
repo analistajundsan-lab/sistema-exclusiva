@@ -122,6 +122,8 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.OPERATOR)
     is_active = Column(Boolean, default=True)
     is_super_admin = Column(Boolean, default=False, nullable=False)
+    mfa_enabled = Column(Boolean, default=False, nullable=False)
+    mfa_secret = Column(String(64))
     must_change_password = Column(Boolean, default=False)
     can_delete_history = Column(Boolean, default=False)
     unit = Column(String(80))

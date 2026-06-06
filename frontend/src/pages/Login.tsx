@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { formatCpf } from '../utils/cpf'
-import { Eye, EyeOff, User, Lock, Building2, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, User, Lock, Building2, AlertCircle, ShieldCheck } from 'lucide-react'
 import { BusIntro } from '../components/BusIntro'
 
 export function Login() {
@@ -10,12 +10,25 @@ export function Login() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [animDone, setAnimDone] = useState(false)
-  const { login, loading, error } = useAuth()
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const { login, verifyMfa, loading, error } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const result = await login(cpf, password)
+    if (result.mfaRequired && result.mfaToken) {
+      setMfaToken(result.mfaToken)
+      return
+    }
+    if (result.ok) navigate(result.mustChangePassword ? '/change-password' : '/')
+  }
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!mfaToken) return
+    const result = await verifyMfa(mfaToken, mfaCode)
     if (result.ok) navigate(result.mustChangePassword ? '/change-password' : '/')
   }
 
@@ -70,6 +83,54 @@ export function Login() {
 
           {/* Card */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+            {mfaToken ? (
+              <form onSubmit={handleMfaSubmit} className="space-y-5">
+                <div className="text-center mb-2">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-brand-50 dark:bg-brand-900/30 rounded-full mb-3">
+                    <ShieldCheck className="w-6 h-6 text-brand-700 dark:text-brand-400" />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Verificação em duas etapas</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Digite o código de 6 dígitos do seu aplicativo autenticador.
+                  </p>
+                </div>
+
+                <input
+                  type="text"
+                  value={mfaCode}
+                  onChange={e => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  inputMode="numeric"
+                  autoFocus
+                  maxLength={6}
+                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-4 py-3 text-center text-2xl tracking-[0.5em] font-semibold w-full focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+
+                {error && (
+                  <div className="flex items-start gap-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl px-4 py-3 text-sm">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || mfaCode.length < 6}
+                  className="w-full bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 dark:hover:bg-brand-500 text-white rounded-xl px-4 py-3 font-semibold text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Verificando...' : 'Verificar'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setMfaToken(null); setMfaCode('') }}
+                  className="w-full text-sm font-medium text-gray-500 dark:text-gray-400 hover:underline"
+                >
+                  Voltar
+                </button>
+              </form>
+            ) : (
+            <>
             <div className="mb-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Bem-vindo</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Entre com seu CPF e senha para continuar</p>
@@ -160,6 +221,8 @@ export function Login() {
                 </Link>
               </div>
             </form>
+            </>
+            )}
           </div>
 
           <p className="text-center text-xs text-gray-400 dark:text-gray-600 mt-6">
