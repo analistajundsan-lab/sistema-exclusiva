@@ -218,7 +218,7 @@ class AuditLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    user_id: int
+    user_id: Optional[int] = None
     action: str
     resource: str
     resource_id: Optional[int] = None

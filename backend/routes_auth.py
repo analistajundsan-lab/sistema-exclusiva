@@ -80,16 +80,44 @@ async def login(request: LoginRequest, req: Request, db: Session = Depends(get_d
 
         if not user or not verify_password(request.password, user.password_hash):
             await auth_metrics(False)
+            # Auditoria de falha sem dados sensiveis (sem CPF/senha).
+            db.add(
+                AuditLog(
+                    user_id=user.id if user else None,
+                    action="LOGIN_FAILED",
+                    resource="auth",
+                    details=client_ip,
+                )
+            )
+            db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas"
             )
 
         if not user.is_active:
             await auth_metrics(False)
+            db.add(
+                AuditLog(
+                    user_id=user.id,
+                    action="LOGIN_FAILED_INACTIVE",
+                    resource="auth",
+                    details=client_ip,
+                )
+            )
+            db.commit()
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Usuário inativo"
             )
 
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="LOGIN_SUCCESS",
+                resource="auth",
+                resource_id=user.id,
+                details=client_ip,
+            )
+        )
         access_token, refresh_token = create_tokens(user, db=db, request=req)
         await auth_metrics(True)
         return TokenResponse(access_token=access_token, refresh_token=refresh_token)
@@ -265,6 +293,8 @@ async def logout(
         )
         jti_raw = payload.get("jti")
         jti = int(jti_raw) if jti_raw is not None else None
+        sub = payload.get("sub")
+        user_id = int(sub) if sub is not None else None
     except (JWTError, ValueError, AttributeError):
         return {"message": "Logout efetuado"}
 
@@ -274,6 +304,14 @@ async def logout(
             db.query(UserSession)
             .filter(UserSession.id == jti, UserSession.revoked_at.is_(None))
             .update({UserSession.revoked_at: now}, synchronize_session=False)
+        )
+        db.add(
+            AuditLog(
+                user_id=user_id,
+                action="LOGOUT",
+                resource="auth",
+                resource_id=user_id,
+            )
         )
         db.commit()
 

@@ -232,7 +232,8 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False, index=True)
+    # nullable: eventos como falha de login podem nao ter usuario associado
+    user_id = Column(Integer, nullable=True, index=True)
     action = Column(String(50), nullable=False, index=True)
     resource = Column(String(50), nullable=False)
     resource_id = Column(Integer, index=True)

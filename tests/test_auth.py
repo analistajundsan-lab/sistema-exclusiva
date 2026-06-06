@@ -607,6 +607,51 @@ def test_deactivation_revokes_sessions(sample_user):
     assert revoked.status_code == 401
 
 
+def test_login_success_is_audited(sample_user):
+    client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    )
+    db = TestingSessionLocal()
+    rows = db.query(AuditLog).filter(AuditLog.action == "LOGIN_SUCCESS").all()
+    assert any(r.user_id == sample_user["id"] for r in rows)
+    # Nao vaza CPF nem senha nos detalhes.
+    for r in rows:
+        assert sample_user["password"] not in (r.details or "")
+        assert "123.456.789-00" not in (r.details or "")
+    db.close()
+
+
+def test_login_failure_is_audited_without_user():
+    resp = client.post(
+        "/auth/login", json={"cpf": "000.000.000-00", "password": "qualquer"}
+    )
+    assert resp.status_code == 401
+    db = TestingSessionLocal()
+    rows = db.query(AuditLog).filter(AuditLog.action == "LOGIN_FAILED").all()
+    assert len(rows) >= 1
+    assert rows[0].user_id is None
+    db.close()
+
+
+def test_logout_is_audited(sample_user):
+    login = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    ).json()
+    client.post(
+        "/auth/logout", headers={"Authorization": f"Bearer {login['refresh_token']}"}
+    )
+    db = TestingSessionLocal()
+    rows = (
+        db.query(AuditLog)
+        .filter(AuditLog.action == "LOGOUT", AuditLog.user_id == sample_user["id"])
+        .all()
+    )
+    assert len(rows) >= 1
+    db.close()
+
+
 def test_health_endpoint():
     """Test health check endpoint."""
     response = client.get("/health")

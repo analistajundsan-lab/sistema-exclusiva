@@ -84,6 +84,15 @@ def migrate_existing_sqlite() -> None:
     if "audit_logs" in tables:
         ensure_column("audit_logs", "deleted_at", "deleted_at TIMESTAMP")
         ensure_column("audit_logs", "deleted_by", "deleted_by INTEGER")
+        # Permite auditar eventos sem usuario (ex.: falha de login). SQLite nao
+        # suporta ALTER COLUMN; nesse caso ignoramos (schema novo ja e nullable).
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE audit_logs ALTER COLUMN user_id DROP NOT NULL")
+                )
+        except Exception:
+            pass
     if "swaps" in tables:
         ensure_column("swaps", "schedule_line_id", "schedule_line_id INTEGER")
         ensure_column("swaps", "schedule_date", "schedule_date DATE")
