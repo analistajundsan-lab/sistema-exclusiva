@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ClipboardList, ShieldCheck, UserCheck } from 'lucide-react'
+import { AlertTriangle, ClipboardList, ShieldCheck, UserCheck } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { getSSTView, SafetySubmission, SafetyTicket } from '../hooks/useSafety'
 

@@ -213,11 +213,131 @@ def test_refresh_invalid_token():
     assert response.status_code == 401
 
 
-def test_password_reset_request():
-    """Test password reset request."""
-    response = client.post("/auth/password-reset-request?email=test@test.com")
+def test_password_reset_request_unknown_email_is_generic():
+    """E-mail inexistente retorna mensagem generica (sem enumeracao)."""
+    response = client.post(
+        "/auth/password-reset-request", json={"email": "naoexiste@test.com"}
+    )
     assert response.status_code == 200
     assert "message" in response.json()
+
+
+def test_password_reset_request_existing_email_same_message(sample_user):
+    """E-mail existente retorna exatamente a mesma mensagem do inexistente."""
+    unknown = client.post(
+        "/auth/password-reset-request", json={"email": "naoexiste@test.com"}
+    ).json()
+    existing = client.post(
+        "/auth/password-reset-request", json={"email": "operator@test.com"}
+    ).json()
+    assert unknown == existing
+
+
+def _create_reset_token(user_id: int, *, expired: bool = False, used: bool = False):
+    """Cria um token de reset diretamente no banco e retorna o token cru."""
+    import secrets as _secrets
+    from datetime import datetime, timedelta, timezone
+    from models import PasswordResetToken
+    import hashlib as _hashlib
+
+    raw = _secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    db = TestingSessionLocal()
+    rec = PasswordResetToken(
+        user_id=user_id,
+        token_hash=_hashlib.sha256(raw.encode()).hexdigest(),
+        expires_at=now - timedelta(minutes=5) if expired else now + timedelta(minutes=30),
+        used_at=now if used else None,
+    )
+    db.add(rec)
+    db.commit()
+    db.close()
+    return raw
+
+
+def test_password_reset_valid_token_changes_password(sample_user):
+    raw = _create_reset_token(sample_user["id"])
+    response = client.post(
+        "/auth/password-reset",
+        json={"token": raw, "new_password": "NovaSenhaForte123!"},
+    )
+    assert response.status_code == 200
+    # Login com a nova senha funciona
+    login = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": "NovaSenhaForte123!"},
+    )
+    assert login.status_code == 200
+
+
+def test_password_reset_token_single_use(sample_user):
+    raw = _create_reset_token(sample_user["id"])
+    first = client.post(
+        "/auth/password-reset",
+        json={"token": raw, "new_password": "NovaSenhaForte123!"},
+    )
+    assert first.status_code == 200
+    second = client.post(
+        "/auth/password-reset",
+        json={"token": raw, "new_password": "OutraSenhaForte123!"},
+    )
+    assert second.status_code == 400
+
+
+def test_password_reset_expired_token_fails(sample_user):
+    raw = _create_reset_token(sample_user["id"], expired=True)
+    response = client.post(
+        "/auth/password-reset",
+        json={"token": raw, "new_password": "NovaSenhaForte123!"},
+    )
+    assert response.status_code == 400
+
+
+def test_password_reset_invalid_token_fails():
+    response = client.post(
+        "/auth/password-reset",
+        json={"token": "token-invalido-qualquer", "new_password": "NovaSenhaForte123!"},
+    )
+    assert response.status_code == 400
+
+
+def test_password_reset_rejects_weak_password(sample_user):
+    raw = _create_reset_token(sample_user["id"])
+    response = client.post(
+        "/auth/password-reset",
+        json={"token": raw, "new_password": "curta"},
+    )
+    assert response.status_code in (400, 422)
+
+
+def test_register_rejects_short_password():
+    response = client.post("/auth/register", json={
+        "cpf": "555.666.777-88",
+        "email": "weak@test.com",
+        "name": "Weak Pass",
+        "password": "Curta123",  # 8 chars, abaixo de 12
+        "role": "operator",
+    })
+    assert response.status_code == 400
+
+
+def test_no_runtime_cpf_backdoor():
+    """Usuario com o CPF antigo do super admin NAO recebe superacesso sem a flag."""
+    db = TestingSessionLocal()
+    user = User(
+        cpf_hash=hash_cpf("41637531842"),
+        email="impostor@test.com",
+        name="Impostor",
+        password_hash=hash_password("password123"),
+        role=UserRole.OPERATOR,
+        is_active=True,
+        is_super_admin=False,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    assert user.has_full_access is False
+    db.close()
 
 
 def test_change_password_clears_temporary_flag(sample_user):
@@ -255,6 +375,7 @@ def test_history_delete_permission_only_vinicius():
         password_hash=hash_password("password123"),
         role=UserRole.ADMIN,
         is_active=True,
+        is_super_admin=True,
     )
     db.add_all([admin, vinicius])
     db.commit()

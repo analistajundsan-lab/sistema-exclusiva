@@ -44,7 +44,13 @@ from schemas import (
 
 router = APIRouter(tags=["safety"])
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
-SAFETY_ROLES = {"admin", "gerente", "supervisao", "tecnico_seguranca", "engenheiro_seguranca"}
+SAFETY_ROLES = {
+    "admin",
+    "gerente",
+    "supervisao",
+    "tecnico_seguranca",
+    "engenheiro_seguranca",
+}
 APPROVAL_ROLES = {"admin", "gerente"}
 
 
@@ -268,7 +274,9 @@ async def create_public_submission(
                 blocking_items=blocking_items,
             )
             ticket.email_sent = sent
-            ticket.email_sent_at = datetime.now(BRASILIA_TZ).replace(tzinfo=None) if sent else None
+            ticket.email_sent_at = (
+                datetime.now(BRASILIA_TZ).replace(tzinfo=None) if sent else None
+            )
 
     db.commit()
     message = {
@@ -432,15 +440,21 @@ async def update_safety_ticket(
     return _ticket_response(ticket, vehicle.prefix)
 
 
-@router.post("/safety/maintenance/{ticket_id}/approve-sst", response_model=SafetyTicketListItem)
+@router.post(
+    "/safety/maintenance/{ticket_id}/approve-sst", response_model=SafetyTicketListItem
+)
 async def approve_ticket_for_sst(
     ticket_id: int,
     body: SSTApprovalRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role.value not in APPROVAL_ROLES and not getattr(current_user, "has_full_access", False):
-        raise HTTPException(status_code=403, detail="Apenas gerentes podem aprovar para SST")
+    if current_user.role.value not in APPROVAL_ROLES and not getattr(
+        current_user, "has_full_access", False
+    ):
+        raise HTTPException(
+            status_code=403, detail="Apenas gerentes podem aprovar para SST"
+        )
 
     row = (
         db.query(MaintenanceTicket, SafetyVehicle)
@@ -473,8 +487,10 @@ async def approve_ticket_for_sst(
         .all()
     )
     sst_emails = [
-        u.email for u in sst_users
-        if u.email and (
+        u.email
+        for u in sst_users
+        if u.email
+        and (
             u.role == UserRole.ENGENHEIRO_SEGURANCA
             or (u.unit and u.unit == ticket.unit)
             or (u.units and ticket.unit in u.units)
@@ -510,7 +526,9 @@ async def sst_view(
         .join(SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id)
         .order_by(DriverChecklistSubmission.submitted_at.desc())
     )
-    submissions_q = apply_user_unit_scope(submissions_q, SafetyVehicle.unit, current_user)
+    submissions_q = apply_user_unit_scope(
+        submissions_q, SafetyVehicle.unit, current_user
+    )
 
     tickets_q = (
         db.query(MaintenanceTicket, SafetyVehicle)
@@ -541,7 +559,9 @@ async def sst_view(
         {
             **_ticket_response(t, v.prefix).model_dump(),
             "created_at": (t.created_at.isoformat() if t.created_at else None),
-            "sst_approved_at": (t.sst_approved_at.isoformat() if t.sst_approved_at else None),
+            "sst_approved_at": (
+                t.sst_approved_at.isoformat() if t.sst_approved_at else None
+            ),
         }
         for t, v in tickets_q.limit(200).all()
     ]

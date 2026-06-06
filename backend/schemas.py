@@ -520,6 +520,7 @@ class SafetyDashboardResponse(BaseModel):
 
 # ── SST Schemas ────────────────────────────────────────────────────────────────
 
+
 class SinistroCreate(BaseModel):
     unit: str = Field(..., max_length=80)
     empresa: Optional[str] = Field(None, max_length=120)

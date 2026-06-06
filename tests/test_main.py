@@ -76,7 +76,7 @@ def test_register_user(client_with_db):
         "cpf": "12345678901",
         "email": "op@exclusiva.com",
         "name": "Operador Teste",
-        "password": "senha1234",
+        "password": "SenhaForte1234",
         "role": "operator",
     })
     assert resp.status_code == 200
@@ -90,7 +90,7 @@ def test_register_duplicate_cpf(client_with_db):
         "cpf": "98765432100",
         "email": "dup@exclusiva.com",
         "name": "Dup User",
-        "password": "senha1234",
+        "password": "SenhaForte1234",
     }
     client_with_db.post("/auth/register", json=payload)
     resp = client_with_db.post("/auth/register", json=payload)
@@ -131,11 +131,11 @@ def test_create_and_list_incident(client_with_db):
         "cpf": "55566677788",
         "email": "inc@exclusiva.com",
         "name": "Inc User",
-        "password": "senha5678",
+        "password": "SenhaForte5678",
     })
     token_resp = client_with_db.post("/auth/login", json={
         "cpf": "55566677788",
-        "password": "senha5678",
+        "password": "SenhaForte5678",
     })
     token = token_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -160,11 +160,11 @@ def test_swap_vehicle_with_itself(client_with_db):
         "cpf": "99988877766",
         "email": "swap@exclusiva.com",
         "name": "Swap User",
-        "password": "swap5678",
+        "password": "SwapForte5678",
     })
     token = client_with_db.post("/auth/login", json={
         "cpf": "99988877766",
-        "password": "swap5678",
+        "password": "SwapForte5678",
     }).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 

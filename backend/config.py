@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     API_TITLE: str = "Sistema Exclusiva Operacional"
     API_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"
+    FRONTEND_URL: str = "https://sistema-exclusiva-pied.vercel.app"
     LOG_LEVEL: str = "INFO"
     EXPOSE_METRICS: bool = True
     RESEND_API_KEY: str = ""
@@ -48,13 +49,21 @@ class Settings(BaseSettings):
     def ALLOWED_ORIGINS(self) -> list:
         v = self.ALLOWED_ORIGINS_RAW.strip()
         if not v:
-            return _DEFAULT_ORIGINS.split(",")
-        if v.startswith("["):
+            origins = _DEFAULT_ORIGINS.split(",")
+        elif v.startswith("["):
             try:
-                return json.loads(v)
+                origins = json.loads(v)
             except json.JSONDecodeError:
-                pass
-        return [item.strip() for item in v.split(",") if item.strip()]
+                origins = [item.strip() for item in v.split(",") if item.strip()]
+        else:
+            origins = [item.strip() for item in v.split(",") if item.strip()]
+
+        # Em producao, nunca aceitar origens locais (localhost/127.0.0.1).
+        if self.ENVIRONMENT == "production":
+            origins = [
+                o for o in origins if "localhost" not in o and "127.0.0.1" not in o
+            ]
+        return origins
 
     @model_validator(mode="after")
     def reject_default_secret_in_production(self):

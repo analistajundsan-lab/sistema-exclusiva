@@ -124,6 +124,7 @@ def _log_sinistro_history(
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/dashboard", response_model=SSTDashboardResponse)
 async def sst_dashboard(
     unit: Optional[str] = None,
@@ -137,12 +138,10 @@ async def sst_dashboard(
     if unit:
         sinistro_q = sinistro_q.filter(Sinistro.unit == unit)
 
-    sinistros_mes = (
-        sinistro_q.filter(
-            func.extract("month", Sinistro.data_ocorrencia) == today.month,
-            func.extract("year", Sinistro.data_ocorrencia) == today.year,
-        ).count()
-    )
+    sinistros_mes = sinistro_q.filter(
+        func.extract("month", Sinistro.data_ocorrencia) == today.month,
+        func.extract("year", Sinistro.data_ocorrencia) == today.year,
+    ).count()
     sinistros_ano = sinistro_q.filter(
         func.extract("year", Sinistro.data_ocorrencia) == today.year
     ).count()
@@ -153,9 +152,7 @@ async def sst_dashboard(
         Sinistro.status == SinistroStatus.ENCERRADO
     ).count()
 
-    colisoes = sinistro_q.filter(
-        Sinistro.tipo_sinistro.ilike("%colisao%")
-    ).count()
+    colisoes = sinistro_q.filter(Sinistro.tipo_sinistro.ilike("%colisao%")).count()
     abalroamentos = sinistro_q.filter(
         Sinistro.tipo_sinistro.ilike("%abalroamento%")
     ).count()
@@ -187,9 +184,7 @@ async def sst_dashboard(
     total_veiculos = veiculo_q.filter(SafetyVehicle.active.is_(True)).count()
 
     ocorrencias_sst = (
-        db.query(Incident)
-        .filter(Incident.sst_forwarded.is_(True))
-        .count()
+        db.query(Incident).filter(Incident.sst_forwarded.is_(True)).count()
     )
 
     top_condutores_raw = (
@@ -232,6 +227,7 @@ async def sst_dashboard(
 
 
 # ── Sinistros ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/sinistros", status_code=status.HTTP_201_CREATED)
 async def create_sinistro(
@@ -393,6 +389,7 @@ async def sinistro_historico(
 
 # ── Ocorrências encaminhadas para SST ─────────────────────────────────────────
 
+
 @router.post("/ocorrencias/{incident_id}/encaminhar")
 async def encaminhar_para_sst(
     incident_id: int,
@@ -469,6 +466,7 @@ async def list_sst_ocorrencias(
 
 
 # ── Liberação de Condutor ─────────────────────────────────────────────────────
+
 
 @router.post("/liberacoes", status_code=status.HTTP_201_CREATED)
 async def create_liberacao(
@@ -577,6 +575,7 @@ async def update_liberacao(
 
 # ── Saúde e Bem-Estar ─────────────────────────────────────────────────────────
 
+
 @router.post("/saude", status_code=status.HTTP_201_CREATED)
 async def create_saude(
     body: SaudeCreate,
@@ -627,9 +626,7 @@ async def list_saude(
     if status:
         query = query.filter(SaudeBeEstarCondutor.status == status)
     if condutor:
-        query = query.filter(
-            SaudeBeEstarCondutor.condutor_nome.ilike(f"%{condutor}%")
-        )
+        query = query.filter(SaudeBeEstarCondutor.condutor_nome.ilike(f"%{condutor}%"))
 
     rows = query.offset(skip).limit(limit).all()
     return [_serialize_saude(r) for r in rows]
@@ -641,7 +638,11 @@ async def get_saude(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
 ):
-    saude = db.query(SaudeBeEstarCondutor).filter(SaudeBeEstarCondutor.id == saude_id).first()
+    saude = (
+        db.query(SaudeBeEstarCondutor)
+        .filter(SaudeBeEstarCondutor.id == saude_id)
+        .first()
+    )
     if not saude:
         raise HTTPException(status_code=404, detail="Registro nao encontrado")
     from auth import ensure_unit_access
@@ -657,7 +658,11 @@ async def update_saude(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
 ):
-    saude = db.query(SaudeBeEstarCondutor).filter(SaudeBeEstarCondutor.id == saude_id).first()
+    saude = (
+        db.query(SaudeBeEstarCondutor)
+        .filter(SaudeBeEstarCondutor.id == saude_id)
+        .first()
+    )
     if not saude:
         raise HTTPException(status_code=404, detail="Registro nao encontrado")
     from auth import ensure_unit_access

@@ -1,13 +1,19 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Header, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from jose import JWTError, jwt
 import hashlib
+import hmac
+import logging
 import re
+import secrets
 from typing import List
 from models import User, get_db
 from schemas import (
     LoginRequest,
     PasswordChange,
+    PasswordReset,
+    PasswordResetRequest,
     TokenResponse,
     UserCreate,
     UserResponse,
@@ -20,20 +26,28 @@ from auth import (
     create_tokens,
     get_current_user,
     require_role,
+    validate_password_policy,
 )
 from config import settings
 from rate_limit import rate_limit, get_remaining_requests
 from metrics_middleware import auth_metrics, rate_limit_metric
-from models import AuditLog, UserRole
-from datetime import datetime, timezone
+from models import AuditLog, PasswordResetToken, UserRole
+import email_service
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-VINICIUS_CPF = "41637531842"
+
+RESET_TOKEN_TTL_MINUTES = 30
+logger = logging.getLogger(__name__)
 
 
 def hash_cpf(cpf: str) -> str:
     cpf_clean = re.sub(r"\D", "", cpf)
     return hashlib.sha256(cpf_clean.encode()).hexdigest()[:16]
+
+
+def hash_reset_token(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
 def get_client_ip(request: Request) -> str:
@@ -108,6 +122,7 @@ async def register(request: UserCreate, req: Request, db: Session = Depends(get_
             detail="Muitos registros do mesmo IP. Tente novamente mais tarde.",
         )
 
+    validate_password_policy(request.password)
     cpf_hash = hash_cpf(request.cpf)
 
     existing = db.query(User).filter(User.cpf_hash == cpf_hash).first()
@@ -138,6 +153,7 @@ async def create_user_by_admin(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
+    validate_password_policy(request.password)
     cpf_hash = hash_cpf(request.cpf)
     existing = db.query(User).filter(User.cpf_hash == cpf_hash).first()
     if existing:
@@ -203,50 +219,134 @@ async def refresh(
 
 @router.post("/password-reset-request")
 async def request_password_reset(
-    email: str, req: Request, db: Session = Depends(get_db)
+    body: PasswordResetRequest, req: Request, db: Session = Depends(get_db)
 ):
-    client_ip = get_client_ip(req)
+    # Resposta sempre identica para evitar enumeracao de e-mails.
+    generic_response = {
+        "message": "Se o e-mail estiver cadastrado, enviaremos as instruções para redefinição de senha."
+    }
 
-    if not await rate_limit(
-        f"pwd_reset:{client_ip}", max_requests=3, window_seconds=3600
-    ):
+    email = body.email.strip().lower()
+    client_ip = get_client_ip(req)
+    user_agent = req.headers.get("user-agent", "")[:255]
+    email_key = hashlib.sha256(email.encode("utf-8")).hexdigest()[:16]
+
+    # Rate limit por IP e por e-mail (hash) — sem revelar existencia da conta.
+    allowed_ip = await rate_limit(
+        f"pwd_reset_ip:{client_ip}", max_requests=5, window_seconds=3600
+    )
+    allowed_email = await rate_limit(
+        f"pwd_reset_email:{email_key}", max_requests=3, window_seconds=3600
+    )
+    if not allowed_ip or not allowed_email:
         await rate_limit_metric("/auth/password-reset-request")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Muitas solicitações. Tente novamente em 1 hora.",
         )
 
-    user = db.query(User).filter(User.email == email).first()
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == email, User.is_active == True)  # noqa: E712
+        .first()
+    )
     if not user:
-        return {"message": "Se o email existir, um link de reset será enviado"}
+        return generic_response
 
-    return {"message": "Link de reset enviado para o email"}
+    now = datetime.now(timezone.utc)
+
+    # Invalida tokens anteriores ainda validos do mesmo usuario.
+    (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.expires_at > now,
+        )
+        .update({PasswordResetToken.used_at: now}, synchronize_session=False)
+    )
+
+    raw_token = secrets.token_urlsafe(32)
+    db.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_reset_token(raw_token),
+            expires_at=now + timedelta(minutes=RESET_TOKEN_TTL_MINUTES),
+            created_ip=client_ip,
+            user_agent=user_agent,
+        )
+    )
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="PASSWORD_RESET_REQUESTED",
+            resource="user",
+            resource_id=user.id,
+        )
+    )
+    db.commit()
+
+    reset_url = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?token={raw_token}"
+    try:
+        email_service.send_password_reset_email(
+            to_email=user.email,
+            user_name=user.name,
+            reset_url=reset_url,
+        )
+    except Exception as exc:  # nao vaza detalhe; nao loga token
+        logger.error("Falha ao enviar e-mail de reset: %s", exc)
+
+    return generic_response
 
 
 @router.post("/password-reset")
-async def reset_password(token: str, new_password: str, db: Session = Depends(get_db)):
-    try:
-        payload = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+async def reset_password(
+    body: PasswordReset, req: Request, db: Session = Depends(get_db)
+):
+    now = datetime.now(timezone.utc)
+    token_hash = hash_reset_token(body.token)
+
+    reset_record = (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.token_hash == token_hash,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.expires_at > now,
         )
-        user_id = int(payload.get("sub"))
-    except JWTError:
+        .first()
+    )
+
+    if not reset_record or not hmac.compare_digest(reset_record.token_hash, token_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token inválido ou expirado",
         )
 
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
+    user = db.query(User).filter(User.id == reset_record.user_id).first()
+    if not user or not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token inválido ou expirado",
         )
 
-    user.password_hash = hash_password(new_password)
-    db.add(AuditLog(user_id=user_id, action="PASSWORD_RESET", resource="user"))
+    validate_password_policy(body.new_password, user=user)
+
+    user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
+    user.password_changed_at = now
+    reset_record.used_at = now
+
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="PASSWORD_RESET_COMPLETED",
+            resource="user",
+            resource_id=user.id,
+        )
+    )
     db.commit()
 
-    return {"message": "Senha alterada com sucesso"}
+    return {"message": "Senha redefinida com sucesso"}
 
 
 @router.post("/change-password")
@@ -260,6 +360,7 @@ async def change_password(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Senha atual invalida"
         )
 
+    validate_password_policy(body.new_password, user=current_user)
     current_user.password_hash = hash_password(body.new_password)
     current_user.must_change_password = False
     current_user.password_changed_at = datetime.now(timezone.utc)
@@ -371,14 +472,14 @@ async def change_history_permission(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    """Permite apagar/recuperar historico somente ao perfil Vinicius."""
+    """Permite apagar/recuperar historico somente ao super administrador."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario nao encontrado")
-    if can_delete_history and user.cpf_hash != hash_cpf(VINICIUS_CPF):
+    if can_delete_history and not user.is_super_admin:
         raise HTTPException(
             status_code=422,
-            detail="Historico pode ser apagado apenas pelo perfil Vinicius",
+            detail="Historico pode ser apagado apenas pelo super administrador",
         )
 
     user.can_delete_history = can_delete_history
@@ -431,10 +532,10 @@ async def admin_update_user(
             )
         user.is_active = body.is_active
     if body.can_delete_history is not None:
-        if body.can_delete_history and user.cpf_hash != hash_cpf(VINICIUS_CPF):
+        if body.can_delete_history and not user.is_super_admin:
             raise HTTPException(
                 status_code=422,
-                detail="Histórico pode ser apagado apenas pelo perfil Vinicius",
+                detail="Histórico pode ser apagado apenas pelo super administrador",
             )
         user.can_delete_history = body.can_delete_history
     if body.must_change_password is not None:

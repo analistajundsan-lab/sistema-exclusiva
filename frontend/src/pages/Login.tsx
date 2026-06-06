@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { formatCpf } from '../utils/cpf'
 import { Eye, EyeOff, User, Lock, Building2, AlertCircle } from 'lucide-react'
@@ -150,6 +150,15 @@ export function Login() {
                   'Entrar'
                 )}
               </button>
+
+              <div className="text-center">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm font-medium text-brand-700 dark:text-brand-400 hover:underline"
+                >
+                  Esqueci minha senha
+                </Link>
+              </div>
             </form>
           </div>
 

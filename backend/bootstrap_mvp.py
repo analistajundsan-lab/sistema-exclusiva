@@ -63,7 +63,14 @@ def migrate_existing_sqlite() -> None:
     tables = set(inspector.get_table_names())
     if "users" in tables:
         ensure_column(
-            "users", "must_change_password", "must_change_password BOOLEAN DEFAULT FALSE"
+            "users",
+            "is_super_admin",
+            "is_super_admin BOOLEAN DEFAULT FALSE NOT NULL",
+        )
+        ensure_column(
+            "users",
+            "must_change_password",
+            "must_change_password BOOLEAN DEFAULT FALSE",
         )
         ensure_column(
             "users", "can_delete_history", "can_delete_history BOOLEAN DEFAULT FALSE"
@@ -86,20 +93,38 @@ def migrate_existing_sqlite() -> None:
         ensure_column("swaps", "driver_in", "driver_in VARCHAR(255)")
         ensure_column("swaps", "whatsapp_text", "whatsapp_text VARCHAR(1000)")
     if "maintenance_tickets" in tables:
-        ensure_column("maintenance_tickets", "email_sent", "email_sent BOOLEAN DEFAULT FALSE")
+        ensure_column(
+            "maintenance_tickets", "email_sent", "email_sent BOOLEAN DEFAULT FALSE"
+        )
         ensure_column("maintenance_tickets", "email_sent_at", "email_sent_at TIMESTAMP")
-        ensure_column("maintenance_tickets", "sst_approved", "sst_approved BOOLEAN DEFAULT FALSE")
-        ensure_column("maintenance_tickets", "sst_approved_by", "sst_approved_by INTEGER")
-        ensure_column("maintenance_tickets", "sst_approved_at", "sst_approved_at TIMESTAMP")
-        ensure_column("maintenance_tickets", "sst_approved_notes", "sst_approved_notes VARCHAR(500)")
+        ensure_column(
+            "maintenance_tickets", "sst_approved", "sst_approved BOOLEAN DEFAULT FALSE"
+        )
+        ensure_column(
+            "maintenance_tickets", "sst_approved_by", "sst_approved_by INTEGER"
+        )
+        ensure_column(
+            "maintenance_tickets", "sst_approved_at", "sst_approved_at TIMESTAMP"
+        )
+        ensure_column(
+            "maintenance_tickets",
+            "sst_approved_notes",
+            "sst_approved_notes VARCHAR(500)",
+        )
     if "incidents" in tables:
         ensure_column("incidents", "victim_status", "victim_status VARCHAR(20)")
         ensure_column("incidents", "unit", "unit VARCHAR(80)")
-        ensure_column("incidents", "sst_forwarded", "sst_forwarded BOOLEAN DEFAULT FALSE")
+        ensure_column(
+            "incidents", "sst_forwarded", "sst_forwarded BOOLEAN DEFAULT FALSE"
+        )
         ensure_column("incidents", "sst_forwarded_at", "sst_forwarded_at TIMESTAMP")
         ensure_column("incidents", "sst_forwarded_by", "sst_forwarded_by INTEGER")
-        ensure_column("incidents", "sst_forward_reason", "sst_forward_reason VARCHAR(500)")
-        ensure_column("incidents", "sst_forward_priority", "sst_forward_priority VARCHAR(20)")
+        ensure_column(
+            "incidents", "sst_forward_reason", "sst_forward_reason VARCHAR(500)"
+        )
+        ensure_column(
+            "incidents", "sst_forward_priority", "sst_forward_priority VARCHAR(20)"
+        )
     if "schedule_lines" in tables:
         ensure_column("schedule_lines", "import_id", "import_id INTEGER")
     if "vehicle_checklists" in tables:
@@ -297,6 +322,7 @@ def upsert_admin(
     email: str,
     name: str,
     can_delete_history: bool = False,
+    is_super_admin: bool = False,
 ) -> None:
     cpf_hash = hash_cpf(cpf)
     user = db.query(User).filter(User.cpf_hash == cpf_hash).first()
@@ -317,6 +343,7 @@ def upsert_admin(
     user.role = UserRole.ADMIN
     user.is_active = True
     user.can_delete_history = can_delete_history
+    user.is_super_admin = is_super_admin
     db.add(
         AuditLog(
             user_id=user.id,
@@ -335,14 +362,26 @@ def main() -> None:
         for user in db.query(User).filter(User.must_change_password.is_(None)).all():
             user.must_change_password = False
         upsert_admin(
-            db, "22692036824", "jerusa@exclusivaturismo.com.br", "Jerusa", False
+            db,
+            "22692036824",
+            "jerusa@exclusivaturismo.com.br",
+            "Jerusa",
+            can_delete_history=False,
+            is_super_admin=False,
         )
+        # Super administrador definido por flag controlada no banco (nao por
+        # CPF hardcoded em runtime). O CPF e usado apenas aqui no seed inicial.
         upsert_admin(
-            db, "41637531842", "vinicius@exclusivaturismo.com.br", "Vinicius", True
+            db,
+            "41637531842",
+            "vinicius@exclusivaturismo.com.br",
+            "Vinicius",
+            can_delete_history=True,
+            is_super_admin=True,
         )
-        vinicius_hash = hash_cpf("41637531842")
-        db.query(User).filter(User.cpf_hash != vinicius_hash).update(
-            {User.can_delete_history: False}
+        # Garante que apenas super admins mantenham permissao de apagar historico.
+        db.query(User).filter(User.is_super_admin.is_(False)).update(
+            {User.can_delete_history: False}, synchronize_session=False
         )
         seed_safety_domain(db)
         db.commit()

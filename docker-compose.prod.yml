@@ -1,88 +1,117 @@
-﻿version: '3.8'
+# Producao: segredos vem do ambiente/secret manager — NUNCA versionar valores reais.
+# Banco, Redis, Prometheus e Grafana ficam apenas na rede interna (sem portas publicas).
+# Apenas o backend (e, se usado, o frontend) sao expostos.
 
 services:
   postgres:
     image: postgres:15-alpine
     container_name: exclusiva_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: sistema_exclusiva
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER obrigatorio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatorio}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB obrigatorio}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: exclusiva_redis
-    ports:
-      - "6379:6379"
+    networks:
+      - internal
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:latest
     container_name: exclusiva_prometheus
-    ports:
-      - "9090:9090"
     volumes:
-      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+    networks:
+      - internal
     depends_on:
       - backend
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest
     container_name: exclusiva_grafana
-    ports:
-      - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER obrigatorio}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD obrigatorio}
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
+    networks:
+      - internal
     depends_on:
       - prometheus
+    restart: unless-stopped
+    # Exposto apenas via rede interna/VPN. Para acesso, use um reverse proxy
+    # autenticado ou tunel — nao publique a porta diretamente na internet.
 
   backend:
     build: ./backend
     container_name: exclusiva_backend
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sistema_exclusiva
+      ENVIRONMENT: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL obrigatorio}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY obrigatorio}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      EXPOSE_METRICS: "false"
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL obrigatorio}
+      ALLOWED_ORIGINS_RAW: ${ALLOWED_ORIGINS_RAW:?ALLOWED_ORIGINS_RAW obrigatorio}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+    ports:
+      - "8000:8000"
+    networks:
+      - internal
+      - public
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
     container_name: exclusiva_frontend
-    ports:
-      - "5173:3000"
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: ${VITE_API_URL:?VITE_API_URL obrigatorio}
+    ports:
+      - "443:3000"
+    networks:
+      - public
     depends_on:
       - backend
+    restart: unless-stopped
+
+networks:
+  internal:
+    internal: true
+  public:
 
 volumes:
   postgres_data:

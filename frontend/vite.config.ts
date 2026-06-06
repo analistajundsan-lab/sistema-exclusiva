@@ -22,9 +22,12 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['lucide-react'],
+        // Funcao (compativel com rolldown/vite 8). O formato objeto antigo
+        // ({ vendor: [...] }) nao e suportado pelo bundler atual.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('lucide-react')) return 'ui'
+          return 'vendor'
         }
       }
     }

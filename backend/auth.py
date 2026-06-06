@@ -18,6 +18,54 @@ UNRESTRICTED_UNIT_ROLES = {
 }
 
 
+COMMON_PASSWORDS = {
+    "12345678",
+    "123456789",
+    "1234567890",
+    "123456789012",
+    "senha123",
+    "senha1234",
+    "admin123",
+    "admin1234",
+    "password",
+    "password123",
+    "qwertyuiop",
+    "exclusiva123",
+}
+
+
+def validate_password_policy(password: str, user: "User | None" = None) -> None:
+    """Politica de senha aplicada no servidor (fonte de verdade).
+
+    - minimo de 12 caracteres;
+    - bloqueia senhas comuns;
+    - bloqueia senha que contenha dados do proprio usuario (email/nome).
+    """
+    if len(password) < 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha deve ter pelo menos 12 caracteres",
+        )
+    if len(password) > 128:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha e muito longa (maximo 128 caracteres)",
+        )
+    if password.lower() in COMMON_PASSWORDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Senha muito comum. Escolha uma senha mais forte.",
+        )
+    if user is not None:
+        lowered = password.lower()
+        email_local = (user.email or "").split("@")[0].lower()
+        if email_local and len(email_local) >= 3 and email_local in lowered:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A senha nao pode conter dados do usuario",
+            )
+
+
 def hash_password(password: str) -> str:
     return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
 

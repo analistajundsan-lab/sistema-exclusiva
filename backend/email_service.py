@@ -17,15 +17,12 @@ def _fmt_dt(dt: Optional[datetime]) -> str:
 
 
 def _blocking_items_html(items: list[str]) -> str:
-    rows = "".join(
-        f"""<tr>
+    rows = "".join(f"""<tr>
               <td style="padding:8px 12px;border-bottom:1px solid #fee2e2;">
                 <span style="color:#dc2626;font-weight:600;">⚠</span>
                 &nbsp;{item}
               </td>
-            </tr>"""
-        for item in items
-    )
+            </tr>""" for item in items)
     return f"""<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #fca5a5;">
       <thead>
         <tr style="background:#fee2e2;">
@@ -166,6 +163,61 @@ def build_ficha_tecnica_html(
 </html>"""
 
 
+def build_password_reset_html(*, user_name: str, reset_url: str) -> str:
+    from html import escape
+
+    safe_name = escape(user_name or "usuário")
+    safe_url = escape(reset_url, quote=True)
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Redefinição de senha — Sistema Exclusiva</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.07);max-width:600px;width:100%;">
+        <tr>
+          <td style="background:#1e40af;padding:24px 32px;">
+            <p style="margin:0;color:#bfdbfe;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Sistema Exclusiva Turismo</p>
+            <h1 style="margin:4px 0 0;color:#fff;font-size:22px;font-weight:700;">🔑 Redefinição de senha</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px 32px;color:#374151;">
+            <p style="margin:0 0 12px;">Olá, {safe_name}.</p>
+            <p style="margin:0 0 12px;">Recebemos uma solicitação para redefinir sua senha no Sistema Exclusiva.</p>
+            <div style="margin:24px 0;text-align:center;">
+              <a href="{safe_url}"
+                 style="display:inline-block;background:#1e40af;color:#fff;text-decoration:none;
+                        padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">
+                Redefinir minha senha
+              </a>
+            </div>
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Este link expira em 30 minutos e só pode ser usado uma vez.</p>
+            <p style="margin:0;font-size:13px;color:#6b7280;">Se você não solicitou esta alteração, ignore este e-mail e informe o responsável pelo sistema.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
+            <p style="margin:0;font-size:11px;color:#94a3b8;text-align:center;">Sistema Exclusiva Turismo · Notificação automática</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_password_reset_email(*, to_email: str, user_name: str, reset_url: str) -> bool:
+    html = build_password_reset_html(user_name=user_name, reset_url=reset_url)
+    return _send(
+        to=[to_email],
+        subject="Redefinição de senha — Sistema Exclusiva",
+        html=html,
+    )
+
+
 def _send(
     *,
     to: list[str],
@@ -176,9 +228,21 @@ def _send(
 ) -> bool:
     """Envia email via Gmail SMTP (preferido) ou Resend como fallback."""
     if settings.SMTP_USER and settings.SMTP_PASSWORD:
-        return _send_smtp(to=to, subject=subject, html=html, pdf_bytes=pdf_bytes, pdf_filename=pdf_filename)
+        return _send_smtp(
+            to=to,
+            subject=subject,
+            html=html,
+            pdf_bytes=pdf_bytes,
+            pdf_filename=pdf_filename,
+        )
     if settings.RESEND_API_KEY:
-        return _send_resend(to=to, subject=subject, html=html, pdf_bytes=pdf_bytes, pdf_filename=pdf_filename)
+        return _send_resend(
+            to=to,
+            subject=subject,
+            html=html,
+            pdf_bytes=pdf_bytes,
+            pdf_filename=pdf_filename,
+        )
     logger.warning("Nenhum servico de email configurado (SMTP_USER ou RESEND_API_KEY)")
     return False
 
@@ -243,7 +307,10 @@ def _send_resend(
         }
         if pdf_bytes:
             payload["attachments"] = [
-                {"filename": pdf_filename, "content": base64.b64encode(pdf_bytes).decode("utf-8")}
+                {
+                    "filename": pdf_filename,
+                    "content": base64.b64encode(pdf_bytes).decode("utf-8"),
+                }
             ]
         resend.Emails.send(payload)
         logger.info("Email Resend enviado para %s: %s", to, subject)
@@ -280,6 +347,7 @@ def send_ficha_tecnica(
     pdf_bytes: Optional[bytes] = None
     try:
         from pdf_service import generate_comunicacao_acidente_pdf
+
         pdf_bytes = generate_comunicacao_acidente_pdf(
             ticket_id=ticket_id,
             unit=unit,
@@ -294,9 +362,17 @@ def send_ficha_tecnica(
     except Exception as exc:
         logger.error("Falha ao gerar PDF ficha tecnica: %s", exc, exc_info=True)
 
-    subject = f"[IMPEDITIVO] Veículo {prefix} — Unidade {unit} — Ficha Técnica #{ticket_id}"
+    subject = (
+        f"[IMPEDITIVO] Veículo {prefix} — Unidade {unit} — Ficha Técnica #{ticket_id}"
+    )
     filename = f"comunicacao_acidente_{prefix}_ticket{ticket_id}.pdf"
-    return _send(to=[manager_email], subject=subject, html=html, pdf_bytes=pdf_bytes, pdf_filename=filename)
+    return _send(
+        to=[manager_email],
+        subject=subject,
+        html=html,
+        pdf_bytes=pdf_bytes,
+        pdf_filename=filename,
+    )
 
 
 def send_sst_approval_notification(
@@ -369,6 +445,7 @@ def send_sst_approval_notification(
     if submitted_at and driver_name:
         try:
             from pdf_service import generate_comunicacao_acidente_pdf
+
             pdf_bytes = generate_comunicacao_acidente_pdf(
                 ticket_id=ticket_id,
                 unit=unit,
@@ -381,7 +458,15 @@ def send_sst_approval_notification(
                 blocking_items=blocking_items,
             )
         except Exception as exc:
-            logger.error("Falha ao gerar PDF para aprovacao SST: %s", exc, exc_info=True)
+            logger.error(
+                "Falha ao gerar PDF para aprovacao SST: %s", exc, exc_info=True
+            )
 
     filename = f"comunicacao_acidente_{prefix}_ticket{ticket_id}.pdf"
-    return _send(to=sst_emails, subject=subject, html=html, pdf_bytes=pdf_bytes, pdf_filename=filename)
+    return _send(
+        to=sst_emails,
+        subject=subject,
+        html=html,
+        pdf_bytes=pdf_bytes,
+        pdf_filename=filename,
+    )

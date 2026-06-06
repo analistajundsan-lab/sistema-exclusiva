@@ -13,7 +13,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 import enum
-import hashlib
 from datetime import datetime
 from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 from config import settings
@@ -122,6 +121,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), default=UserRole.OPERATOR)
     is_active = Column(Boolean, default=True)
+    is_super_admin = Column(Boolean, default=False, nullable=False)
     must_change_password = Column(Boolean, default=False)
     can_delete_history = Column(Boolean, default=False)
     unit = Column(String(80))
@@ -134,8 +134,9 @@ class User(Base):
 
     @property
     def has_full_access(self) -> bool:
-        vinicius_hash = hashlib.sha256("41637531842".encode()).hexdigest()[:16]
-        return self.cpf_hash == vinicius_hash
+        # Superacesso vem exclusivamente do banco (coluna controlada por
+        # migration/bootstrap), nunca de CPF hardcoded em runtime.
+        return bool(self.is_super_admin)
 
 
 class Incident(Base):
@@ -239,6 +240,19 @@ class AuditLog(Base):
     deleted_at = Column(DateTime, index=True)
     deleted_by = Column(Integer, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    used_at = Column(DateTime(timezone=True))
+    created_ip = Column(String(64))
+    user_agent = Column(String(255))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class VehicleChecklist(Base):
@@ -408,6 +422,7 @@ class UnitAlertSetting(Base):
 
 class OcorrenciaRetorno(Base):
     """Relatório de ocorrência preenchido pelo plantonista quando o veículo retorna."""
+
     __tablename__ = "ocorrencias_retorno"
 
     id = Column(Integer, primary_key=True, index=True)
