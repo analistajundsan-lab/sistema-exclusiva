@@ -26,6 +26,21 @@ function clearAuth() {
   localStorage.removeItem('role')
 }
 
+// Revoga a sessao server-side (refresh token) no backend. Best-effort:
+// usa axios cru para nao sofrer override do Authorization pelo interceptor.
+export async function revokeSession(): Promise<void> {
+  const refreshToken = localStorage.getItem('refreshToken')
+  if (!refreshToken) return
+  try {
+    await axios.post(`${api.defaults.baseURL}/auth/logout`, null, {
+      headers: { Authorization: `Bearer ${refreshToken}` },
+      timeout: 8000,
+    })
+  } catch {
+    // ignora falhas — o cliente descarta os tokens de qualquer forma
+  }
+}
+
 async function doRefresh(): Promise<string> {
   const refreshToken = localStorage.getItem('refreshToken')
   if (!refreshToken) throw new Error('no_refresh_token')

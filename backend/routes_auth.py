@@ -27,11 +27,13 @@ from auth import (
     get_current_user,
     require_role,
     validate_password_policy,
+    revoke_all_user_sessions,
+    hash_token,
 )
 from config import settings
 from rate_limit import rate_limit, get_remaining_requests
 from metrics_middleware import auth_metrics, rate_limit_metric
-from models import AuditLog, PasswordResetToken, UserRole
+from models import AuditLog, PasswordResetToken, UserSession, UserRole
 import email_service
 from datetime import datetime, timedelta, timezone
 
@@ -88,7 +90,7 @@ async def login(request: LoginRequest, req: Request, db: Session = Depends(get_d
                 status_code=status.HTTP_403_FORBIDDEN, detail="Usuário inativo"
             )
 
-        access_token, refresh_token = create_tokens(user)
+        access_token, refresh_token = create_tokens(user, db=db, request=req)
         await auth_metrics(True)
         return TokenResponse(access_token=access_token, refresh_token=refresh_token)
     except HTTPException:
@@ -189,9 +191,13 @@ async def create_user_by_admin(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(
+    req: Request,
     authorization: str = Header(...),
     db: Session = Depends(get_db),
 ):
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido"
+    )
     try:
         scheme, token = authorization.split(" ", 1)
         if scheme.lower() != "bearer":
@@ -202,19 +208,76 @@ async def refresh(
         if payload.get("type") not in (None, "refresh"):
             raise ValueError
         user_id = int(payload.get("sub"))
+        jti_raw = payload.get("jti")
+        jti = int(jti_raw) if jti_raw is not None else None
     except (JWTError, ValueError, AttributeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido"
-        )
+        raise invalid
 
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    user = (
+        db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    )  # noqa: E712
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado"
-        )
+        raise invalid
 
-    access_token, refresh_token = create_tokens(user)
+    now = datetime.now(timezone.utc)
+
+    if jti is not None:
+        # Token com sessao server-side: valida, revoga (rotacao) e reemite.
+        session = (
+            db.query(UserSession)
+            .filter(
+                UserSession.id == jti,
+                UserSession.user_id == user.id,
+                UserSession.revoked_at.is_(None),
+                UserSession.expires_at > now,
+            )
+            .first()
+        )
+        if not session or session.refresh_token_hash != hash_token(token):
+            # Token de uma sessao revogada/expirada/desconhecida ou reutilizado.
+            raise invalid
+        session.revoked_at = now
+        session.last_used_at = now
+        db.add(session)
+        db.commit()
+
+    # Tokens legados (sem jti) sao aceitos uma vez e migrados para sessao.
+    access_token, refresh_token = create_tokens(user, db=db, request=req)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/logout")
+async def logout(
+    authorization: str = Header(...),
+    db: Session = Depends(get_db),
+):
+    """Revoga a sessao associada ao refresh token informado.
+
+    Resposta sempre 200 para nao vazar validade do token. Sem sessao
+    (token legado) apenas confirma — o frontend descarta os tokens.
+    """
+    try:
+        scheme, token = authorization.split(" ", 1)
+        if scheme.lower() != "bearer":
+            raise ValueError
+        payload = jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
+        jti_raw = payload.get("jti")
+        jti = int(jti_raw) if jti_raw is not None else None
+    except (JWTError, ValueError, AttributeError):
+        return {"message": "Logout efetuado"}
+
+    if jti is not None:
+        now = datetime.now(timezone.utc)
+        (
+            db.query(UserSession)
+            .filter(UserSession.id == jti, UserSession.revoked_at.is_(None))
+            .update({UserSession.revoked_at: now}, synchronize_session=False)
+        )
+        db.commit()
+
+    return {"message": "Logout efetuado"}
 
 
 @router.post("/password-reset-request")
@@ -336,6 +399,9 @@ async def reset_password(
     user.password_changed_at = now
     reset_record.used_at = now
 
+    # Reset de senha revoga todas as sessoes ativas do usuario.
+    revoke_all_user_sessions(db, user.id)
+
     db.add(
         AuditLog(
             user_id=user.id,
@@ -364,6 +430,8 @@ async def change_password(
     current_user.password_hash = hash_password(body.new_password)
     current_user.must_change_password = False
     current_user.password_changed_at = datetime.now(timezone.utc)
+    # Troca de senha revoga as demais sessoes ativas do usuario.
+    revoke_all_user_sessions(db, current_user.id)
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -427,6 +495,9 @@ async def toggle_user(
             status_code=400, detail="Não é possível desativar o próprio usuário"
         )
     user.is_active = not user.is_active
+    # Desativacao revoga imediatamente as sessoes ativas do usuario.
+    if not user.is_active:
+        revoke_all_user_sessions(db, user.id)
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -531,6 +602,8 @@ async def admin_update_user(
                 status_code=400, detail="Não é possível desativar o próprio usuário"
             )
         user.is_active = body.is_active
+        if not body.is_active:
+            revoke_all_user_sessions(db, user.id)
     if body.can_delete_history is not None:
         if body.can_delete_history and not user.is_super_admin:
             raise HTTPException(

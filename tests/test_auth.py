@@ -15,12 +15,14 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 Base.metadata.create_all(bind=engine)
 
+
 def override_get_db():
     db = TestingSessionLocal()
     try:
         yield db
     finally:
         db.close()
+
 
 app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
@@ -52,7 +54,7 @@ def sample_user():
         name="Test Operator",
         password_hash=hash_password("password123"),
         role=UserRole.OPERATOR,
-        is_active=True
+        is_active=True,
     )
     db.add(user)
     db.commit()
@@ -64,13 +66,16 @@ def sample_user():
 
 def test_register_success():
     """Test successful user registration."""
-    response = client.post("/auth/register", json={
-        "cpf": "111.222.333-44",
-        "email": "newuser@test.com",
-        "name": "New User",
-        "password": "SecurePass123!",
-        "role": "operator"
-    })
+    response = client.post(
+        "/auth/register",
+        json={
+            "cpf": "111.222.333-44",
+            "email": "newuser@test.com",
+            "name": "New User",
+            "password": "SecurePass123!",
+            "role": "operator",
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == "newuser@test.com"
@@ -79,13 +84,16 @@ def test_register_success():
 
 
 def test_public_register_cannot_create_admin():
-    response = client.post("/auth/register", json={
-        "cpf": "222.333.444-55",
-        "email": "fakeadmin@test.com",
-        "name": "Fake Admin",
-        "password": "SecurePass123!",
-        "role": "admin"
-    })
+    response = client.post(
+        "/auth/register",
+        json={
+            "cpf": "222.333.444-55",
+            "email": "fakeadmin@test.com",
+            "name": "Fake Admin",
+            "password": "SecurePass123!",
+            "role": "admin",
+        },
+    )
     assert response.status_code == 200
     assert response.json()["role"] == "operator"
 
@@ -105,7 +113,9 @@ def test_admin_creates_user_with_temporary_password():
     db.commit()
     db.close()
 
-    token = client.post("/auth/login", json={"cpf": "41637531842", "password": "password123"}).json()["access_token"]
+    token = client.post(
+        "/auth/login", json={"cpf": "41637531842", "password": "password123"}
+    ).json()["access_token"]
     response = client.post(
         "/auth/users",
         json={
@@ -125,23 +135,26 @@ def test_admin_creates_user_with_temporary_password():
 
 def test_register_duplicate_cpf(sample_user):
     """Test registration with duplicate CPF."""
-    response = client.post("/auth/register", json={
-        "cpf": "123.456.789-00",  # Same as sample_user
-        "email": "another@test.com",
-        "name": "Another User",
-        "password": "SecurePass123!",
-        "role": "operator"
-    })
+    response = client.post(
+        "/auth/register",
+        json={
+            "cpf": "123.456.789-00",  # Same as sample_user
+            "email": "another@test.com",
+            "name": "Another User",
+            "password": "SecurePass123!",
+            "role": "operator",
+        },
+    )
     assert response.status_code == 400
     assert "já cadastrado" in response.json()["detail"]
 
 
 def test_login_success(sample_user):
     """Test successful login."""
-    response = client.post("/auth/login", json={
-        "cpf": sample_user["cpf"],
-        "password": sample_user["password"]
-    })
+    response = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
@@ -151,20 +164,18 @@ def test_login_success(sample_user):
 
 def test_login_invalid_credentials(sample_user):
     """Test login with invalid credentials."""
-    response = client.post("/auth/login", json={
-        "cpf": sample_user["cpf"],
-        "password": "wrongpassword"
-    })
+    response = client.post(
+        "/auth/login", json={"cpf": sample_user["cpf"], "password": "wrongpassword"}
+    )
     assert response.status_code == 401
     assert "Credenciais inválidas" in response.json()["detail"]
 
 
 def test_login_nonexistent_user():
     """Test login with non-existent user."""
-    response = client.post("/auth/login", json={
-        "cpf": "999.999.999-99",
-        "password": "anypassword"
-    })
+    response = client.post(
+        "/auth/login", json={"cpf": "999.999.999-99", "password": "anypassword"}
+    )
     assert response.status_code == 401
 
 
@@ -175,11 +186,11 @@ def test_login_inactive_user(sample_user):
     user.is_active = False
     db.commit()
     db.close()
-    
-    response = client.post("/auth/login", json={
-        "cpf": sample_user["cpf"],
-        "password": sample_user["password"]
-    })
+
+    response = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    )
     assert response.status_code == 403
     assert "inativo" in response.json()["detail"]
 
@@ -187,16 +198,15 @@ def test_login_inactive_user(sample_user):
 def test_refresh_token(sample_user):
     """Test token refresh."""
     # First, login
-    login_response = client.post("/auth/login", json={
-        "cpf": sample_user["cpf"],
-        "password": sample_user["password"]
-    })
+    login_response = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    )
     tokens = login_response.json()
-    
+
     # Now refresh
     response = client.post(
-        "/auth/refresh",
-        headers={"Authorization": f"Bearer {tokens['refresh_token']}"}
+        "/auth/refresh", headers={"Authorization": f"Bearer {tokens['refresh_token']}"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -207,8 +217,7 @@ def test_refresh_token(sample_user):
 def test_refresh_invalid_token():
     """Test refresh with invalid token."""
     response = client.post(
-        "/auth/refresh",
-        headers={"Authorization": "Bearer invalid.token.here"}
+        "/auth/refresh", headers={"Authorization": "Bearer invalid.token.here"}
     )
     assert response.status_code == 401
 
@@ -246,7 +255,9 @@ def _create_reset_token(user_id: int, *, expired: bool = False, used: bool = Fal
     rec = PasswordResetToken(
         user_id=user_id,
         token_hash=_hashlib.sha256(raw.encode()).hexdigest(),
-        expires_at=now - timedelta(minutes=5) if expired else now + timedelta(minutes=30),
+        expires_at=(
+            now - timedelta(minutes=5) if expired else now + timedelta(minutes=30)
+        ),
         used_at=now if used else None,
     )
     db.add(rec)
@@ -311,13 +322,16 @@ def test_password_reset_rejects_weak_password(sample_user):
 
 
 def test_register_rejects_short_password():
-    response = client.post("/auth/register", json={
-        "cpf": "555.666.777-88",
-        "email": "weak@test.com",
-        "name": "Weak Pass",
-        "password": "Curta123",  # 8 chars, abaixo de 12
-        "role": "operator",
-    })
+    response = client.post(
+        "/auth/register",
+        json={
+            "cpf": "555.666.777-88",
+            "email": "weak@test.com",
+            "name": "Weak Pass",
+            "password": "Curta123",  # 8 chars, abaixo de 12
+            "role": "operator",
+        },
+    )
     assert response.status_code == 400
 
 
@@ -341,15 +355,18 @@ def test_no_runtime_cpf_backdoor():
 
 
 def test_change_password_clears_temporary_flag(sample_user):
-    login_response = client.post("/auth/login", json={
-        "cpf": sample_user["cpf"],
-        "password": sample_user["password"]
-    })
+    login_response = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    )
     token = login_response.json()["access_token"]
 
     response = client.post(
         "/auth/change-password",
-        json={"current_password": sample_user["password"], "new_password": "NovaSenha123!"},
+        json={
+            "current_password": sample_user["password"],
+            "new_password": "NovaSenha123!",
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -385,7 +402,9 @@ def test_history_delete_permission_only_vinicius():
     vinicius_id = vinicius.id
     db.close()
 
-    admin_token = client.post("/auth/login", json={"cpf": "22692036824", "password": "password123"}).json()["access_token"]
+    admin_token = client.post(
+        "/auth/login", json={"cpf": "22692036824", "password": "password123"}
+    ).json()["access_token"]
 
     denied = client.patch(
         f"/auth/users/{admin_id}/history-permission",
@@ -431,13 +450,21 @@ def test_only_vinicius_permission_soft_deletes_and_restores_history():
     log_id = log.id
     db.close()
 
-    jerusa_token = client.post("/auth/login", json={"cpf": "22692036824", "password": "password123"}).json()["access_token"]
-    vinicius_token = client.post("/auth/login", json={"cpf": "41637531842", "password": "password123"}).json()["access_token"]
+    jerusa_token = client.post(
+        "/auth/login", json={"cpf": "22692036824", "password": "password123"}
+    ).json()["access_token"]
+    vinicius_token = client.post(
+        "/auth/login", json={"cpf": "41637531842", "password": "password123"}
+    ).json()["access_token"]
 
-    forbidden = client.delete(f"/audit/logs/{log_id}", headers={"Authorization": f"Bearer {jerusa_token}"})
+    forbidden = client.delete(
+        f"/audit/logs/{log_id}", headers={"Authorization": f"Bearer {jerusa_token}"}
+    )
     assert forbidden.status_code == 403
 
-    deleted = client.delete(f"/audit/logs/{log_id}", headers={"Authorization": f"Bearer {vinicius_token}"})
+    deleted = client.delete(
+        f"/audit/logs/{log_id}", headers={"Authorization": f"Bearer {vinicius_token}"}
+    )
     assert deleted.status_code == 200
 
     visible_deleted = client.get(
@@ -445,10 +472,139 @@ def test_only_vinicius_permission_soft_deletes_and_restores_history():
         params={"include_deleted": True},
         headers={"Authorization": f"Bearer {vinicius_token}"},
     )
-    assert any(item["id"] == log_id and item["deleted_at"] for item in visible_deleted.json())
+    assert any(
+        item["id"] == log_id and item["deleted_at"] for item in visible_deleted.json()
+    )
 
-    restored = client.post(f"/audit/logs/{log_id}/restore", headers={"Authorization": f"Bearer {vinicius_token}"})
+    restored = client.post(
+        f"/audit/logs/{log_id}/restore",
+        headers={"Authorization": f"Bearer {vinicius_token}"},
+    )
     assert restored.status_code == 200
+
+
+def test_refresh_rotates_and_revokes_old_token(sample_user):
+    login = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    ).json()
+    old_refresh = login["refresh_token"]
+
+    first = client.post(
+        "/auth/refresh", headers={"Authorization": f"Bearer {old_refresh}"}
+    )
+    assert first.status_code == 200
+    new_refresh = first.json()["refresh_token"]
+
+    # Reutilizar o token antigo falha (rotacao/revogacao server-side).
+    reused = client.post(
+        "/auth/refresh", headers={"Authorization": f"Bearer {old_refresh}"}
+    )
+    assert reused.status_code == 401
+
+    # O token novo funciona.
+    ok = client.post(
+        "/auth/refresh", headers={"Authorization": f"Bearer {new_refresh}"}
+    )
+    assert ok.status_code == 200
+
+
+def test_password_reset_revokes_active_sessions(sample_user):
+    login = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    ).json()
+    refresh = login["refresh_token"]
+
+    raw = _create_reset_token(sample_user["id"])
+    done = client.post(
+        "/auth/password-reset",
+        json={"token": raw, "new_password": "NovaSenhaForte123!"},
+    )
+    assert done.status_code == 200
+
+    revoked = client.post(
+        "/auth/refresh", headers={"Authorization": f"Bearer {refresh}"}
+    )
+    assert revoked.status_code == 401
+
+
+def test_change_password_revokes_active_sessions(sample_user):
+    login = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    ).json()
+    refresh = login["refresh_token"]
+    access = login["access_token"]
+
+    changed = client.post(
+        "/auth/change-password",
+        json={
+            "current_password": sample_user["password"],
+            "new_password": "NovaSenhaForte123!",
+        },
+        headers={"Authorization": f"Bearer {access}"},
+    )
+    assert changed.status_code == 200
+
+    revoked = client.post(
+        "/auth/refresh", headers={"Authorization": f"Bearer {refresh}"}
+    )
+    assert revoked.status_code == 401
+
+
+def test_logout_revokes_session(sample_user):
+    login = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    ).json()
+    refresh = login["refresh_token"]
+
+    out = client.post("/auth/logout", headers={"Authorization": f"Bearer {refresh}"})
+    assert out.status_code == 200
+
+    revoked = client.post(
+        "/auth/refresh", headers={"Authorization": f"Bearer {refresh}"}
+    )
+    assert revoked.status_code == 401
+
+
+def test_deactivation_revokes_sessions(sample_user):
+    db = TestingSessionLocal()
+    admin = User(
+        cpf_hash=hash_cpf("41637531842"),
+        email="admin_deact@test.com",
+        name="Admin",
+        password_hash=hash_password("password123"),
+        role=UserRole.ADMIN,
+        is_active=True,
+        is_super_admin=True,
+    )
+    db.add(admin)
+    db.commit()
+    db.close()
+
+    user_login = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    ).json()
+    refresh = user_login["refresh_token"]
+
+    admin_token = client.post(
+        "/auth/login", json={"cpf": "41637531842", "password": "password123"}
+    ).json()["access_token"]
+
+    toggled = client.patch(
+        f"/auth/users/{sample_user['id']}/toggle",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert toggled.status_code == 200
+    assert toggled.json()["is_active"] is False
+
+    revoked = client.post(
+        "/auth/refresh", headers={"Authorization": f"Bearer {refresh}"}
+    )
+    assert revoked.status_code == 401
 
 
 def test_health_endpoint():

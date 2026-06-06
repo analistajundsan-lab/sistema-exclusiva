@@ -16,12 +16,14 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 Base.metadata.create_all(bind=engine)
 
+
 def override_get_db():
     db = TestingSessionLocal()
     try:
         yield db
     finally:
         db.close()
+
 
 app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
@@ -50,16 +52,15 @@ def auth_token():
         name="Test Operator",
         password_hash=hash_password("password123"),
         role=UserRole.OPERATOR,
-        is_active=True
+        is_active=True,
     )
     db.add(user)
     db.commit()
     db.close()
-    
-    response = client.post("/auth/login", json={
-        "cpf": "123.456.789-00",
-        "password": "password123"
-    })
+
+    response = client.post(
+        "/auth/login", json={"cpf": "123.456.789-00", "password": "password123"}
+    )
     return response.json()["access_token"]
 
 
@@ -73,16 +74,15 @@ def supervisor_token():
         name="Test Supervisor",
         password_hash=hash_password("password123"),
         role=UserRole.SUPERVISOR,
-        is_active=True
+        is_active=True,
     )
     db.add(user)
     db.commit()
     db.close()
-    
-    response = client.post("/auth/login", json={
-        "cpf": "987.654.321-00",
-        "password": "password123"
-    })
+
+    response = client.post(
+        "/auth/login", json={"cpf": "987.654.321-00", "password": "password123"}
+    )
     return response.json()["access_token"]
 
 
@@ -96,16 +96,15 @@ def admin_token():
         name="Test Admin",
         password_hash=hash_password("password123"),
         role=UserRole.ADMIN,
-        is_active=True
+        is_active=True,
     )
     db.add(user)
     db.commit()
     db.close()
-    
-    response = client.post("/auth/login", json={
-        "cpf": "111.222.333-44",
-        "password": "password123"
-    })
+
+    response = client.post(
+        "/auth/login", json={"cpf": "111.222.333-44", "password": "password123"}
+    )
     return response.json()["access_token"]
 
 
@@ -119,8 +118,8 @@ class TestIncidents:
                 "incident_type": "Avaria",
                 "description": "Motor não liga",
                 "line": "Linha 501",
-                "direction": "Centro"
-            }
+                "direction": "Centro",
+            },
         )
         assert response.status_code == 201
         data = response.json()
@@ -131,11 +130,10 @@ class TestIncidents:
         client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"prefix_code": "VP-001", "incident_type": "Avaria"}
+            json={"prefix_code": "VP-001", "incident_type": "Avaria"},
         )
         response = client.get(
-            "/incidents/",
-            headers={"Authorization": f"Bearer {auth_token}"}
+            "/incidents/", headers={"Authorization": f"Bearer {auth_token}"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -253,11 +251,11 @@ class TestChecklist:
         client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"prefix_code": "VP-001", "incident_type": "Avaria"}
+            json={"prefix_code": "VP-001", "incident_type": "Avaria"},
         )
         response = client.get(
             "/incidents/?prefix_code=VP",
-            headers={"Authorization": f"Bearer {auth_token}"}
+            headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert response.status_code == 200
 
@@ -265,13 +263,13 @@ class TestChecklist:
         create_resp = client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"prefix_code": "VP-001", "incident_type": "Avaria"}
+            json={"prefix_code": "VP-001", "incident_type": "Avaria"},
         )
         incident_id = create_resp.json()["id"]
-        
+
         response = client.get(
             f"/incidents/{incident_id}",
-            headers={"Authorization": f"Bearer {auth_token}"}
+            headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert response.status_code == 200
         assert response.json()["id"] == incident_id
@@ -280,14 +278,14 @@ class TestChecklist:
         create_resp = client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"prefix_code": "VP-001", "incident_type": "Avaria"}
+            json={"prefix_code": "VP-001", "incident_type": "Avaria"},
         )
         incident_id = create_resp.json()["id"]
-        
+
         response = client.put(
             f"/incidents/{incident_id}",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"incident_type": "Acidente"}
+            json={"incident_type": "Acidente"},
         )
         assert response.status_code == 200
         assert response.json()["incident_type"] == "Acidente"
@@ -296,13 +294,13 @@ class TestChecklist:
         create_resp = client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"prefix_code": "VP-001", "incident_type": "Avaria"}
+            json={"prefix_code": "VP-001", "incident_type": "Avaria"},
         )
         incident_id = create_resp.json()["id"]
-        
+
         response = client.delete(
             f"/incidents/{incident_id}",
-            headers={"Authorization": f"Bearer {auth_token}"}
+            headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert response.status_code == 403
 
@@ -310,13 +308,13 @@ class TestChecklist:
         create_resp = client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"prefix_code": "VP-001", "incident_type": "Avaria"}
+            json={"prefix_code": "VP-001", "incident_type": "Avaria"},
         )
         incident_id = create_resp.json()["id"]
-        
+
         response = client.delete(
             f"/incidents/{incident_id}",
-            headers={"Authorization": f"Bearer {supervisor_token}"}
+            headers={"Authorization": f"Bearer {supervisor_token}"},
         )
         assert response.status_code == 204
 
@@ -328,8 +326,8 @@ class TestChecklist:
                 "incident_type": "Avaria",
                 "description": "Motor não liga",
                 "line": "Linha 501",
-                "direction": "Centro"
-            }
+                "direction": "Centro",
+            },
         )
         assert response.status_code in (401, 403)  # HTTPBearer retorna 403 sem token
 
@@ -337,11 +335,15 @@ class TestChecklist:
         client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"prefix_code": "VP-001", "incident_type": "Avaria", "line": "Linha 501"}
+            json={
+                "prefix_code": "VP-001",
+                "incident_type": "Avaria",
+                "line": "Linha 501",
+            },
         )
         response = client.get(
             "/incidents/?line=Linha 501",
-            headers={"Authorization": f"Bearer {auth_token}"}
+            headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -350,8 +352,7 @@ class TestChecklist:
 
     def test_get_incident_not_found(self, auth_token):
         response = client.get(
-            "/incidents/99999",
-            headers={"Authorization": f"Bearer {auth_token}"}
+            "/incidents/99999", headers={"Authorization": f"Bearer {auth_token}"}
         )
         assert response.status_code == 404
 
@@ -360,15 +361,15 @@ class TestChecklist:
         create_resp = client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"prefix_code": "VP-001", "incident_type": "Avaria"}
+            json={"prefix_code": "VP-001", "incident_type": "Avaria"},
         )
         incident_id = create_resp.json()["id"]
-        
+
         # Tentar atualizar com supervisor (não é dono nem admin)
         response = client.put(
             f"/incidents/{incident_id}",
             headers={"Authorization": f"Bearer {supervisor_token}"},
-            json={"incident_type": "Acidente"}
+            json={"incident_type": "Acidente"},
         )
         assert response.status_code == 403
 
@@ -381,8 +382,8 @@ class TestSwaps:
             json={
                 "vehicle_out": "VP-001",
                 "vehicle_in": "VP-002",
-                "lines_covered": "Linha 501, 502"
-            }
+                "lines_covered": "Linha 501, 502",
+            },
         )
         assert response.status_code == 201
         data = response.json()
@@ -393,7 +394,7 @@ class TestSwaps:
         response = client.post(
             "/swaps/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"vehicle_out": "VP-001", "vehicle_in": "VP-001"}
+            json={"vehicle_out": "VP-001", "vehicle_in": "VP-001"},
         )
         assert response.status_code == 422
 
@@ -401,11 +402,10 @@ class TestSwaps:
         client.post(
             "/swaps/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"}
+            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"},
         )
         response = client.get(
-            "/swaps/",
-            headers={"Authorization": f"Bearer {auth_token}"}
+            "/swaps/", headers={"Authorization": f"Bearer {auth_token}"}
         )
         assert response.status_code == 200
 
@@ -413,13 +413,12 @@ class TestSwaps:
         create_resp = client.post(
             "/swaps/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"}
+            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"},
         )
         swap_id = create_resp.json()["id"]
-        
+
         response = client.get(
-            f"/swaps/{swap_id}",
-            headers={"Authorization": f"Bearer {auth_token}"}
+            f"/swaps/{swap_id}", headers={"Authorization": f"Bearer {auth_token}"}
         )
         assert response.status_code == 200
         assert response.json()["id"] == swap_id
@@ -428,14 +427,14 @@ class TestSwaps:
         create_resp = client.post(
             "/swaps/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"}
+            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"},
         )
         swap_id = create_resp.json()["id"]
-        
+
         response = client.put(
             f"/swaps/{swap_id}",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"vehicle_in": "VP-003"}
+            json={"vehicle_in": "VP-003"},
         )
         assert response.status_code == 200
 
@@ -443,13 +442,12 @@ class TestSwaps:
         create_resp = client.post(
             "/swaps/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"}
+            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"},
         )
         swap_id = create_resp.json()["id"]
-        
+
         response = client.delete(
-            f"/swaps/{swap_id}",
-            headers={"Authorization": f"Bearer {supervisor_token}"}
+            f"/swaps/{swap_id}", headers={"Authorization": f"Bearer {supervisor_token}"}
         )
         assert response.status_code == 204
 
@@ -457,13 +455,12 @@ class TestSwaps:
         create_resp = client.post(
             "/swaps/",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"}
+            json={"vehicle_out": "VP-001", "vehicle_in": "VP-002"},
         )
         swap_id = create_resp.json()["id"]
-        
+
         response = client.delete(
-            f"/swaps/{swap_id}",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/swaps/{swap_id}", headers={"Authorization": f"Bearer {admin_token}"}
         )
         assert response.status_code == 204
 

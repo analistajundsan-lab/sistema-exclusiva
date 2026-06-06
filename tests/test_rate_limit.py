@@ -3,14 +3,15 @@ tests/test_rate_limit.py
 Cobertura dos branches de rate_limit.py (Redis disponível / indisponível / exception).
 NÃO modifica código de produção.
 """
+
 import asyncio
 import pytest
 from unittest.mock import MagicMock, patch
 
 import rate_limit as rl
 
-
 # ─── Helper ─────────────────────────────────────────────────────────────────
+
 
 def run(coro):
     """Roda coroutine em novo event loop (seguro em testes síncronos)."""
@@ -18,6 +19,7 @@ def run(coro):
 
 
 # ─── Fixtures ───────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def restore_redis_client():
@@ -28,6 +30,7 @@ def restore_redis_client():
 
 
 # ─── Testes: rate_limit() ────────────────────────────────────────────────────
+
 
 def test_rate_limit_redis_unavailable():
     """Sem Redis → fail open (retorna True)."""
@@ -96,6 +99,7 @@ def test_rate_limit_redis_exception():
 
 # ─── Testes: get_remaining_requests() ───────────────────────────────────────
 
+
 def test_get_remaining_redis_unavailable():
     """Sem Redis → retorna max_requests completo."""
     rl.redis_client = None
@@ -151,6 +155,7 @@ def test_get_remaining_redis_exception():
 
 # ─── Testes: init_redis() ────────────────────────────────────────────────────
 
+
 def test_init_redis_failure():
     """Falha ao conectar → redis_client fica None."""
     with patch("rate_limit.redis.Redis") as mock_cls:
@@ -170,6 +175,7 @@ def test_init_redis_success():
 
 
 # ─── Testes: get_redis_client() ─────────────────────────────────────────────
+
 
 def test_get_redis_client_none():
     """Quando redis_client é None, get_redis_client retorna None."""

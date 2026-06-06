@@ -242,6 +242,20 @@ class AuditLog(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
 
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    refresh_token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    revoked_at = Column(DateTime(timezone=True), index=True)
+    last_used_at = Column(DateTime(timezone=True))
+    ip = Column(String(64))
+    user_agent = Column(String(255))
+
+
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
 

@@ -1,11 +1,19 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
 from jose import JWTError, jwt
 import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from config import settings
-from models import User, UserRole, get_db
+from models import User, UserRole, UserSession, get_db
+
+REFRESH_TOKEN_TTL_DAYS = 7
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
 
 security = HTTPBearer(auto_error=False)
 
@@ -76,7 +84,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     )
 
 
-def create_tokens(user: User) -> tuple[str, str]:
+def create_tokens(
+    user: User,
+    db: Session | None = None,
+    request: Request | None = None,
+) -> tuple[str, str]:
+    """Gera access + refresh tokens.
+
+    Quando `db` e fornecido, cria uma sessao server-side (tabela
+    user_sessions) e embute o id da sessao (jti) no refresh token, permitindo
+    rotacao e revogacao individual. Sem `db`, mantem o comportamento legado
+    (refresh JWT puro) para compatibilidade.
+    """
     now = datetime.now(timezone.utc)
     access_payload = {
         "sub": str(user.id),
@@ -84,20 +103,64 @@ def create_tokens(user: User) -> tuple[str, str]:
         "type": "access",
         "exp": now + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES),
     }
-    refresh_payload = {
-        "sub": str(user.id),
-        "type": "refresh",
-        "exp": now + timedelta(days=7),
-    }
-
     access_token = jwt.encode(
         access_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
+
+    expires_at = now + timedelta(days=REFRESH_TOKEN_TTL_DAYS)
+
+    if db is None:
+        refresh_payload = {
+            "sub": str(user.id),
+            "type": "refresh",
+            "exp": expires_at,
+        }
+        refresh_token = jwt.encode(
+            refresh_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        )
+        return access_token, refresh_token
+
+    ip = None
+    user_agent = None
+    if request is not None:
+        if xff := request.headers.get("x-forwarded-for"):
+            ip = xff.split(",")[0].strip()[:64]
+        elif request.client:
+            ip = request.client.host[:64]
+        user_agent = request.headers.get("user-agent", "")[:255]
+
+    session = UserSession(
+        user_id=user.id,
+        refresh_token_hash="",
+        expires_at=expires_at,
+        ip=ip,
+        user_agent=user_agent,
+    )
+    db.add(session)
+    db.flush()  # garante session.id para usar como jti
+
+    refresh_payload = {
+        "sub": str(user.id),
+        "type": "refresh",
+        "jti": str(session.id),  # jose exige jti como string
+        "exp": expires_at,
+    }
     refresh_token = jwt.encode(
         refresh_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
+    session.refresh_token_hash = hash_token(refresh_token)
+    db.add(session)
+    db.commit()
 
     return access_token, refresh_token
+
+
+def revoke_all_user_sessions(db: Session, user_id: int) -> None:
+    now = datetime.now(timezone.utc)
+    db.query(UserSession).filter(
+        UserSession.user_id == user_id,
+        UserSession.revoked_at.is_(None),
+    ).update({UserSession.revoked_at: now}, synchronize_session=False)
 
 
 def user_allowed_units(user: User) -> list[str] | None:

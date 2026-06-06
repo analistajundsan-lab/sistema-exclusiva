@@ -31,12 +31,14 @@ client = TestClient(app)
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
+
 def hash_cpf(cpf: str) -> str:
     cpf_clean = re.sub(r"\D", "", cpf)
     return hashlib.sha256(cpf_clean.encode()).hexdigest()[:16]
 
 
 # ─── Fixtures ───────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def setup_teardown():
@@ -72,6 +74,7 @@ def auth_token():
 
 # ─── TestMetrics ────────────────────────────────────────────────────────────
 
+
 class TestMetrics:
     def test_metrics_endpoint_exists(self):
         response = client.get("/metrics")
@@ -101,9 +104,11 @@ class TestMetrics:
 
 # ─── TestLogging / metrics_middleware coverage ───────────────────────────────
 
+
 class TestLogging:
     def test_structured_logging_available(self):
         from observability import setup_json_logger
+
         logger = setup_json_logger("test")
         assert logger is not None
 
@@ -121,6 +126,7 @@ class TestLogging:
     def test_auth_metrics_success(self):
         """Cobre metrics_middleware.py linha 47-48 (branch success)."""
         from metrics_middleware import auth_metrics
+
         asyncio.run(auth_metrics(True))
         metrics = client.get("/metrics")
         assert b"auth_attempts_total" in metrics.content
@@ -128,6 +134,7 @@ class TestLogging:
     def test_auth_metrics_failure(self):
         """Cobre metrics_middleware.py linha 47-48 (branch failed)."""
         from metrics_middleware import auth_metrics
+
         asyncio.run(auth_metrics(False))
         metrics = client.get("/metrics")
         assert b"auth_attempts_total" in metrics.content
@@ -137,6 +144,7 @@ class TestLogging:
     def test_rate_limit_metric(self):
         """Cobre metrics_middleware.py linha 52-53."""
         from metrics_middleware import rate_limit_metric
+
         asyncio.run(rate_limit_metric("/incidents/"))
         metrics = client.get("/metrics")
         assert b"rate_limit_hits_total" in metrics.content
@@ -146,6 +154,7 @@ class TestLogging:
     def test_db_metrics_context_success(self):
         """Cobre metrics_middleware.py __exit__ caminho sem erro (linha 67-68)."""
         from metrics_middleware import DBMetricsContext
+
         with DBMetricsContext("UPDATE") as _ctx:
             pass
         metrics = client.get("/metrics")
@@ -154,6 +163,7 @@ class TestLogging:
     def test_db_metrics_context_with_exception(self):
         """Cobre metrics_middleware.py __exit__ caminho com erro (linhas 70-75)."""
         from metrics_middleware import DBMetricsContext
+
         try:
             with DBMetricsContext("DELETE"):
                 raise ValueError("simulated db error")
@@ -190,7 +200,10 @@ class TestLogging:
             headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert response.status_code == 200
-        assert "X-Response-Time-Ms" in response.headers or "X-Response-Time" in response.headers
+        assert (
+            "X-Response-Time-Ms" in response.headers
+            or "X-Response-Time" in response.headers
+        )
 
     def test_audit_middleware_invalid_bearer(self):
         """Cobre middleware.py branch Bearer com token inválido (except pass, linha 25-26)."""

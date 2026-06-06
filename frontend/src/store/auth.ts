@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { revokeSession } from '../api/client'
 
 interface UserProfile {
   id: number
@@ -68,6 +69,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     })
   },
   logout: () => {
+    // Revoga a sessao no servidor antes de limpar (best-effort).
+    void revokeSession()
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('role')
