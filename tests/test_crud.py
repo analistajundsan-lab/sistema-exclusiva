@@ -468,4 +468,5 @@ class TestSwaps:
 class TestAuth:
     def test_refresh_token_unauthorized(self):
         response = client.post("/auth/refresh", headers={})
-        assert response.status_code == 422  # Missing Authorization header
+        # Sem cookie nem header de refresh -> 401 (credencial ausente/invalida)
+        assert response.status_code == 401

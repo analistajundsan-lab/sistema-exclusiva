@@ -33,6 +33,7 @@ def setup_teardown():
     """Clear database before each test."""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    client.cookies.clear()  # evita vazamento de cookie de refresh entre testes
     yield
     Base.metadata.drop_all(bind=engine)
 
@@ -650,6 +651,47 @@ def test_logout_is_audited(sample_user):
     )
     assert len(rows) >= 1
     db.close()
+
+
+def test_login_sets_refresh_cookie(sample_user):
+    resp = client.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    )
+    assert resp.status_code == 200
+    assert "refresh_token" in resp.cookies
+
+
+def test_refresh_via_cookie_without_header(sample_user):
+    from fastapi.testclient import TestClient as _TC
+
+    c = _TC(app)  # cliente proprio com jar de cookies isolado
+    login = c.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    )
+    assert "refresh_token" in login.cookies
+
+    # Sem Authorization header: o cookie do jar carrega o refresh token.
+    r = c.post("/auth/refresh")
+    assert r.status_code == 200
+    assert "access_token" in r.json()
+
+
+def test_logout_clears_refresh_cookie(sample_user):
+    from fastapi.testclient import TestClient as _TC
+
+    c = _TC(app)
+    c.post(
+        "/auth/login",
+        json={"cpf": sample_user["cpf"], "password": sample_user["password"]},
+    )
+    out = c.post("/auth/logout")
+    assert out.status_code == 200
+    # Cookie de refresh expirado/removido; novo refresh sem credencial falha.
+    c.cookies.clear()
+    r = c.post("/auth/refresh")
+    assert r.status_code == 401
 
 
 def test_health_endpoint():

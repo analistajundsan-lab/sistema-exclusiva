@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends, Header, Request
+from fastapi import APIRouter, HTTPException, status, Depends, Header, Request, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from jose import JWTError, jwt
@@ -87,6 +87,49 @@ def hash_reset_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
+REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 dias
+
+
+def set_refresh_cookie(response: Response, token: str) -> None:
+    """Define o refresh token como cookie HttpOnly.
+
+    Secure apenas em producao (em dev HTTP/localhost o navegador descartaria
+    cookies Secure). SameSite=Lax + mesma origem (proxy /api) protege contra
+    CSRF nas rotas que leem o cookie.
+    """
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        max_age=REFRESH_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/")
+
+
+def _extract_refresh_token(request: Request, authorization: str | None) -> str | None:
+    """Le o refresh token do header Authorization (se enviado) ou do cookie.
+
+    Em producao o frontend NAO envia header no /auth/refresh (a chamada usa
+    axios cru, sem o interceptor), entao o cookie HttpOnly e usado. O header
+    permanece como fallback/compatibilidade.
+    """
+    if authorization:
+        try:
+            scheme, token = authorization.split(" ", 1)
+            if scheme.lower() == "bearer" and token:
+                return token
+        except ValueError:
+            pass
+    return request.cookies.get(REFRESH_COOKIE_NAME)
+
+
 def get_client_ip(request: Request) -> str:
     if x_forwarded_for := request.headers.get("x-forwarded-for"):
         return x_forwarded_for.split(",")[0].strip()
@@ -94,7 +137,12 @@ def get_client_ip(request: Request) -> str:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
+async def login(
+    request: LoginRequest,
+    req: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     import logging
 
     logger = logging.getLogger(__name__)
@@ -158,6 +206,7 @@ async def login(request: LoginRequest, req: Request, db: Session = Depends(get_d
             )
         )
         access_token, refresh_token = create_tokens(user, db=db, request=req)
+        set_refresh_cookie(response, refresh_token)
         await auth_metrics(True)
         return TokenResponse(access_token=access_token, refresh_token=refresh_token)
     except HTTPException:
@@ -257,16 +306,17 @@ async def create_user_by_admin(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(
     req: Request,
-    authorization: str = Header(...),
+    response: Response,
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     invalid = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido"
     )
+    token = _extract_refresh_token(req, authorization)
+    if not token:
+        raise invalid
     try:
-        scheme, token = authorization.split(" ", 1)
-        if scheme.lower() != "bearer":
-            raise ValueError
         payload = jwt.decode(
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
         )
@@ -308,23 +358,26 @@ async def refresh(
 
     # Tokens legados (sem jti) sao aceitos uma vez e migrados para sessao.
     access_token, refresh_token = create_tokens(user, db=db, request=req)
+    set_refresh_cookie(response, refresh_token)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/logout")
 async def logout(
-    authorization: str = Header(...),
+    req: Request,
+    response: Response,
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
-    """Revoga a sessao associada ao refresh token informado.
+    """Revoga a sessao associada ao refresh token e limpa o cookie.
 
-    Resposta sempre 200 para nao vazar validade do token. Sem sessao
-    (token legado) apenas confirma — o frontend descarta os tokens.
+    Resposta sempre 200 para nao vazar validade do token.
     """
+    clear_refresh_cookie(response)
+    token = _extract_refresh_token(req, authorization)
+    if not token:
+        return {"message": "Logout efetuado"}
     try:
-        scheme, token = authorization.split(" ", 1)
-        if scheme.lower() != "bearer":
-            raise ValueError
         payload = jwt.decode(
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
         )

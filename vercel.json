@@ -5,6 +5,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://sistema-exclusiva.fly.dev/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
@@ -24,6 +28,6 @@
   ],
   "env": {
     "VITE_DEMO_MODE": "false",
-    "VITE_API_URL": "https://sistema-exclusiva.fly.dev"
+    "VITE_API_URL": "/api"
   }
 }

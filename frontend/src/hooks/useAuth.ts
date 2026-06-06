@@ -13,7 +13,8 @@ export function useAuth() {
     try {
       const res = await api.post('/auth/login', { cpf, password })
       const payload = JSON.parse(atob(res.data.access_token.split('.')[1]))
-      setAuth(res.data.access_token, payload.role || 'operator', res.data.refresh_token)
+      // refresh token vive em cookie HttpOnly — nao persistir no localStorage
+      setAuth(res.data.access_token, payload.role || 'operator')
       const me = await api.get('/auth/me')
       setUserProfile({
         id: me.data.id,

@@ -4,10 +4,11 @@ import { demoAdapter } from './demo'
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   timeout: 30000,
+  // Envia o cookie HttpOnly de refresh (mesma origem via proxy /api).
+  withCredentials: true,
 })
 
 // Single promise shared across all concurrent 401s in the same tab.
-// Cross-tab: the other tab will pick up the new token from localStorage on retry.
 let refreshPromise: Promise<string> | null = null
 
 if (import.meta.env.VITE_DEMO_MODE === 'true') {
@@ -26,31 +27,26 @@ function clearAuth() {
   localStorage.removeItem('role')
 }
 
-// Revoga a sessao server-side (refresh token) no backend. Best-effort:
-// usa axios cru para nao sofrer override do Authorization pelo interceptor.
+// Revoga a sessao server-side e limpa o cookie de refresh (best-effort).
 export async function revokeSession(): Promise<void> {
-  const refreshToken = localStorage.getItem('refreshToken')
-  if (!refreshToken) return
   try {
     await axios.post(`${api.defaults.baseURL}/auth/logout`, null, {
-      headers: { Authorization: `Bearer ${refreshToken}` },
+      withCredentials: true,
       timeout: 8000,
     })
   } catch {
-    // ignora falhas — o cliente descarta os tokens de qualquer forma
+    // ignora falhas — o cliente descarta o access token de qualquer forma
   }
 }
 
+// O refresh token vive em cookie HttpOnly; o navegador o envia automaticamente.
 async function doRefresh(): Promise<string> {
-  const refreshToken = localStorage.getItem('refreshToken')
-  if (!refreshToken) throw new Error('no_refresh_token')
   const res = await axios.post(
     `${api.defaults.baseURL}/auth/refresh`,
     null,
-    { headers: { Authorization: `Bearer ${refreshToken}` } },
+    { withCredentials: true },
   )
   localStorage.setItem('token', res.data.access_token)
-  localStorage.setItem('refreshToken', res.data.refresh_token)
   return res.data.access_token
 }
 
@@ -66,13 +62,6 @@ api.interceptors.response.use(
 
     if (err.response?.status === 401 && !original?._retry) {
       original._retry = true
-
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (!refreshToken) {
-        clearAuth()
-        window.location.href = '/login'
-        return Promise.reject(err)
-      }
 
       // Deduplicate: se outra requisição já iniciou o refresh, aguarda a mesma Promise
       if (!refreshPromise) {
