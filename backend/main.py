@@ -131,6 +131,17 @@ async def startup():
     except Exception as e:
         logger.error("Bootstrap falhou (nao critico): %s", e)
 
+    try:
+        from maintenance import cleanup_security_tables
+
+        _db = SessionLocal()
+        try:
+            cleanup_security_tables(_db)
+        finally:
+            _db.close()
+    except Exception as e:
+        logger.error("Limpeza de seguranca falhou (nao critico): %s", e)
+
 
 app.include_router(auth_router)
 app.include_router(incidents_router)
