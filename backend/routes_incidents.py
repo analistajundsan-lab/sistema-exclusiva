@@ -5,7 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from auth import get_current_user, require_role
+from auth import (
+    get_current_user,
+    require_role,
+    apply_user_unit_scope,
+    ensure_unit_access,
+)
 from models import AuditLog, Incident, IncidentStatus, User, UserRole, get_db
 from schemas import CountResponse, IncidentCreate, IncidentResponse, IncidentUpdate
 from typing import List, Optional
@@ -43,7 +48,7 @@ async def count_incidents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Incident)
+    query = apply_user_unit_scope(db.query(Incident), Incident.unit, current_user)
     if prefix_code:
         query = query.filter(Incident.prefix_code.ilike(f"%{prefix_code}%"))
     if incident_type:
@@ -65,6 +70,7 @@ async def create_incident(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    ensure_unit_access(current_user, body.unit)
     incident = Incident(**body.model_dump(), created_by=current_user.id)
     db.add(incident)
     db.flush()
@@ -94,7 +100,11 @@ async def list_incidents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Incident).order_by(Incident.created_at.desc())
+    query = apply_user_unit_scope(
+        db.query(Incident).order_by(Incident.created_at.desc()),
+        Incident.unit,
+        current_user,
+    )
     if prefix_code:
         query = query.filter(Incident.prefix_code.ilike(f"%{prefix_code}%"))
     if incident_type:
@@ -123,6 +133,7 @@ async def incident_whatsapp_text(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrencia nao encontrada"
         )
+    ensure_unit_access(current_user, incident.unit)
     return {"text": format_incident_whatsapp_text(incident)}
 
 
@@ -137,6 +148,7 @@ async def get_incident(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada"
         )
+    ensure_unit_access(current_user, incident.unit)
     return incident
 
 
@@ -152,6 +164,7 @@ async def update_incident(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada"
         )
+    ensure_unit_access(current_user, incident.unit)
     if current_user.role != UserRole.ADMIN and incident.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão"
