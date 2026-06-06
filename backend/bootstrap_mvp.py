@@ -18,7 +18,7 @@ from models import (
     UserRole,
     engine,
 )
-from routes_auth import hash_cpf
+from routes_auth import hash_cpf, find_user_by_cpf
 
 TEMP_PASSWORD = "Exclusiva@2026"
 
@@ -333,11 +333,10 @@ def upsert_admin(
     can_delete_history: bool = False,
     is_super_admin: bool = False,
 ) -> None:
-    cpf_hash = hash_cpf(cpf)
-    user = db.query(User).filter(User.cpf_hash == cpf_hash).first()
+    user, _ = find_user_by_cpf(db, cpf)
     if not user:
         user = User(
-            cpf_hash=cpf_hash,
+            cpf_hash=hash_cpf(cpf),
             email=email,
             name=name,
             password_hash=hash_password(TEMP_PASSWORD),
@@ -347,6 +346,9 @@ def upsert_admin(
         )
         db.add(user)
         db.flush()
+    else:
+        # Normaliza para o formato de hash canonico (migra legado -> HMAC).
+        user.cpf_hash = hash_cpf(cpf)
     user.email = email
     user.name = name
     user.role = UserRole.ADMIN

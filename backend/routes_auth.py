@@ -43,9 +43,44 @@ RESET_TOKEN_TTL_MINUTES = 30
 logger = logging.getLogger(__name__)
 
 
-def hash_cpf(cpf: str) -> str:
+def _hash_cpf_legacy(cpf: str) -> str:
     cpf_clean = re.sub(r"\D", "", cpf)
     return hashlib.sha256(cpf_clean.encode()).hexdigest()[:16]
+
+
+def _hash_cpf_secure(cpf: str) -> str:
+    cpf_clean = re.sub(r"\D", "", cpf)
+    secret = settings.CPF_HASH_PEPPER.encode("utf-8")
+    return hmac.new(secret, cpf_clean.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def hash_cpf(cpf: str) -> str:
+    """Hash canonico para NOVOS registros.
+
+    Usa HMAC-SHA-256 com pepper quando CPF_HASH_PEPPER esta definido; caso
+    contrario mantem o hash legado (compatibilidade).
+    """
+    if settings.CPF_HASH_PEPPER:
+        return _hash_cpf_secure(cpf)
+    return _hash_cpf_legacy(cpf)
+
+
+def find_user_by_cpf(db: Session, cpf: str) -> tuple["User | None", bool]:
+    """Localiza usuario por CPF tentando o hash seguro e depois o legado.
+
+    Retorna (user, needs_rehash) onde needs_rehash indica que o usuario foi
+    encontrado pelo hash legado e deve ser migrado para o formato seguro.
+    """
+    if settings.CPF_HASH_PEPPER:
+        secure = _hash_cpf_secure(cpf)
+        user = db.query(User).filter(User.cpf_hash == secure).first()
+        if user:
+            return user, False
+        legacy = _hash_cpf_legacy(cpf)
+        user = db.query(User).filter(User.cpf_hash == legacy).first()
+        return user, bool(user)
+    legacy = _hash_cpf_legacy(cpf)
+    return db.query(User).filter(User.cpf_hash == legacy).first(), False
 
 
 def hash_reset_token(raw_token: str) -> str:
@@ -75,8 +110,7 @@ async def login(request: LoginRequest, req: Request, db: Session = Depends(get_d
                 detail="Muitas tentativas de login. Tente novamente em 1 minuto.",
             )
 
-        cpf_hash = hash_cpf(request.cpf)
-        user = db.query(User).filter(User.cpf_hash == cpf_hash).first()
+        user, needs_rehash = find_user_by_cpf(db, request.cpf)
 
         if not user or not verify_password(request.password, user.password_hash):
             await auth_metrics(False)
@@ -108,6 +142,11 @@ async def login(request: LoginRequest, req: Request, db: Session = Depends(get_d
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Usuário inativo"
             )
+
+        # Rehash-on-login: migra CPF legado para HMAC quando pepper ativo.
+        if needs_rehash:
+            user.cpf_hash = _hash_cpf_secure(request.cpf)
+            db.add(user)
 
         db.add(
             AuditLog(
@@ -153,16 +192,15 @@ async def register(request: UserCreate, req: Request, db: Session = Depends(get_
         )
 
     validate_password_policy(request.password)
-    cpf_hash = hash_cpf(request.cpf)
 
-    existing = db.query(User).filter(User.cpf_hash == cpf_hash).first()
+    existing, _ = find_user_by_cpf(db, request.cpf)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="CPF já cadastrado"
         )
 
     user = User(
-        cpf_hash=cpf_hash,
+        cpf_hash=hash_cpf(request.cpf),
         email=request.email,
         name=request.name,
         password_hash=hash_password(request.password),
@@ -184,15 +222,14 @@ async def create_user_by_admin(
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     validate_password_policy(request.password)
-    cpf_hash = hash_cpf(request.cpf)
-    existing = db.query(User).filter(User.cpf_hash == cpf_hash).first()
+    existing, _ = find_user_by_cpf(db, request.cpf)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="CPF ja cadastrado"
         )
 
     user = User(
-        cpf_hash=cpf_hash,
+        cpf_hash=hash_cpf(request.cpf),
         email=request.email,
         name=request.name,
         password_hash=hash_password(request.password),

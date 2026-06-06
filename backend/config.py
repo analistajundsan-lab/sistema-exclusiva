@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
+    # Pepper para HMAC do hash de CPF. Vazio = mantem hash legado (SHA-256
+    # truncado) para compatibilidade. Definir em producao ativa o HMAC e o
+    # rehash-on-login dos usuarios existentes.
+    CPF_HASH_PEPPER: str = ""
     JWT_EXPIRATION_MINUTES: int = 480
     API_TITLE: str = "Sistema Exclusiva Operacional"
     API_VERSION: str = "0.1.0"
