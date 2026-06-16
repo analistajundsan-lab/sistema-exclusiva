@@ -4,6 +4,29 @@ import { Layout } from '../components/Layout'
 import api from '../api/client'
 import { Eye, EyeOff, Lock, AlertCircle, ArrowLeft } from 'lucide-react'
 
+// Regra de senha (espelha a politica do backend): min 8, com maiuscula,
+// minuscula, numero e caractere especial.
+export function validatePasswordPolicy(password: string): string | null {
+  if (password.length < 8) return 'A senha deve ter pelo menos 8 caracteres.'
+  if (!/[A-Z]/.test(password)) return 'A senha deve conter pelo menos uma letra maiúscula.'
+  if (!/[a-z]/.test(password)) return 'A senha deve conter pelo menos uma letra minúscula.'
+  if (!/[0-9]/.test(password)) return 'A senha deve conter pelo menos um número.'
+  if (!/[^A-Za-z0-9]/.test(password)) return 'A senha deve conter pelo menos um caractere especial.'
+  return null
+}
+
+// Extrai uma mensagem legivel de um erro de API (o detail de um 422 do
+// FastAPI vem como array de objetos — renderiza-lo direto quebra o React).
+export function extractApiError(e: any, fallback: string): string {
+  const detail = e?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const msg = detail.map((d: any) => d?.msg).filter(Boolean).join('. ')
+    if (msg) return msg
+  }
+  return fallback
+}
+
 // Password strength helpers
 function getStrength(password: string): number {
   let score = 0
@@ -107,8 +130,9 @@ export function ChangePassword() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (newPassword.length < 8) {
-      setError('A nova senha deve ter pelo menos 8 caracteres.')
+    const policyError = validatePasswordPolicy(newPassword)
+    if (policyError) {
+      setError(policyError)
       return
     }
     if (newPassword !== confirmPassword) {
@@ -124,7 +148,7 @@ export function ChangePassword() {
       })
       navigate('/')
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Erro ao alterar senha.')
+      setError(extractApiError(e, 'Erro ao alterar senha.'))
     } finally {
       setLoading(false)
     }
@@ -174,6 +198,9 @@ export function ChangePassword() {
                 onToggle={() => toggle('new')}
               >
                 <StrengthBar password={newPassword} />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                  Mínimo 8 caracteres, com maiúscula, minúscula, número e caractere especial.
+                </p>
               </PasswordField>
 
               <PasswordField

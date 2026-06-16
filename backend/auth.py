@@ -45,19 +45,40 @@ COMMON_PASSWORDS = {
 def validate_password_policy(password: str, user: "User | None" = None) -> None:
     """Politica de senha aplicada no servidor (fonte de verdade).
 
-    - minimo de 12 caracteres;
+    - minimo de 8 caracteres;
+    - exige maiuscula, minuscula, numero e caractere especial;
     - bloqueia senhas comuns;
     - bloqueia senha que contenha dados do proprio usuario (email/nome).
     """
-    if len(password) < 12:
+    if len(password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A senha deve ter pelo menos 12 caracteres",
+            detail="A senha deve ter pelo menos 8 caracteres",
         )
     if len(password) > 128:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A senha e muito longa (maximo 128 caracteres)",
+        )
+    if not any(c.isupper() for c in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha deve conter pelo menos uma letra maiuscula",
+        )
+    if not any(c.islower() for c in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha deve conter pelo menos uma letra minuscula",
+        )
+    if not any(c.isdigit() for c in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha deve conter pelo menos um numero",
+        )
+    if not any(not c.isalnum() for c in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha deve conter pelo menos um caractere especial",
         )
     if password.lower() in COMMON_PASSWORDS:
         raise HTTPException(

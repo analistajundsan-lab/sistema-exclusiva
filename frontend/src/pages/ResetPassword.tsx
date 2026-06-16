@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import api from '../api/client'
+import { validatePasswordPolicy, extractApiError } from './ChangePassword'
 import { Lock, Eye, EyeOff, Building2, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react'
 
 export function ResetPassword() {
@@ -19,8 +20,9 @@ export function ResetPassword() {
     e.preventDefault()
     setError(null)
 
-    if (password.length < 12) {
-      setError('A senha deve ter pelo menos 12 caracteres.')
+    const policyError = validatePasswordPolicy(password)
+    if (policyError) {
+      setError(policyError)
       return
     }
     if (password !== confirm) {
@@ -35,9 +37,8 @@ export function ResetPassword() {
       setTimeout(() => navigate('/login'), 2500)
     } catch (err: any) {
       const status = err?.response?.status
-      const detail = err?.response?.data?.detail
-      if (status === 400) {
-        setError(detail || 'Token inválido ou expirado. Solicite um novo link.')
+      if (status === 400 || status === 422) {
+        setError(extractApiError(err, 'Token inválido ou expirado. Solicite um novo link.'))
       } else {
         setError('Não foi possível redefinir a senha. Tente novamente.')
       }
@@ -81,7 +82,7 @@ export function ResetPassword() {
               <div className="mb-6">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Redefinir senha</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Escolha uma nova senha com pelo menos 12 caracteres.
+                  Mínimo 8 caracteres, com maiúscula, minúscula, número e caractere especial.
                 </p>
               </div>
 

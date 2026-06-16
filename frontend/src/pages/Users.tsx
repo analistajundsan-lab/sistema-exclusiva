@@ -312,7 +312,7 @@ export function Users() {
               </div>
               {modalMode === 'create' && (
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Senha * (min. 12 caracteres)</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Senha * (mín. 8: maiúscula, minúscula, número e especial)</label>
                   <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                     className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
                 </div>

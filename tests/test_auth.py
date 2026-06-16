@@ -332,7 +332,7 @@ def test_register_rejects_short_password():
             "cpf": "555.666.777-88",
             "email": "weak@test.com",
             "name": "Weak Pass",
-            "password": "Curta123",  # 8 chars, abaixo de 12
+            "password": "Curtaa123",  # >=8 mas sem caractere especial
             "role": "operator",
         },
     )
