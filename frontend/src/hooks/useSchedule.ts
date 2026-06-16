@@ -76,8 +76,15 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     return params
   }
 
-  const fetchSchedule = useCallback(async (f = filters, skip = page * PAGE_SIZE) => {
-    setLoading(true)
+  // silent: atualizacao "fantasma" — nao liga o loading e so troca o estado
+  // se os dados realmente mudaram (evita a lista tremer no auto-refresh).
+  const fetchSchedule = useCallback(async (
+    f = filters,
+    skip = page * PAGE_SIZE,
+    opts: { silent?: boolean } = {},
+  ) => {
+    const { silent = false } = opts
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const params = paramsFrom(f, skip)
@@ -87,13 +94,13 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
         api.get('/schedule/lines/count', { params: paramsFrom(f, 0) }),
         api.get('/schedule/summary', { params: summaryParams }),
       ])
-      setLines(listRes.data)
-      setTotal(countRes.data.total)
-      setSummary(summaryRes.data)
+      setLines(prev => JSON.stringify(prev) === JSON.stringify(listRes.data) ? prev : listRes.data)
+      setTotal(prev => prev === countRes.data.total ? prev : countRes.data.total)
+      setSummary(prev => JSON.stringify(prev) === JSON.stringify(summaryRes.data) ? prev : summaryRes.data)
     } catch {
-      setError('Erro ao carregar escala')
+      if (!silent) setError('Erro ao carregar escala')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [filters, page])
 

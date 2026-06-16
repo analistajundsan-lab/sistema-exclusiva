@@ -46,8 +46,13 @@ export function useSwaps(initialFilters?: SwapFilters) {
     return p
   }
 
-  const fetchSwaps = useCallback(async (f = filters, skip = page * PAGE_SIZE) => {
-    setLoading(true)
+  const fetchSwaps = useCallback(async (
+    f = filters,
+    skip = page * PAGE_SIZE,
+    opts: { silent?: boolean } = {},
+  ) => {
+    const { silent = false } = opts
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const params = buildParams(f, skip)
@@ -55,12 +60,12 @@ export function useSwaps(initialFilters?: SwapFilters) {
         api.get('/swaps/', { params }),
         api.get('/swaps/count', { params: { ...params, skip: undefined, limit: undefined } }),
       ])
-      setSwaps(listRes.data)
-      setTotal(countRes.data.total)
+      setSwaps(prev => JSON.stringify(prev) === JSON.stringify(listRes.data) ? prev : listRes.data)
+      setTotal(prev => prev === countRes.data.total ? prev : countRes.data.total)
     } catch {
-      setError('Erro ao carregar trocas')
+      if (!silent) setError('Erro ao carregar trocas')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [filters, page])
 

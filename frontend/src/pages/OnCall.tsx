@@ -72,8 +72,10 @@ export function OnCall() {
 
   useEffect(() => {
     const refresh = () => {
-      pending.refetch(pendingFilters, 0)
-      swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0)
+      // Atualizacao silenciosa: sem spinner e so re-renderiza se algo mudou,
+      // para a lista nao "tremer" enquanto o plantonista clica nos botoes.
+      pending.refetch(pendingFilters, 0, { silent: true })
+      swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0, { silent: true })
     }
     const interval = window.setInterval(refresh, 8000)
     return () => window.clearInterval(interval)
