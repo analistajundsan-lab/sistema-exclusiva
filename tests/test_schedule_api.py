@@ -760,6 +760,20 @@ def test_swap_can_be_created_from_confirmed_schedule_line(admin_token, operator_
     assert "PREFIXO 1590" in data["whatsapp_text"]
     assert "ATENDERA AS LINHAS" in data["whatsapp_text"]
 
+    by_vehicle_out = client.get(
+        "/swaps/?vehicle=1580",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    by_vehicle_in = client.get(
+        "/swaps/?vehicle=1590",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+
+    assert by_vehicle_out.status_code == 200
+    assert by_vehicle_in.status_code == 200
+    assert by_vehicle_out.json()[0]["id"] == data["id"]
+    assert by_vehicle_in.json()[0]["id"] == data["id"]
+
 
 def test_swap_can_change_only_driver_from_confirmed_schedule_line(
     admin_token, operator_token

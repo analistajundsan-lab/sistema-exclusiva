@@ -84,7 +84,7 @@ export function Consulta() {
     try {
       const swapParams = new URLSearchParams({ limit: '200' })
       if (filters.date) swapParams.set('schedule_date', filters.date)
-      if (filters.prefix) swapParams.set('vehicle_out', filters.prefix)
+      if (filters.prefix) swapParams.set('vehicle', filters.prefix)
       if (filters.line) swapParams.set('line', filters.line)
       if (filters.driver) swapParams.set('driver_name', filters.driver)
 

@@ -384,7 +384,7 @@ def main() -> None:
             "jerusa@exclusivaturismo.com.br",
             "Jerusa",
             can_delete_history=False,
-            is_super_admin=False,
+            is_super_admin=True,
         )
         # Super administrador definido por flag controlada no banco (nao por
         # CPF hardcoded em runtime). O CPF e usado apenas aqui no seed inicial.

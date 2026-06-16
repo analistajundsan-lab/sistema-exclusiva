@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { ScheduleFilters, ScheduleLine, useSchedule } from '../hooks/useSchedule'
 import { useSwaps } from '../hooks/useSwaps'
@@ -16,6 +16,7 @@ export function OnCall() {
   const userUnit = useAuthStore(s => s.userUnit)
   const userUnits = useAuthStore(s => s.userUnits)
   const role = useAuthStore(s => s.role)
+  const hasFullAccess = useAuthStore(s => s.hasFullAccess)
 
   // Unidades disponíveis para este usuário
   const availableUnits = useMemo(() => {
@@ -34,13 +35,14 @@ export function OnCall() {
 
   const pendingFilters = useMemo(() => ({
     ...filters,
+    status: lineSearch ? undefined : 'pendente',
     line_code: lineSearch || undefined,
     ...(autoMode && !lineSearch ? { start_in_minutes: '40' } : {}),
   }), [filters, autoMode, lineSearch])
 
   const pending = useSchedule(pendingFilters)
   const swapsList = useSwaps({ unit: filters.unit, schedule_date: filters.schedule_date })
-  const canManageLines = role === 'admin' || role === 'gerente' || role === 'supervisao' || role === 'supervisor'
+  const canManageLines = hasFullAccess || role === 'admin' || role === 'gerente' || role === 'supervisao' || role === 'supervisor'
 
   // Estado do card com troca inline aberta
   const [swapOpenId, setSwapOpenId] = useState<number | null>(null)
@@ -61,11 +63,25 @@ export function OnCall() {
     pending.applyFilters(pendingFilters)
   }
 
+  useEffect(() => {
+    swapsList.applyFilters({ unit: filters.unit, schedule_date: filters.schedule_date })
+  }, [filters.unit, filters.schedule_date])
+
+  useEffect(() => {
+    const refresh = () => {
+      pending.refetch(pendingFilters, 0)
+      swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0)
+    }
+    const interval = window.setInterval(refresh, 8000)
+    return () => window.clearInterval(interval)
+  }, [pendingFilters, filters.unit, filters.schedule_date])
+
   const handleConfirm = async (id: number) => {
     setActionError(null)
     setActionMessage(null)
     try {
       await pending.confirmLine(id)
+      await swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0)
       setActionMessage('Linha confirmada.')
     } catch (e: any) {
       setActionError(e?.response?.data?.detail || 'Não foi possível confirmar a linha.')
@@ -98,6 +114,7 @@ export function OnCall() {
         reason: swapReason || undefined,
         lines_covered: `${line.direction} - ${line.line_code}`,
       } as any)
+      await pending.refetch(pendingFilters, 0)
       setSwapOpenId(null)
       setSwapVehicle('')
       setSwapDriver('')
@@ -199,7 +216,7 @@ export function OnCall() {
               onChange={e => setFilters(s => ({ ...s, unit: e.target.value }))}
               className="mt-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-normal"
             >
-              {(role === 'admin' ? ALL_UNITS : availableUnits).map(u => <option key={u} value={u}>{u}</option>)}
+              {(hasFullAccess || role === 'admin' ? ALL_UNITS : availableUnits).map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </label>
           <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -280,7 +297,7 @@ export function OnCall() {
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
               <div>
-                <h2 className="font-bold text-gray-900 dark:text-gray-100">Linhas pendentes</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100">{lineSearch ? 'Resultado da linha' : 'Linhas pendentes'}</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {lineSearch ? `Busca pela linha ${lineSearch}.` : autoMode ? 'Iniciando nos próximos 40 min.' : 'Todas as pendentes da unidade.'}
                 </p>
@@ -292,12 +309,12 @@ export function OnCall() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500" />
                   </span>
                   <span className="rounded-full px-3 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300">
-                    {pending.total} pendentes
+                    {pending.total} {lineSearch ? 'resultado(s)' : 'pendentes'}
                   </span>
                 </div>
               ) : (
                 <span className="rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                  {pending.total} pendentes
+                  {pending.total} {lineSearch ? 'resultado(s)' : 'pendentes'}
                 </span>
               )}
             </div>
@@ -366,19 +383,21 @@ export function OnCall() {
                   {/* Botões de ação */}
                   {swapOpenId !== line.id ? (
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleConfirm(line.id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                      >
-                        <CheckCircle2 size={15} />
-                        Confirmar
-                      </button>
+                      {line.status !== 'confirmada' && (
+                        <button
+                          onClick={() => handleConfirm(line.id)}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                        >
+                          <CheckCircle2 size={15} />
+                          Confirmar
+                        </button>
+                      )}
                       <button
                         onClick={() => openSwap(line)}
                         className="flex-1 flex items-center justify-center gap-1.5 border-2 border-accent-500 text-accent-600 dark:text-accent-400 dark:border-accent-500 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-all"
                       >
                         <ArrowLeftRight size={15} />
-                        Trocar
+                        {line.status === 'confirmada' ? 'Trocar novamente' : 'Trocar'}
                       </button>
                       {canManageLines && (
                         <button

@@ -308,7 +308,10 @@ def test_password_reset_expired_token_fails(sample_user):
 def test_password_reset_invalid_token_fails():
     response = client.post(
         "/auth/password-reset",
-        json={"token": "token-invalido-qualquer", "new_password": "NovaSenhaForte123!"},
+        json={
+            "token": "token-invalido-qualquer-com-tamanho-valido",
+            "new_password": "NovaSenhaForte123!",
+        },
     )
     assert response.status_code == 400
 

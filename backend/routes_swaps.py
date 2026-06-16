@@ -62,6 +62,7 @@ def build_swap_whatsapp_text(
 
 @router.get("/count", response_model=CountResponse)
 async def count_swaps(
+    vehicle: Optional[str] = None,
     vehicle_out: Optional[str] = None,
     vehicle_in: Optional[str] = None,
     schedule_date: Optional[date] = None,
@@ -70,6 +71,13 @@ async def count_swaps(
 ):
     query = db.query(Swap)
     query = apply_user_unit_scope(query, Swap.unit, current_user)
+    if vehicle:
+        query = query.filter(
+            or_(
+                Swap.vehicle_out.ilike(f"%{vehicle}%"),
+                Swap.vehicle_in.ilike(f"%{vehicle}%"),
+            )
+        )
     if vehicle_out:
         query = query.filter(Swap.vehicle_out.ilike(f"%{vehicle_out}%"))
     if vehicle_in:
@@ -157,6 +165,7 @@ async def create_swap(
 async def list_swaps(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
+    vehicle: Optional[str] = None,
     vehicle_out: Optional[str] = None,
     vehicle_in: Optional[str] = None,
     driver_name: Optional[str] = None,
@@ -169,6 +178,13 @@ async def list_swaps(
 ):
     query = db.query(Swap).order_by(Swap.created_at.desc())
     query = apply_user_unit_scope(query, Swap.unit, current_user)
+    if vehicle:
+        query = query.filter(
+            or_(
+                Swap.vehicle_out.ilike(f"%{vehicle}%"),
+                Swap.vehicle_in.ilike(f"%{vehicle}%"),
+            )
+        )
     if vehicle_out:
         query = query.filter(Swap.vehicle_out.ilike(f"%{vehicle_out}%"))
     if vehicle_in:

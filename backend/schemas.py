@@ -61,6 +61,7 @@ class UserAdminUpdate(BaseModel):
     units: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+    is_super_admin: Optional[bool] = None
     can_delete_history: Optional[bool] = None
     must_change_password: Optional[bool] = None
 
@@ -73,6 +74,7 @@ class UserResponse(BaseModel):
     name: str
     role: UserRole
     is_active: bool
+    is_super_admin: bool = False
     must_change_password: bool
     can_delete_history: bool
     has_full_access: bool = False
@@ -100,13 +102,13 @@ class PasswordResetRequest(BaseModel):
 
 
 class PasswordReset(BaseModel):
-    token: str
-    new_password: str = Field(..., min_length=8)
+    token: str = Field(..., min_length=32, max_length=256)
+    new_password: str = Field(..., min_length=12, max_length=128)
 
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=12, max_length=128)
 
 
 class MfaSetupResponse(BaseModel):

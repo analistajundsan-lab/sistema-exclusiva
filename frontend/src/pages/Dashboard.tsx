@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
 import { DEFAULT_OPERATION_DATE } from '../config/demo'
@@ -63,25 +63,29 @@ export function Dashboard() {
     })
   }, [selectedDate])
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     const [dash, inc, swp] = await Promise.all([
       api.get<DashboardTurns>('/schedule/dashboard-turns', { params: { schedule_date: selectedDate } }),
       api.get('/incidents/count', { params: { today: selectedDate === TODAY ? 'true' : undefined } }),
-      api.get('/swaps/count'),
+      api.get('/swaps/count', { params: { schedule_date: selectedDate } }),
     ])
     setDashboard(dash.data)
     setDayStats({
       ocorrencias_hoje: inc.data.total,
       trocas_hoje: swp.data.total,
     })
-  }
+  }, [selectedDate])
 
   useEffect(() => {
     setLoading(true)
     loadStats()
       .catch(() => setDashboard(null))
       .finally(() => setLoading(false))
-  }, [selectedDate])
+    const interval = window.setInterval(() => {
+      loadStats().catch(() => setDashboard(null))
+    }, 8000)
+    return () => window.clearInterval(interval)
+  }, [loadStats])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -246,9 +250,9 @@ function TurnCard({ turn }: { turn: TurnStats }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-        <Metric label="Entradas" value={turn.entrada} />
-        <Metric label="Saidas" value={turn.saida} />
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <StatusMetric label="Confirmadas" value={confirmed} detail={`E ${turn.confirmed_entrada} | S ${turn.confirmed_saida}`} tone="green" />
+        <StatusMetric label="Pendentes" value={turn.total - confirmed} detail={`E ${turn.pending_entrada} | S ${turn.pending_saida}`} tone="gray" />
       </div>
 
       <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
@@ -256,14 +260,8 @@ function TurnCard({ turn }: { turn: TurnStats }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <div className="bg-green-50 dark:bg-green-900/20 rounded p-2">
-          <p className="text-green-700 dark:text-green-300 font-semibold">Confirmadas</p>
-          <p className="text-gray-600 dark:text-gray-300">E {turn.confirmed_entrada} | S {turn.confirmed_saida}</p>
-        </div>
-        <div className="bg-gray-50 dark:bg-gray-700 rounded p-2">
-          <p className="text-gray-700 dark:text-gray-200 font-semibold">Pendentes</p>
-          <p className="text-gray-600 dark:text-gray-300">E {turn.pending_entrada} | S {turn.pending_saida}</p>
-        </div>
+        <Metric label="Entradas" value={turn.entrada} />
+        <Metric label="Saidas" value={turn.saida} />
       </div>
     </div>
   )
@@ -287,6 +285,19 @@ function Metric({ label, value }: { label: string; value: number }) {
     <div className="bg-gray-50 dark:bg-gray-700 rounded p-2">
       <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
       <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{value}</p>
+    </div>
+  )
+}
+
+function StatusMetric({ label, value, detail, tone }: { label: string; value: number; detail: string; tone: 'green' | 'gray' }) {
+  const classes = tone === 'green'
+    ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+    : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
+  return (
+    <div className={`${classes} rounded p-2 min-h-[76px]`}>
+      <p className="text-xs font-semibold">{label}</p>
+      <p className="text-2xl font-black leading-tight">{value}</p>
+      <p className="text-xs text-gray-600 dark:text-gray-300">{detail}</p>
     </div>
   )
 }
