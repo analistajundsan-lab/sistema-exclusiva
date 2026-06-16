@@ -50,6 +50,9 @@ export function OnCall() {
   const [swapDriver, setSwapDriver] = useState('')
   const [swapReason, setSwapReason] = useState('')
   const [swapSaving, setSwapSaving] = useState(false)
+  const [relatedLines, setRelatedLines] = useState<ScheduleLine[]>([])
+  const [relatedLoading, setRelatedLoading] = useState(false)
+  const [selectedRelatedIds, setSelectedRelatedIds] = useState<number[]>([])
 
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -88,12 +91,32 @@ export function OnCall() {
     }
   }
 
-  const openSwap = (line: ScheduleLine) => {
+  const openSwap = async (line: ScheduleLine) => {
     setSwapOpenId(line.id)
     setSwapVehicle('')
     setSwapDriver('')
     setSwapReason('')
+    setRelatedLines([])
+    setSelectedRelatedIds([])
     setActionError(null)
+    setRelatedLoading(true)
+    try {
+      const res = await client.get<ScheduleLine[]>('/schedule/lines', {
+        params: {
+          schedule_date: filters.schedule_date,
+          unit: line.unit,
+          prefix_code: line.prefix_code,
+          limit: 500,
+        },
+      })
+      setRelatedLines(
+        res.data.filter(item => item.id !== line.id && item.status !== 'cancelada'),
+      )
+    } catch {
+      setActionError('Nao foi possivel carregar as outras linhas deste prefixo.')
+    } finally {
+      setRelatedLoading(false)
+    }
   }
 
   const handleCreateSwap = async (line: ScheduleLine) => {
@@ -101,25 +124,33 @@ export function OnCall() {
     setSwapSaving(true)
     setActionError(null)
     try {
-      // 1. Confirmar a linha
-      await pending.confirmLine(line.id)
-      // 2. Registrar a troca
-      await swapsList.createSwap({
-        schedule_line_id: line.id,
-        schedule_date: filters.schedule_date,
-        vehicle_out: line.prefix_code,
-        vehicle_in: swapVehicle.trim() || undefined,
-        driver_out: line.driver_name,
-        driver_in: swapDriver.trim() || undefined,
-        reason: swapReason || undefined,
-        lines_covered: `${line.direction} - ${line.line_code}`,
-      } as any)
+      const linesToSwap = [
+        line,
+        ...relatedLines.filter(item => selectedRelatedIds.includes(item.id)),
+      ]
+      for (const item of linesToSwap) {
+        if (item.status !== 'confirmada') {
+          await pending.confirmLine(item.id)
+        }
+        await swapsList.createSwap({
+          schedule_line_id: item.id,
+          schedule_date: filters.schedule_date,
+          vehicle_out: item.prefix_code,
+          vehicle_in: swapVehicle.trim() || undefined,
+          driver_out: item.driver_name,
+          driver_in: swapDriver.trim() || undefined,
+          reason: swapReason || undefined,
+          lines_covered: `${item.direction} - ${item.line_code}`,
+        } as any)
+      }
       await pending.refetch(pendingFilters, 0)
       setSwapOpenId(null)
       setSwapVehicle('')
       setSwapDriver('')
       setSwapReason('')
-      setActionMessage('Troca registrada! Copie o texto no painel lateral para enviar no WhatsApp.')
+      setRelatedLines([])
+      setSelectedRelatedIds([])
+      setActionMessage(`${linesToSwap.length} troca(s) registrada(s)! Copie o texto no painel lateral para enviar no WhatsApp.`)
     } catch (e: any) {
       setActionError(e?.response?.data?.detail || 'Não foi possível registrar a troca.')
     } finally {
@@ -432,6 +463,45 @@ export function OnCall() {
                           placeholder="Motorista substituto (opcional)"
                           className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         />
+                      </div>
+                      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-white/70 dark:bg-gray-800/60 p-3">
+                        <p className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide">
+                          Outras linhas do prefixo {line.prefix_code}
+                        </p>
+                        {relatedLoading && (
+                          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Carregando sequencia...</p>
+                        )}
+                        {!relatedLoading && relatedLines.length === 0 && (
+                          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                            Nenhuma outra linha deste carro para a data/unidade selecionada.
+                          </p>
+                        )}
+                        {!relatedLoading && relatedLines.length > 0 && (
+                          <div className="mt-2 space-y-1.5">
+                            {relatedLines.map(item => (
+                              <label
+                                key={item.id}
+                                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-amber-100/70 dark:hover:bg-amber-900/20"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRelatedIds.includes(item.id)}
+                                  onChange={e => {
+                                    setSelectedRelatedIds(prev =>
+                                      e.target.checked
+                                        ? [...prev, item.id]
+                                        : prev.filter(id => id !== item.id),
+                                    )
+                                  }}
+                                />
+                                <span className="font-mono font-semibold">L - {item.line_code}</span>
+                                <span>{item.direction}</span>
+                                <span>{item.start_time} - {item.end_time}</span>
+                                <span className="text-gray-400 dark:text-gray-500">{item.status}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <button

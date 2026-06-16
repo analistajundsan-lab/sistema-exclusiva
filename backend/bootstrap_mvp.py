@@ -135,6 +135,9 @@ def migrate_existing_sqlite() -> None:
         ensure_column("incidents", "sst_forwarded_at", "sst_forwarded_at TIMESTAMP")
         ensure_column("incidents", "sst_forwarded_by", "sst_forwarded_by INTEGER")
         ensure_column(
+            "incidents", "replacement_prefix", "replacement_prefix VARCHAR(20)"
+        )
+        ensure_column(
             "incidents", "sst_forward_reason", "sst_forward_reason VARCHAR(500)"
         )
         ensure_column(

@@ -151,6 +151,7 @@ class Incident(Base):
     line = Column(String(50), index=True)
     direction = Column(String(50))
     victim_status = Column(String(20))
+    replacement_prefix = Column(String(20), index=True)
     unit = Column(String(80), index=True)
     status = Column(
         Enum(IncidentStatus), default=IncidentStatus.ABERTO, nullable=False, index=True

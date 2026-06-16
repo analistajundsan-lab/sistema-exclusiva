@@ -9,6 +9,7 @@ from models import Base, User, Incident, Swap, get_db, UserRole
 from auth import hash_password
 import hashlib
 import re
+from datetime import datetime, timedelta, timezone
 
 TEST_DB = "sqlite:///./test_phase2.db"
 engine = create_engine(TEST_DB, connect_args={"check_same_thread": False})
@@ -304,7 +305,7 @@ class TestChecklist:
         )
         assert response.status_code == 403
 
-    def test_delete_incident_supervisor(self, auth_token, supervisor_token):
+    def test_delete_incident_admin(self, auth_token, admin_token):
         create_resp = client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
@@ -314,9 +315,52 @@ class TestChecklist:
 
         response = client.delete(
             f"/incidents/{incident_id}",
-            headers={"Authorization": f"Bearer {supervisor_token}"},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 204
+
+    def test_incident_replacement_prefix_in_whatsapp_text(self, auth_token):
+        create_resp = client.post(
+            "/incidents/",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "prefix_code": "2910",
+                "incident_type": "Avaria",
+                "replacement_prefix": "1590",
+            },
+        )
+        incident_id = create_resp.json()["id"]
+
+        response = client.get(
+            f"/incidents/{incident_id}/whatsapp/text",
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+
+        assert response.status_code == 200
+        assert "Substituto: 1590" in response.json()["text"]
+
+    def test_incident_owner_cannot_edit_after_two_hours(self, auth_token):
+        create_resp = client.post(
+            "/incidents/",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"prefix_code": "VP-001", "incident_type": "Avaria"},
+        )
+        incident_id = create_resp.json()["id"]
+        db = TestingSessionLocal()
+        try:
+            incident = db.query(Incident).filter(Incident.id == incident_id).one()
+            incident.created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+            db.commit()
+        finally:
+            db.close()
+
+        response = client.put(
+            f"/incidents/{incident_id}",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"incident_type": "Acidente"},
+        )
+
+        assert response.status_code == 403
 
     def test_create_incident_unauthorized(self):
         response = client.post(

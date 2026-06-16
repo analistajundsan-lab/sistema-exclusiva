@@ -1,14 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
-import { useIncidents } from '../hooks/useIncidents'
-import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react'
+import { Incident, useIncidents } from '../hooks/useIncidents'
+import { useAuthStore } from '../store/auth'
+import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, MessageCircle, Pencil, Trash2 } from 'lucide-react'
+
+const emptyForm = {
+  prefix_code: '',
+  incident_type: '',
+  line: '',
+  direction: '',
+  description: '',
+  victim_status: '',
+  replacement_prefix: '',
+}
 
 export function Incidents() {
-  const { incidents, loading, error, total, page, totalPages, setPage, createIncident } = useIncidents()
+  const { incidents, loading, error, total, page, totalPages, setPage, createIncident, updateIncident, deleteIncident, fetchIncidents, filters } = useIncidents()
+  const role = useAuthStore(s => s.role)
+  const userId = useAuthStore(s => s.userId)
+  const hasFullAccess = useAuthStore(s => s.hasFullAccess)
   const [modal, setModal] = useState(false)
-  const [form, setForm] = useState({ prefix_code: '', incident_type: '', line: '', direction: '', description: '', victim_status: '' })
+  const [editing, setEditing] = useState<Incident | null>(null)
+  const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [whatsAppMenu, setWhatsAppMenu] = useState<number | 'new' | null>(null)
 
   const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -19,6 +35,7 @@ export function Incidents() {
     line?: string
     direction?: string
     victim_status?: string
+    replacement_prefix?: string
     description?: string
   }) => {
     const parts = [
@@ -28,14 +45,55 @@ export function Incidents() {
     ]
     if (incident.line) parts.push(`Linha: ${incident.line}`)
     if (incident.direction) parts.push(`Sentido: ${incident.direction}`)
+    if (incident.replacement_prefix) parts.push(`Substituto: ${incident.replacement_prefix}`)
     if (incident.victim_status === 'com_vitimas') parts.push('Vitimas: com vitimas')
     if (incident.victim_status === 'sem_vitimas') parts.push('Vitimas: sem vitimas')
     if (incident.description) parts.push('', incident.description)
     return parts.join('\n')
   }
 
-  const sendWhatsApp = (text: string) => {
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      fetchIncidents(filters, page * 20, true)
+    }, 8000)
+    return () => window.clearInterval(interval)
+  }, [fetchIncidents, filters, page])
+
+  const sendWhatsApp = (text: string, kind: 'personal' | 'business' = 'personal') => {
+    const encoded = encodeURIComponent(text)
+    const url = kind === 'business'
+      ? `whatsapp://send?text=${encoded}`
+      : `https://wa.me/?text=${encoded}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setWhatsAppMenu(null)
+  }
+
+  const canEdit = (incident: Incident) => {
+    if (hasFullAccess || role === 'admin') return true
+    if (incident.created_by !== userId) return false
+    return Date.now() - new Date(incident.created_at).getTime() <= 2 * 60 * 60 * 1000
+  }
+
+  const openCreate = () => {
+    setEditing(null)
+    setForm(emptyForm)
+    setFormError(null)
+    setModal(true)
+  }
+
+  const openEdit = (incident: Incident) => {
+    setEditing(incident)
+    setForm({
+      prefix_code: incident.prefix_code || '',
+      incident_type: incident.incident_type || '',
+      line: incident.line || '',
+      direction: incident.direction || '',
+      description: incident.description || '',
+      victim_status: incident.victim_status || '',
+      replacement_prefix: incident.replacement_prefix || '',
+    })
+    setFormError(null)
+    setModal(true)
   }
 
   const handleSubmit = async (sendAfterSave = false) => {
@@ -46,15 +104,29 @@ export function Incidents() {
     setSaving(true)
     setFormError(null)
     try {
-      const created = await createIncident({ ...form, status: 'aberto' } as any)
+      const payload = {
+        ...form,
+        replacement_prefix: form.replacement_prefix.trim() || undefined,
+        status: 'aberto',
+      } as any
+      const saved = editing
+        ? await updateIncident(editing.id, payload)
+        : await createIncident(payload)
       setModal(false)
-      setForm({ prefix_code: '', incident_type: '', line: '', direction: '', description: '', victim_status: '' })
-      if (sendAfterSave) sendWhatsApp(incidentText(created))
+      setEditing(null)
+      setForm(emptyForm)
+      await fetchIncidents(filters, page * 20)
+      if (sendAfterSave) sendWhatsApp(incidentText(saved))
     } catch (e: any) {
       setFormError(e?.response?.data?.detail || 'Erro ao registrar ocorrência.')
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleDelete = async (incident: Incident) => {
+    if (!confirm('Apagar esta ocorrencia?')) return
+    await deleteIncident(incident.id)
   }
 
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
@@ -79,7 +151,7 @@ export function Incidents() {
           <p className="text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5">{today}</p>
         </div>
         <button
-          onClick={() => setModal(true)}
+          onClick={openCreate}
           className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all"
         >
           <Plus size={16} />
@@ -127,17 +199,20 @@ export function Incidents() {
                     Descrição
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Substituto
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     <div className="flex items-center gap-1.5"><Clock size={12} /> Horário</div>
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    WhatsApp
+                    Acoes
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
                 {incidents.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">
+                    <td colSpan={8} className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">
                       <AlertTriangle size={24} className="mx-auto mb-2 opacity-30" />
                       Nenhuma ocorrência registrada hoje.
                     </td>
@@ -165,18 +240,63 @@ export function Incidents() {
                       {i.description || <span className="text-gray-300 dark:text-gray-600">—</span>}
                     </td>
                     <td className="px-5 py-3.5">
+                      {i.replacement_prefix ? (
+                        <span className="font-mono font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-lg text-xs">
+                          {i.replacement_prefix}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 dark:text-gray-600">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5">
                       <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
                         {new Date(i.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <button
-                        onClick={() => sendWhatsApp(incidentText(i))}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-xs font-semibold"
-                      >
-                        <MessageCircle size={12} />
-                        WhatsApp
-                      </button>
+                      <div className="relative flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => setWhatsAppMenu(whatsAppMenu === i.id ? null : i.id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-xs font-semibold"
+                        >
+                          <MessageCircle size={12} />
+                          WhatsApp
+                        </button>
+                        {canEdit(i) && (
+                          <button
+                            onClick={() => openEdit(i)}
+                            className="inline-flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 p-1.5"
+                            title="Editar ocorrencia"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {(hasFullAccess || role === 'admin') && (
+                          <button
+                            onClick={() => handleDelete(i)}
+                            className="inline-flex items-center justify-center rounded-lg bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 p-1.5"
+                            title="Apagar ocorrencia"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                        {whatsAppMenu === i.id && (
+                          <div className="absolute right-0 top-8 z-10 min-w-44 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg p-1">
+                            <button
+                              onClick={() => sendWhatsApp(incidentText(i), 'personal')}
+                              className="block w-full text-left rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              WhatsApp pessoal
+                            </button>
+                            <button
+                              onClick={() => sendWhatsApp(incidentText(i), 'business')}
+                              className="block w-full text-left rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              WhatsApp Business
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -217,10 +337,10 @@ export function Incidents() {
             <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-white">
                 <AlertTriangle size={18} />
-                <h2 className="text-base font-bold">Registrar Ocorrência</h2>
+                <h2 className="text-base font-bold">{editing ? 'Editar Ocorrencia' : 'Registrar Ocorrência'}</h2>
               </div>
               <button
-                onClick={() => { setModal(false); setFormError(null) }}
+                onClick={() => { setModal(false); setEditing(null); setFormError(null) }}
                 className="text-red-200 hover:text-white transition-colors"
               >
                 <X size={18} />
@@ -295,6 +415,18 @@ export function Incidents() {
                       <option value="EM DESLOCAMENTO">EM DESLOCAMENTO</option>
                     </select>
                   </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                      Prefixo substituto
+                    </label>
+                    <input
+                      name="replacement_prefix"
+                      value={form.replacement_prefix}
+                      onChange={handle}
+                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      placeholder="Opcional"
+                    />
+                  </div>
                 </div>
 
                 {form.incident_type === 'Acidente' && (
@@ -331,7 +463,7 @@ export function Incidents() {
 
                 <div className="flex gap-2 justify-end pt-1">
                   <button
-                    onClick={() => { setModal(false); setFormError(null) }}
+                    onClick={() => { setModal(false); setEditing(null); setFormError(null) }}
                     className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-all"
                   >
                     Cancelar
@@ -342,7 +474,7 @@ export function Incidents() {
                     className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all disabled:opacity-50"
                   >
                     <Plus size={15} />
-                    {saving ? 'Registrando...' : 'Registrar'}
+                    {saving ? 'Salvando...' : editing ? 'Salvar' : 'Registrar'}
                   </button>
                   <button
                     onClick={() => handleSubmit(true)}

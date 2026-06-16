@@ -11,6 +11,8 @@ export interface Incident {
   line?: string
   direction?: string
   victim_status?: string
+  replacement_prefix?: string
+  unit?: string
   status: IncidentStatus
   created_by: number
   created_at: string
@@ -41,8 +43,8 @@ export function useIncidents(initialFilters?: IncidentFilters) {
     return p
   }
 
-  const fetchIncidents = useCallback(async (f = filters, skip = page * PAGE_SIZE) => {
-    setLoading(true)
+  const fetchIncidents = useCallback(async (f = filters, skip = page * PAGE_SIZE, silent = false) => {
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const params = buildParams(f, skip)
@@ -55,7 +57,7 @@ export function useIncidents(initialFilters?: IncidentFilters) {
     } catch {
       setError('Erro ao carregar ocorrências')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [filters, page])
 

@@ -1,4 +1,4 @@
-from datetime import date as date_type, datetime
+from datetime import date as date_type, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from auth import (
     get_current_user,
-    require_role,
     apply_user_unit_scope,
     ensure_unit_access,
 )
@@ -29,6 +28,8 @@ def format_incident_whatsapp_text(incident: Incident) -> str:
         parts.append(f"Linha: {incident.line}")
     if incident.direction:
         parts.append(f"Sentido: {incident.direction}")
+    if incident.replacement_prefix:
+        parts.append(f"Substituto: {incident.replacement_prefix}")
     if incident.victim_status == "com_vitimas":
         parts.append("Vitimas: com vitimas")
     elif incident.victim_status == "sem_vitimas":
@@ -36,6 +37,21 @@ def format_incident_whatsapp_text(incident: Incident) -> str:
     if incident.description:
         parts.extend(["", incident.description])
     return "\n".join(parts)
+
+
+def can_manage_all_incidents(user: User) -> bool:
+    return getattr(user, "has_full_access", False) or user.role == UserRole.ADMIN
+
+
+def can_edit_incident(user: User, incident: Incident) -> bool:
+    if can_manage_all_incidents(user):
+        return True
+    if incident.created_by != user.id or incident.created_at is None:
+        return False
+    created_at = incident.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - created_at <= timedelta(hours=2)
 
 
 @router.get("/count", response_model=CountResponse)
@@ -165,7 +181,7 @@ async def update_incident(
             status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada"
         )
     ensure_unit_access(current_user, incident.unit)
-    if current_user.role != UserRole.ADMIN and incident.created_by != current_user.id:
+    if not can_edit_incident(current_user, incident):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão"
         )
@@ -189,12 +205,17 @@ async def update_incident(
 async def delete_incident(
     incident_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ADMIN)),
+    current_user: User = Depends(get_current_user),
 ):
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Ocorrência não encontrada"
+        )
+    ensure_unit_access(current_user, incident.unit)
+    if not can_manage_all_incidents(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissao"
         )
     db.add(
         AuditLog(

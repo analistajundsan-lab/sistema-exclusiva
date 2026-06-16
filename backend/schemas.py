@@ -157,6 +157,7 @@ class IncidentCreate(BaseModel):
     line: Optional[str] = None
     direction: Optional[str] = None
     victim_status: Optional[str] = None
+    replacement_prefix: Optional[str] = Field(None, max_length=20)
     unit: Optional[str] = Field(None, max_length=80)
     status: IncidentStatus = IncidentStatus.ABERTO
 
@@ -168,6 +169,7 @@ class IncidentUpdate(BaseModel):
     line: Optional[str] = None
     direction: Optional[str] = None
     victim_status: Optional[str] = None
+    replacement_prefix: Optional[str] = Field(None, max_length=20)
     status: Optional[IncidentStatus] = None
 
 
@@ -181,6 +183,7 @@ class IncidentResponse(BaseModel):
     line: Optional[str] = None
     direction: Optional[str] = None
     victim_status: Optional[str] = None
+    replacement_prefix: Optional[str] = None
     unit: Optional[str] = None
     status: IncidentStatus = IncidentStatus.ABERTO
     sst_forwarded: bool = False
