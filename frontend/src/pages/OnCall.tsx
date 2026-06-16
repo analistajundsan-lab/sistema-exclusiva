@@ -43,6 +43,11 @@ export function OnCall() {
   const pending = useSchedule(pendingFilters)
   const swapsList = useSwaps({ unit: filters.unit, schedule_date: filters.schedule_date })
   const canManageLines = hasFullAccess || role === 'admin' || role === 'gerente' || role === 'supervisao' || role === 'supervisor'
+  // Apenas admin/acesso total escolhe a unidade. Plantonista fica travado na
+  // garagem cadastrada (a unica do seu perfil).
+  const canChooseUnit = hasFullAccess || role === 'admin'
+  const unitOptions = canChooseUnit ? ALL_UNITS : availableUnits
+  const unitLocked = !canChooseUnit && availableUnits.length <= 1
 
   // Estado do card com troca inline aberta
   const [swapOpenId, setSwapOpenId] = useState<number | null>(null)
@@ -65,6 +70,14 @@ export function OnCall() {
     event.preventDefault()
     pending.applyFilters(pendingFilters)
   }
+
+  // Trava a unidade na garagem do plantonista (mesmo se o perfil carregar
+  // depois do primeiro render ou se o filtro tiver outra unidade salva).
+  useEffect(() => {
+    if (!canChooseUnit && availableUnits.length > 0 && !availableUnits.includes(filters.unit || '')) {
+      setFilters(s => ({ ...s, unit: availableUnits[0] }))
+    }
+  }, [canChooseUnit, availableUnits, filters.unit])
 
   useEffect(() => {
     swapsList.applyFilters({ unit: filters.unit, schedule_date: filters.schedule_date })
@@ -244,13 +257,23 @@ export function OnCall() {
           </label>
           <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Unidade
-            <select
-              value={filters.unit || ''}
-              onChange={e => setFilters(s => ({ ...s, unit: e.target.value }))}
-              className="mt-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-normal"
-            >
-              {(hasFullAccess || role === 'admin' ? ALL_UNITS : availableUnits).map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
+            {unitLocked ? (
+              <div
+                title="Garagem vinculada ao seu cadastro"
+                className="mt-1.5 flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700/60 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-xl px-3 py-2.5 text-sm w-full font-semibold"
+              >
+                <MapPin size={14} className="text-brand-600 dark:text-brand-400 shrink-0" />
+                {filters.unit || availableUnits[0]}
+              </div>
+            ) : (
+              <select
+                value={filters.unit || ''}
+                onChange={e => setFilters(s => ({ ...s, unit: e.target.value }))}
+                className="mt-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-normal"
+              >
+                {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            )}
           </label>
           <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Linha
