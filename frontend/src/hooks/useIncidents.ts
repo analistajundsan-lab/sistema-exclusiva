@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import api from '../api/client'
+import api, { apiErrorMessage } from '../api/client'
 
 export type IncidentStatus = 'aberto' | 'em_andamento' | 'fechado'
 
@@ -54,8 +54,8 @@ export function useIncidents(initialFilters?: IncidentFilters) {
       ])
       setIncidents(listRes.data)
       setTotal(countRes.data.total)
-    } catch {
-      setError('Erro ao carregar ocorrências')
+    } catch (err: any) {
+      if (!silent) setError(apiErrorMessage(err, 'Erro ao carregar ocorrencias'))
     } finally {
       if (!silent) setLoading(false)
     }

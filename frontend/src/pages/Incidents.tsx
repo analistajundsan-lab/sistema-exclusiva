@@ -18,6 +18,7 @@ export function Incidents() {
   const { incidents, loading, error, total, page, totalPages, setPage, createIncident, updateIncident, deleteIncident, fetchIncidents, filters } = useIncidents()
   const role = useAuthStore(s => s.role)
   const userId = useAuthStore(s => s.userId)
+  const userUnit = useAuthStore(s => s.userUnit)
   const hasFullAccess = useAuthStore(s => s.hasFullAccess)
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState<Incident | null>(null)
@@ -106,6 +107,7 @@ export function Incidents() {
     try {
       const payload = {
         ...form,
+        unit: userUnit || undefined,
         replacement_prefix: form.replacement_prefix.trim() || undefined,
         status: 'aberto',
       } as any

@@ -154,6 +154,7 @@ def test_create_and_list_incident(client_with_db):
             "email": "inc@exclusiva.com",
             "name": "Inc User",
             "password": "SenhaForte5678!",
+            "unit": "Caieiras",
         },
     )
     token_resp = client_with_db.post(

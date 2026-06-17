@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Header, Request, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from jose import JWTError, jwt
 import hashlib
 import hmac
@@ -46,6 +47,36 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 RESET_TOKEN_TTL_MINUTES = 30
 logger = logging.getLogger(__name__)
+
+MULTI_UNIT_ROLES = {
+    UserRole.PLANTONISTA,
+    UserRole.ANALISTA,
+    UserRole.TECNICO_SEGURANCA,
+    UserRole.ENGENHEIRO_SEGURANCA,
+}
+
+
+def _split_units(units: str | None) -> list[str]:
+    if not units:
+        return []
+    return [item.strip() for item in units.split(",") if item.strip()]
+
+
+def _validate_user_unit_scope(role: UserRole, unit: str | None, units: str | None) -> None:
+    if role in (UserRole.ADMIN, UserRole.GERENTE, UserRole.SUPERVISAO, UserRole.SUPERVISOR):
+        return
+    if role in MULTI_UNIT_ROLES:
+        if not _split_units(units) and not (unit and unit.strip()):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Selecione ao menos uma unidade para este perfil",
+            )
+        return
+    if not unit or not unit.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Selecione a unidade do usuario",
+        )
 
 
 def _hash_cpf_legacy(cpf: str) -> str:
@@ -300,6 +331,8 @@ async def register(request: UserCreate, req: Request, db: Session = Depends(get_
         name=request.name,
         password_hash=hash_password(request.password),
         role=UserRole.OPERATOR,
+        unit=request.unit,
+        units=request.units,
         must_change_password=request.must_change_password,
     )
     db.add(user)
@@ -317,15 +350,29 @@ async def create_user_by_admin(
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     validate_password_policy(request.password)
+    _validate_user_unit_scope(request.role, request.unit, request.units)
     existing, _ = find_user_by_cpf(db, request.cpf)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="CPF ja cadastrado"
         )
 
+    # E-mail e UNIQUE no banco: checa antes para devolver 400 claro em vez de
+    # estourar IntegrityError -> 500 ("erro de servidor") numa segunda tentativa.
+    email_clean = (request.email or "").strip()
+    if email_clean:
+        email_conflict = (
+            db.query(User).filter(func.lower(User.email) == email_clean.lower()).first()
+        )
+        if email_conflict:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="E-mail ja cadastrado para outro usuario",
+            )
+
     user = User(
         cpf_hash=hash_cpf(request.cpf),
-        email=request.email,
+        email=email_clean or request.email,
         name=request.name,
         password_hash=hash_password(request.password),
         role=request.role,
@@ -335,16 +382,23 @@ async def create_user_by_admin(
         can_delete_history=False,
     )
     db.add(user)
-    db.flush()
-    db.add(
-        AuditLog(
-            user_id=current_user.id,
-            action="ADMIN_CREATE_USER",
-            resource="user",
-            resource_id=user.id,
+    try:
+        db.flush()
+        db.add(
+            AuditLog(
+                user_id=current_user.id,
+                action="ADMIN_CREATE_USER",
+                resource="user",
+                resource_id=user.id,
+            )
         )
-    )
-    db.commit()
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CPF ou e-mail ja cadastrado",
+        )
     db.refresh(user)
     return user
 
@@ -889,6 +943,11 @@ async def admin_update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    next_role = body.role if body.role is not None else user.role
+    next_unit = body.unit if body.unit is not None else user.unit
+    next_units = body.units if body.units is not None else user.units
+    _validate_user_unit_scope(next_role, next_unit, next_units)
 
     if body.name is not None:
         user.name = body.name

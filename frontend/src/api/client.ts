@@ -27,6 +27,33 @@ function clearAuth() {
   localStorage.removeItem('role')
 }
 
+export function apiErrorMessage(err: any, fallback: string): string {
+  const status = err?.response?.status
+  const detail = err?.response?.data?.detail
+
+  if (typeof detail === 'string') {
+    if (detail.includes('Troca de senha obrigatoria')) {
+      return 'Senha temporaria: defina uma nova senha antes de acessar escala e ocorrencias.'
+    }
+    if (detail.includes('Sem permissao')) {
+      return 'Seu perfil nao tem permissao para esta unidade. Peca ao administrador para revisar suas unidades.'
+    }
+    return detail
+  }
+
+  if (status === 403) {
+    return 'Acesso bloqueado para este perfil. Verifique senha temporaria, cargo e unidade cadastrada.'
+  }
+  if (status === 401) {
+    return 'Sessao expirada. Entre novamente.'
+  }
+  if (!status) {
+    return 'Sem conexao com o servidor. Verifique sua internet e tente novamente.'
+  }
+
+  return fallback
+}
+
 // Revoga a sessao server-side e limpa o cookie de refresh (best-effort).
 export async function revokeSession(): Promise<void> {
   try {

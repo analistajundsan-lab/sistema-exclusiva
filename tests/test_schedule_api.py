@@ -55,6 +55,7 @@ def create_token(cpf: str, role: UserRole) -> str:
         name=f"Test {role.value}",
         password_hash=hash_password("password123"),
         role=role,
+        unit=None if role == UserRole.ADMIN else "Caieiras",
         is_active=True,
     )
     db.add(user)

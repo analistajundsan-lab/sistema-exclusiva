@@ -53,6 +53,7 @@ def auth_token():
         name="Test Operator",
         password_hash=hash_password("password123"),
         role=UserRole.OPERATOR,
+        unit="JUNDIAI",
         is_active=True,
     )
     db.add(user)
@@ -107,6 +108,26 @@ def admin_token():
         "/auth/login", json={"cpf": "111.222.333-44", "password": "password123"}
     )
     return response.json()["access_token"]
+
+
+def test_admin_create_duplicate_email_returns_400(admin_token):
+    """E-mail duplicado deve retornar 400 claro, nunca 500 (IntegrityError)."""
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    payload = {
+        "cpf": "321.654.987-00",
+        "email": "dupadmin@test.com",
+        "name": "Primeiro Usuario",
+        "password": "SenhaForte1234!",
+        "role": "supervisao",
+    }
+    r1 = client.post("/auth/users", json=payload, headers=headers)
+    assert r1.status_code == 200, r1.text
+    r2 = client.post(
+        "/auth/users",
+        json={**payload, "cpf": "147.258.369-00", "name": "Segundo Usuario"},
+        headers=headers,
+    )
+    assert r2.status_code == 400
 
 
 class TestIncidents:

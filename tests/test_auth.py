@@ -125,6 +125,7 @@ def test_admin_creates_user_with_temporary_password():
             "name": "Plantonista",
             "password": "TempPass123!",
             "role": "operator",
+            "unit": "Caieiras",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -132,6 +133,38 @@ def test_admin_creates_user_with_temporary_password():
     data = response.json()
     assert data["role"] == "operator"
     assert data["must_change_password"] is True
+
+
+def test_admin_cannot_create_unit_scoped_user_without_unit():
+    db = TestingSessionLocal()
+    admin = User(
+        cpf_hash=hash_cpf("41637531842"),
+        email="admin@test.com",
+        name="Admin",
+        password_hash=hash_password("password123"),
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    db.add(admin)
+    db.commit()
+    db.close()
+
+    token = client.post(
+        "/auth/login", json={"cpf": "41637531842", "password": "password123"}
+    ).json()["access_token"]
+    response = client.post(
+        "/auth/users",
+        json={
+            "cpf": "33344455566",
+            "email": "plantao@test.com",
+            "name": "Plantonista",
+            "password": "TempPass123!",
+            "role": "plantonista",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 422
+    assert "unidade" in response.json()["detail"].lower()
 
 
 def test_register_duplicate_cpf(sample_user):

@@ -86,8 +86,11 @@ async def create_incident(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ensure_unit_access(current_user, body.unit)
-    incident = Incident(**body.model_dump(), created_by=current_user.id)
+    data = body.model_dump()
+    if not data.get("unit") and current_user.unit:
+        data["unit"] = current_user.unit
+    ensure_unit_access(current_user, data.get("unit"))
+    incident = Incident(**data, created_by=current_user.id)
     db.add(incident)
     db.flush()
     db.add(

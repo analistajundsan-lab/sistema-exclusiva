@@ -124,6 +124,31 @@ def test_user_cannot_create_incident_for_other_unit():
     assert resp.status_code == 403
 
 
+def test_user_without_unit_cannot_access_or_create_unit_scoped_incidents():
+    _make_user("11111111111", "CAIEIRAS")
+    _make_user("33333333333", None)
+    a = _token("11111111111")
+    no_unit = _token("33333333333")
+
+    created = client.post(
+        "/incidents/",
+        json={"prefix_code": "100", "incident_type": "Falha", "unit": "CAIEIRAS"},
+        headers={"Authorization": f"Bearer {a}"},
+    )
+    assert created.status_code == 201
+
+    scoped_list = client.get("/incidents/", headers={"Authorization": f"Bearer {no_unit}"})
+    assert scoped_list.status_code == 200
+    assert scoped_list.json() == []
+
+    denied = client.post(
+        "/incidents/",
+        json={"prefix_code": "200", "incident_type": "Falha", "unit": "CAIEIRAS"},
+        headers={"Authorization": f"Bearer {no_unit}"},
+    )
+    assert denied.status_code == 403
+
+
 def test_super_admin_sees_all_units():
     _make_user("11111111111", "CAIEIRAS")
     _make_user("99999999999", "JUNDIAI", role=UserRole.ADMIN, is_super_admin=True)

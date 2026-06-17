@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import api from '../api/client'
+import api, { apiErrorMessage } from '../api/client'
 
 export interface ScheduleLine {
   id: number
@@ -97,8 +97,8 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
       setLines(prev => JSON.stringify(prev) === JSON.stringify(listRes.data) ? prev : listRes.data)
       setTotal(prev => prev === countRes.data.total ? prev : countRes.data.total)
       setSummary(prev => JSON.stringify(prev) === JSON.stringify(summaryRes.data) ? prev : summaryRes.data)
-    } catch {
-      if (!silent) setError('Erro ao carregar escala')
+    } catch (err: any) {
+      if (!silent) setError(apiErrorMessage(err, 'Erro ao carregar escala'))
     } finally {
       if (!silent) setLoading(false)
     }
