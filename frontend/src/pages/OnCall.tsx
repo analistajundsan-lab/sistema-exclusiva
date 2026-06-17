@@ -12,6 +12,42 @@ import {
 
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
+// Copia texto de forma robusta. No iOS o navigator.clipboard rejeita quando
+// chamado depois de um await (perde o "gesto do usuario"); por isso ha o
+// fallback com textarea + execCommand. Retorna true se conseguiu copiar.
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // cai no fallback abaixo
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.top = '-1000px'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    ta.setSelectionRange(0, text.length)
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
+// Abre o WhatsApp com o texto pre-preenchido. Usa location.href (em vez de
+// window.open) porque no mobile o popup e bloqueado apos um await.
+function openWhatsApp(text: string) {
+  window.location.href = `https://wa.me/?text=${encodeURIComponent(text)}`
+}
+
 export function OnCall() {
   const userUnit = useAuthStore(s => s.userUnit)
   const userUnits = useAuthStore(s => s.userUnits)
@@ -189,39 +225,56 @@ export function OnCall() {
   }
 
   const handleCopySwap = async (text: string, id: number) => {
-    try {
-      await navigator.clipboard.writeText(text)
+    const ok = await copyToClipboard(text)
+    if (ok) {
       setCopiedId(id)
       setTimeout(() => setCopiedId(null), 2000)
-    } catch {
-      alert(text)
+    } else {
+      // Sem clipboard (iOS): abre direto o WhatsApp com o texto.
+      openWhatsApp(text)
     }
   }
 
   const handleSendWhatsApp = async () => {
+    setActionError(null)
     try {
       const params = new URLSearchParams()
       if (filters.unit) params.set('unit', filters.unit)
       if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
       const res = await client.get(`/swaps/whatsapp/text?${params}`)
       const text = res.data.text as string
-      await navigator.clipboard?.writeText(text)
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+      if (!text || res.data.total === 0) {
+        setActionError('Nenhuma troca registrada para enviar.')
+        return
+      }
+      // Nao depende de clipboard: abre o WhatsApp com o texto pre-preenchido.
+      openWhatsApp(text)
     } catch {
-      alert('Erro ao gerar texto de trocas.')
+      setActionError('Erro ao gerar texto de trocas.')
     }
   }
 
   const handleCopyAllSwaps = async () => {
+    setActionError(null)
     try {
       const params = new URLSearchParams()
       if (filters.unit) params.set('unit', filters.unit)
       if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
       const res = await client.get(`/swaps/whatsapp/text?${params}`)
-      await navigator.clipboard.writeText(res.data.text)
-      setActionMessage('Texto copiado! Cole no WhatsApp.')
+      const text = res.data.text as string
+      if (!text || res.data.total === 0) {
+        setActionError('Nenhuma troca registrada para copiar.')
+        return
+      }
+      const ok = await copyToClipboard(text)
+      if (ok) {
+        setActionMessage('Texto copiado! Cole no WhatsApp.')
+      } else {
+        // Fallback mobile: se nao deu para copiar, abre o WhatsApp com o texto.
+        openWhatsApp(text)
+      }
     } catch {
-      alert('Erro ao copiar trocas.')
+      setActionError('Erro ao gerar texto de trocas.')
     }
   }
 
