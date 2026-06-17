@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
 
+    # Web Push (VAPID). Vazio = push desabilitado (app continua funcionando).
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_SUBJECT: str = "mailto:analistajundsan@gmail.com"
+    # Antecedencia (min) em que a linha pendente dispara o push de proximidade.
+    PUSH_LEAD_MINUTES: int = 20
+
     # str field avoids pydantic-settings v2 JSON-parsing a list before validators run
     ALLOWED_ORIGINS_RAW: str = _DEFAULT_ORIGINS
     ALLOWED_ORIGIN_REGEX: str | None = None

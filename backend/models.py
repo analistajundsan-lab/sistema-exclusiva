@@ -595,6 +595,29 @@ class SaudeBeEstarCondutor(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    unit = Column(String(80), index=True)
+    endpoint = Column(Text, nullable=False, unique=True)
+    p256dh = Column(String(255), nullable=False)
+    auth = Column(String(255), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    last_used_at = Column(DateTime)
+
+
+class PushSentLine(Base):
+    """Controla quais linhas ja dispararam o push de proximidade (<20 min),
+    evitando notificacao duplicada (inclusive entre os 2 workers do uvicorn)."""
+
+    __tablename__ = "push_sent_lines"
+
+    schedule_line_id = Column(Integer, primary_key=True)
+    sent_at = Column(DateTime, server_default=func.now())
+
+
 _database_url = (
     settings.DATABASE_URL
     or "postgresql://postgres:postgres@localhost:5432/sistema_exclusiva"

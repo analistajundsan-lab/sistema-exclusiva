@@ -14,9 +14,11 @@ from routes_audit import router as audit_router
 from routes_checklist import router as checklist_router
 from routes_safety import router as safety_router
 from routes_sst import router as sst_router
+from routes_push import router as push_router
 from rate_limit import init_redis
 from metrics_middleware import metrics_middleware
 from prometheus_client import make_asgi_app
+import asyncio
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -142,6 +144,33 @@ async def startup():
     except Exception as e:
         logger.error("Limpeza de seguranca falhou (nao critico): %s", e)
 
+    # Agendador de push de proximidade (a cada 60s). Roda apenas se ha VAPID.
+    try:
+        from push_service import push_enabled
+
+        if push_enabled():
+            asyncio.create_task(push_scheduler_loop())
+            logger.info("Agendador de push iniciado")
+        else:
+            logger.info("Push desabilitado (VAPID nao configurado)")
+    except Exception as e:
+        logger.error("Falha ao iniciar agendador de push: %s", e)
+
+
+async def push_scheduler_loop():
+    from push_service import scan_and_notify
+
+    while True:
+        await asyncio.sleep(60)
+        try:
+            db = SessionLocal()
+            try:
+                scan_and_notify(db)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error("Agendador de push: erro no ciclo: %s", e)
+
 
 app.include_router(auth_router)
 app.include_router(incidents_router)
@@ -151,6 +180,7 @@ app.include_router(audit_router)
 app.include_router(checklist_router)
 app.include_router(safety_router)
 app.include_router(sst_router)
+app.include_router(push_router)
 
 
 @app.get("/health")

@@ -111,6 +111,20 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
+class PushKeys(BaseModel):
+    p256dh: str = Field(..., max_length=255)
+    auth: str = Field(..., max_length=255)
+
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str = Field(..., max_length=1000)
+    keys: PushKeys
+
+
+class PushUnsubscribe(BaseModel):
+    endpoint: str = Field(..., max_length=1000)
+
+
 class MfaSetupResponse(BaseModel):
     secret: str
     otpauth_uri: str

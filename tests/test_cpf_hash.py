@@ -63,7 +63,7 @@ def test_new_user_uses_hmac_hash():
             "cpf": "123.456.789-00",
             "email": "a@test.com",
             "name": "User A",
-            "password": "SenhaForte1234",
+            "password": "SenhaForte1234!",
             "role": "operator",
         },
     )
@@ -81,7 +81,7 @@ def test_legacy_user_can_login_and_is_rehashed():
         cpf_hash=_legacy_hash("98765432100"),
         email="leg@test.com",
         name="Legacy",
-        password_hash=hash_password("SenhaForte1234"),
+        password_hash=hash_password("SenhaForte1234!"),
         role=UserRole.OPERATOR,
         is_active=True,
     )
@@ -93,7 +93,7 @@ def test_legacy_user_can_login_and_is_rehashed():
     # Login com pepper ativo: encontra via fallback legado e funciona.
     r = client.post(
         "/auth/login",
-        json={"cpf": "987.654.321-00", "password": "SenhaForte1234"},
+        json={"cpf": "987.654.321-00", "password": "SenhaForte1234!"},
     )
     assert r.status_code == 200
 
@@ -112,7 +112,7 @@ def test_duplicate_cpf_detected_across_hash_formats():
             cpf_hash=_legacy_hash("11122233344"),
             email="dup@test.com",
             name="Dup",
-            password_hash=hash_password("SenhaForte1234"),
+            password_hash=hash_password("SenhaForte1234!"),
             role=UserRole.OPERATOR,
             is_active=True,
         )
@@ -126,7 +126,7 @@ def test_duplicate_cpf_detected_across_hash_formats():
             "cpf": "111.222.333-44",
             "email": "dup2@test.com",
             "name": "Dup Two",
-            "password": "SenhaForte1234",
+            "password": "SenhaForte1234!",
             "role": "operator",
         },
     )

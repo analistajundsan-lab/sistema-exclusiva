@@ -7,8 +7,9 @@ import { useAuthStore } from '../store/auth'
 import client from '../api/client'
 import {
   CheckCircle2, ArrowLeftRight, X, MessageCircle, Clock,
-  Bus, MapPin, User, ChevronRight, Filter,
+  Bus, MapPin, User, ChevronRight, Filter, Bell,
 } from 'lucide-react'
+import { enablePush, currentPushState, pushSupported, isIOS, isStandalone, PushState } from '../utils/push'
 
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
@@ -146,6 +147,30 @@ export function OnCall() {
   // "Tick" para recalcular as cores/contagem regressiva conforme o tempo passa
   // (o auto-refresh e silencioso e nao re-renderiza se os dados nao mudam).
   const [, setTick] = useState(0)
+
+  // Notificacoes push (alerta de linha entrando em <20 min)
+  const [pushState, setPushState] = useState<PushState>(() => currentPushState())
+  const [pushInfo, setPushInfo] = useState<string | null>(null)
+
+  const handleEnablePush = async () => {
+    setPushInfo(null)
+    const res = await enablePush()
+    if (res.ok) {
+      setPushState('granted')
+      setPushInfo('Notificações ativadas neste aparelho.')
+    } else if (res.reason === 'ios-instalar') {
+      setPushInfo('No iPhone, primeiro instale o app: toque em Compartilhar → "Adicionar à Tela de Início", abra pelo ícone e ative novamente.')
+    } else if (res.reason === 'permissao-negada') {
+      setPushState('denied')
+      setPushInfo('Permissão negada. Habilite as notificações nas configurações do navegador.')
+    } else if (res.reason === 'nao-suportado') {
+      setPushInfo('Este navegador não suporta notificações.')
+    } else if (res.reason === 'sem-vapid') {
+      setPushInfo('Push ainda não configurado no servidor.')
+    } else {
+      setPushInfo('Não foi possível ativar as notificações.')
+    }
+  }
 
   const [statusLine, setStatusLine] = useState<{ line: ScheduleLine; action: 'cancel' } | null>(null)
   const [statusReason, setStatusReason] = useState('')
@@ -436,6 +461,35 @@ export function OnCall() {
             Atualizar
           </button>
         </form>
+
+        {/* Ativar notificacoes push */}
+        {pushSupported() && pushState !== 'granted' && (
+          <div className="bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Bell size={18} className="text-brand-600 dark:text-brand-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-brand-800 dark:text-brand-300">Ative os alertas de linha</p>
+                <p className="text-xs text-brand-700 dark:text-brand-400 mt-0.5">
+                  Receba uma notificação quando uma linha pendente entrar em menos de 20 min.
+                  {isIOS() && !isStandalone() && ' No iPhone, instale o app na tela inicial antes (Compartilhar → "Adicionar à Tela de Início").'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleEnablePush}
+              className="flex items-center justify-center gap-1.5 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap shrink-0"
+            >
+              <Bell size={14} />
+              Ativar notificações
+            </button>
+          </div>
+        )}
+        {pushInfo && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 flex items-center gap-2">
+            <Bell size={16} className="text-blue-600 dark:text-blue-400 shrink-0" />
+            <p className="text-blue-700 dark:text-blue-300 text-sm">{pushInfo}</p>
+          </div>
+        )}
 
         {/* Mensagens */}
         {actionMessage && (
