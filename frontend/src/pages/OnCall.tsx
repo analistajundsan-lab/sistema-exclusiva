@@ -160,8 +160,25 @@ export function OnCall() {
           limit: 500,
         },
       })
+      // Corte por horario (Opcao A): se a escala e de hoje, mostra apenas as
+      // linhas que ainda vao comecar (inicio >= hora atual de Brasilia). Para
+      // datas futuras nada "passou", entao mostra tudo. Linhas que viram o dia
+      // (ex.: 23:25 -> 00:12) entram porque comecam no mesmo dia.
+      const spDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date())
+      const spTime = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).format(new Date())
+      const isToday = filters.schedule_date === spDate
       setRelatedLines(
-        res.data.filter(item => item.id !== line.id && item.status !== 'cancelada'),
+        res.data.filter(item =>
+          item.id !== line.id &&
+          item.status !== 'cancelada' &&
+          (!isToday || (item.start_time || '') >= spTime),
+        ),
       )
     } catch {
       setActionError('Nao foi possivel carregar as outras linhas deste prefixo.')
