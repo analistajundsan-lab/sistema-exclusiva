@@ -48,6 +48,51 @@ function openWhatsApp(text: string) {
   window.location.href = `https://wa.me/?text=${encodeURIComponent(text)}`
 }
 
+// Minutos ate o inicio da linha, no fuso de Brasilia. Calcula apenas para a
+// escala de HOJE; outras datas retornam null (sem urgencia de relogio).
+function minutesUntilStart(startTime?: string, scheduleDate?: string): number | null {
+  if (!startTime) return null
+  const now = new Date()
+  const spDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now)
+  if (scheduleDate && scheduleDate !== spDate) return null
+  const spTime = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(now)
+  const [nh, nm] = spTime.split(':').map(Number)
+  const [sh, sm] = startTime.split(':').map(Number)
+  return (sh * 60 + sm) - (nh * 60 + nm)
+}
+
+// Cor por proximidade do inicio: verde > 30 min, laranja 20-30 min, vermelho
+// (circulado) < 20 min. Sem dado de tempo (outra data) fica neutro/verde.
+function getUrgency(mins: number | null): { card: string; badge: string } {
+  if (mins !== null && mins < 20) return {
+    card: 'border-red-400 dark:border-red-600 ring-2 ring-red-500/70 animate-pulse',
+    badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
+  }
+  if (mins !== null && mins <= 30) return {
+    card: 'border-orange-300 dark:border-orange-700',
+    badge: 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300',
+  }
+  return {
+    card: 'border-green-300 dark:border-green-800',
+    badge: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
+  }
+}
+
+function countdownLabel(mins: number | null): string | null {
+  if (mins === null) return null
+  if (mins <= 0) return 'iniciando agora'
+  if (mins < 60) return `em ${mins} min`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m ? `em ${h}h${String(m).padStart(2, '0')}` : `em ${h}h`
+}
+
 export function OnCall() {
   const userUnit = useAuthStore(s => s.userUnit)
   const userUnits = useAuthStore(s => s.userUnits)
@@ -73,7 +118,7 @@ export function OnCall() {
     ...filters,
     status: lineSearch ? undefined : 'pendente',
     line_code: lineSearch || undefined,
-    ...(autoMode && !lineSearch ? { start_in_minutes: '40' } : {}),
+    ...(autoMode && !lineSearch ? { start_in_minutes: '120' } : {}),
   }), [filters, autoMode, lineSearch])
 
   const pending = useSchedule(pendingFilters)
@@ -98,6 +143,9 @@ export function OnCall() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
+  // "Tick" para recalcular as cores/contagem regressiva conforme o tempo passa
+  // (o auto-refresh e silencioso e nao re-renderiza se os dados nao mudam).
+  const [, setTick] = useState(0)
 
   const [statusLine, setStatusLine] = useState<{ line: ScheduleLine; action: 'cancel' } | null>(null)
   const [statusReason, setStatusReason] = useState('')
@@ -129,6 +177,11 @@ export function OnCall() {
     const interval = window.setInterval(refresh, 8000)
     return () => window.clearInterval(interval)
   }, [pendingFilters, filters.unit, filters.schedule_date])
+
+  useEffect(() => {
+    const t = window.setInterval(() => setTick(x => x + 1), 30000)
+    return () => window.clearInterval(t)
+  }, [])
 
   const handleConfirm = async (id: number) => {
     setActionError(null)
@@ -356,7 +409,7 @@ export function OnCall() {
             />
           </label>
           <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide flex flex-col justify-end">
-            <span className="mb-1.5">Próximas 40 min</span>
+            <span className="mb-1.5">Próximas 2 horas</span>
             <button
               type="button"
               onClick={() => {
@@ -365,7 +418,7 @@ export function OnCall() {
                 pending.applyFilters({
                   ...filters,
                   line_code: filters.line_code?.trim() || undefined,
-                  ...(next && !filters.line_code?.trim() ? { start_in_minutes: '40' } : {}),
+                  ...(next && !filters.line_code?.trim() ? { start_in_minutes: '120' } : {}),
                 })
               }}
               className={`relative inline-flex h-10 w-16 items-center rounded-xl text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 ${autoMode ? 'bg-brand-700 dark:bg-brand-600 border-brand-700' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'} border`}
@@ -425,7 +478,7 @@ export function OnCall() {
               <div>
                 <h2 className="font-bold text-gray-900 dark:text-gray-100">{lineSearch ? 'Resultado da linha' : 'Linhas pendentes'}</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {lineSearch ? `Busca pela linha ${lineSearch}.` : autoMode ? 'Iniciando nos próximos 40 min.' : 'Todas as pendentes da unidade.'}
+                  {lineSearch ? `Busca pela linha ${lineSearch}.` : autoMode ? 'Iniciando nas próximas 2 horas.' : 'Todas as pendentes da unidade.'}
                 </p>
               </div>
               {pending.total > 0 ? (
@@ -456,15 +509,19 @@ export function OnCall() {
                 <div className="text-center py-10">
                   <Bus size={28} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
                   <p className="text-sm text-gray-400 dark:text-gray-500">
-                    {lineSearch ? 'Nenhuma linha pendente encontrada para essa busca.' : autoMode ? 'Nenhuma linha iniciando nos próximos 40 min.' : 'Nenhuma linha pendente.'}
+                    {lineSearch ? 'Nenhuma linha pendente encontrada para essa busca.' : autoMode ? 'Nenhuma linha iniciando nas próximas 2 horas.' : 'Nenhuma linha pendente.'}
                   </p>
                 </div>
               )}
 
-              {pending.lines.map(line => (
+              {pending.lines.map(line => {
+                const mins = minutesUntilStart(line.start_time, filters.schedule_date)
+                const urgency = getUrgency(mins)
+                const countdown = countdownLabel(mins)
+                return (
                 <article
                   key={line.id}
-                  className="border border-gray-100 dark:border-gray-700 rounded-2xl p-4 hover:shadow-sm transition-shadow bg-gray-50/50 dark:bg-gray-700/30"
+                  className={`border ${urgency.card} rounded-2xl p-4 hover:shadow-sm transition-shadow bg-gray-50/50 dark:bg-gray-700/30`}
                 >
                   {/* Topo do card — badges */}
                   <div className="flex flex-wrap items-center gap-2.5 mb-3">
@@ -472,10 +529,15 @@ export function OnCall() {
                       <Bus size={15} />
                       L - {line.line_code}
                     </span>
-                    <span className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-base sm:text-lg font-black bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 leading-none">
+                    <span className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-base sm:text-lg font-black leading-none ${urgency.badge}`}>
                       <Clock size={15} />
                       {line.start_time} – {line.end_time}
                     </span>
+                    {countdown && (
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${urgency.badge}`}>
+                        {countdown}
+                      </span>
+                    )}
                     <span className="rounded-full px-3 py-1.5 text-sm font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
                       {line.direction}
                     </span>
@@ -622,7 +684,8 @@ export function OnCall() {
                     </div>
                   )}
                 </article>
-              ))}
+                )
+              })}
             </div>
           </section>
 
