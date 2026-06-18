@@ -79,12 +79,7 @@ def main() -> None:
         if args.nome:
             print("-" * 70)
             like = f"%{args.nome.upper()}%"
-            rows = (
-                db.query(User)
-                .filter(User.name.ilike(like))
-                .order_by(User.id)
-                .all()
-            )
+            rows = db.query(User).filter(User.name.ilike(like)).order_by(User.id).all()
             print(f"Busca por nome ~ {args.nome!r}: {len(rows)} resultado(s)")
             for r in rows:
                 casa_seguro = settings.CPF_HASH_PEPPER and r.cpf_hash == secure

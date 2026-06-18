@@ -6,6 +6,7 @@ e dispara um push para os dispositivos inscritos da MESMA unidade. O controle de
 duplicidade usa a tabela push_sent_lines (insert atomico), seguro inclusive com
 multiplos workers do uvicorn.
 """
+
 import json
 import logging
 from datetime import datetime, timedelta
@@ -103,9 +104,7 @@ def scan_and_notify(db) -> int:
             continue
 
         subs = (
-            db.query(PushSubscription)
-            .filter(PushSubscription.unit == line.unit)
-            .all()
+            db.query(PushSubscription).filter(PushSubscription.unit == line.unit).all()
         )
         if not subs:
             continue

@@ -564,8 +564,12 @@ class LiberacaoCondutor(Base):
     # ── Fase 3: respostas item a item + score/categoria/alerta ──
     respostas = Column(Text)  # JSON: [{item, categoria, impeditivo, resposta}]
     score_aptidao = Column(Integer)  # 0-100
-    categoria_bloqueio = Column(String(40), index=True)  # fisica/fadiga/psicossocial/seguranca/jornada/documental
-    alerta_fadiga = Column(String(40), index=True)  # menos_4h/4_6h/jornada_excessiva/outra_atividade_12h
+    categoria_bloqueio = Column(
+        String(40), index=True
+    )  # fisica/fadiga/psicossocial/seguranca/jornada/documental
+    alerta_fadiga = Column(
+        String(40), index=True
+    )  # menos_4h/4_6h/jornada_excessiva/outra_atividade_12h
 
     resultado = Column(
         Enum(LiberacaoStatus),

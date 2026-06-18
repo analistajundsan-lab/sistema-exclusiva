@@ -72,8 +72,15 @@ def _split_units(units: str | None) -> list[str]:
     return [item.strip() for item in units.split(",") if item.strip()]
 
 
-def _validate_user_unit_scope(role: UserRole, unit: str | None, units: str | None) -> None:
-    if role in (UserRole.ADMIN, UserRole.GERENTE, UserRole.SUPERVISAO, UserRole.SUPERVISOR):
+def _validate_user_unit_scope(
+    role: UserRole, unit: str | None, units: str | None
+) -> None:
+    if role in (
+        UserRole.ADMIN,
+        UserRole.GERENTE,
+        UserRole.SUPERVISAO,
+        UserRole.SUPERVISOR,
+    ):
         return
     if role in MULTI_UNIT_ROLES:
         if not _split_units(units) and not (unit and unit.strip()):
@@ -1050,9 +1057,9 @@ async def delete_user(
     db.query(UserSession).filter(UserSession.user_id == user_id).delete(
         synchronize_session=False
     )
-    db.query(PasswordResetToken).filter(
-        PasswordResetToken.user_id == user_id
-    ).delete(synchronize_session=False)
+    db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user_id).delete(
+        synchronize_session=False
+    )
     db.query(PushSubscription).filter(PushSubscription.user_id == user_id).delete(
         synchronize_session=False
     )

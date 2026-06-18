@@ -189,9 +189,11 @@ async def sst_dashboard(
             q = q.filter(SafetyVehicle.unit == unit)
         return q
 
-    checklists_hoje = _scoped_checklist_query().filter(
-        func.date(DriverChecklistSubmission.submitted_at) == today
-    ).count()
+    checklists_hoje = (
+        _scoped_checklist_query()
+        .filter(func.date(DriverChecklistSubmission.submitted_at) == today)
+        .count()
+    )
     veiculos_com_checklist_hoje = (
         _scoped_checklist_query()
         .filter(func.date(DriverChecklistSubmission.submitted_at) == today)
@@ -315,7 +317,9 @@ async def sst_dashboard_v2(
         return q
 
     months = _last_12_months(today)
-    fetch_start = min(d_start, prev_start, date_type(int(months[0][:4]), int(months[0][5:]), 1))
+    fetch_start = min(
+        d_start, prev_start, date_type(int(months[0][:4]), int(months[0][5:]), 1)
+    )
     sin_objs = _sin_q().filter(Sinistro.data_ocorrencia >= fetch_start).all()
 
     por_mes = {mo: 0 for mo in months}
@@ -356,11 +360,17 @@ async def sst_dashboard_v2(
             if s.cidade:
                 rk_cidade[s.cidade] = rk_cidade.get(s.cidade, 0) + 1
             if s.gravidade:
-                por_gravidade[str(s.gravidade)] = por_gravidade.get(str(s.gravidade), 0) + 1
+                por_gravidade[str(s.gravidade)] = (
+                    por_gravidade.get(str(s.gravidade), 0) + 1
+                )
             if s.fator_contribuinte:
-                por_fator[s.fator_contribuinte] = por_fator.get(s.fator_contribuinte, 0) + 1
+                por_fator[s.fator_contribuinte] = (
+                    por_fator.get(s.fator_contribuinte, 0) + 1
+                )
             if s.responsabilidade:
-                por_responsabilidade[s.responsabilidade] = por_responsabilidade.get(s.responsabilidade, 0) + 1
+                por_responsabilidade[s.responsabilidade] = (
+                    por_responsabilidade.get(s.responsabilidade, 0) + 1
+                )
             g, p = _norm15(s.gravidade), _norm15(s.probabilidade)
             if g and p:
                 matrix[(p, g)] = matrix.get((p, g), 0) + 1
@@ -380,16 +390,21 @@ async def sst_dashboard_v2(
     else:
         delta_pct = 100 if sinistros_periodo > 0 else 0
 
-    sinistros_investigacao = _sin_q().filter(
-        Sinistro.status == SinistroStatus.EM_INVESTIGACAO
-    ).count()
+    sinistros_investigacao = (
+        _sin_q().filter(Sinistro.status == SinistroStatus.EM_INVESTIGACAO).count()
+    )
 
     # ── Plano de acao (Fase 2): tarefas abertas/vencidas/concluidas ──
     acoes = []
     acoes_abertas = acoes_vencidas = acoes_concluidas = 0
     for s in sin_objs:
         st_acao = (s.status_acao or "").lower()
-        if not st_acao and not s.responsavel_acao and not s.prazo_acao and not s.tratativa_acao:
+        if (
+            not st_acao
+            and not s.responsavel_acao
+            and not s.prazo_acao
+            and not s.tratativa_acao
+        ):
             continue
         if st_acao == "concluida":
             acoes_concluidas += 1
@@ -400,17 +415,19 @@ async def sst_dashboard_v2(
         if dias_atraso > 0:
             acoes_vencidas += 1
         acoes_abertas += 1
-        acoes.append({
-            "sinistro_id": s.id,
-            "numero": s.numero,
-            "unit": s.unit,
-            "tipo": s.tipo_sinistro,
-            "responsavel": s.responsavel_acao,
-            "prazo": s.prazo_acao.isoformat() if s.prazo_acao else None,
-            "status_acao": s.status_acao or "pendente",
-            "dias_atraso": max(0, dias_atraso),
-            "gravidade": s.gravidade,
-        })
+        acoes.append(
+            {
+                "sinistro_id": s.id,
+                "numero": s.numero,
+                "unit": s.unit,
+                "tipo": s.tipo_sinistro,
+                "responsavel": s.responsavel_acao,
+                "prazo": s.prazo_acao.isoformat() if s.prazo_acao else None,
+                "status_acao": s.status_acao or "pendente",
+                "dias_atraso": max(0, dias_atraso),
+                "gravidade": s.gravidade,
+            }
+        )
     acoes.sort(key=lambda a: a["dias_atraso"], reverse=True)
 
     # ── Veiculos + conformidade de check-list ──
@@ -437,11 +454,16 @@ async def sst_dashboard_v2(
         .distinct()
         .count()
     )
-    compliance_pct = round(veic_chk_hoje / total_veiculos * 100) if total_veiculos else 0
+    compliance_pct = (
+        round(veic_chk_hoje / total_veiculos * 100) if total_veiculos else 0
+    )
 
     chk_rows = (
         _chk_q()
-        .filter(func.date(DriverChecklistSubmission.submitted_at) >= today - timedelta(days=13))
+        .filter(
+            func.date(DriverChecklistSubmission.submitted_at)
+            >= today - timedelta(days=13)
+        )
         .with_entities(
             DriverChecklistSubmission.submitted_at,
             DriverChecklistSubmission.overall_status,
@@ -493,7 +515,9 @@ async def sst_dashboard_v2(
             if getattr(lb, attr) is False:
                 bloqueio_motivos[label] += 1
         if lb.categoria_bloqueio:
-            bloqueio_categoria[lb.categoria_bloqueio] = bloqueio_categoria.get(lb.categoria_bloqueio, 0) + 1
+            bloqueio_categoria[lb.categoria_bloqueio] = (
+                bloqueio_categoria.get(lb.categoria_bloqueio, 0) + 1
+            )
         if lb.alerta_fadiga:
             alerta_fadiga[lb.alerta_fadiga] = alerta_fadiga.get(lb.alerta_fadiga, 0) + 1
 
@@ -504,7 +528,9 @@ async def sst_dashboard_v2(
     if unit:
         saude_q = saude_q.filter(SaudeBeEstarCondutor.unit == unit)
     saude_fadiga_alta = saude_q.filter(
-        func.lower(SaudeBeEstarCondutor.fadiga).in_(["alta", "alto", "critico", "critica"])
+        func.lower(SaudeBeEstarCondutor.fadiga).in_(
+            ["alta", "alto", "critico", "critica"]
+        )
     ).count()
     saude_jornada_excessiva = saude_q.filter(
         SaudeBeEstarCondutor.jornada_excessiva.is_(True)
@@ -524,11 +550,27 @@ async def sst_dashboard_v2(
     # nao-conformidade de check-list. Nao e formula oficial de risco.
     risk_score = min(
         100,
-        round(sinistros_periodo * 8 + condutores_bloqueados * 12 + (100 - compliance_pct) * 0.4),
+        round(
+            sinistros_periodo * 8
+            + condutores_bloqueados * 12
+            + (100 - compliance_pct) * 0.4
+        ),
     )
 
-    grav_labels = {1: "1-Leve", 2: "2-Moderada", 3: "3-Grave", 4: "4-Gravissima", 5: "5-Catastrofica"}
-    prob_labels = {1: "1-Rara", 2: "2-Improvavel", 3: "3-Possivel", 4: "4-Provavel", 5: "5-Frequente"}
+    grav_labels = {
+        1: "1-Leve",
+        2: "2-Moderada",
+        3: "3-Grave",
+        4: "4-Gravissima",
+        5: "5-Catastrofica",
+    }
+    prob_labels = {
+        1: "1-Rara",
+        2: "2-Improvavel",
+        3: "3-Possivel",
+        4: "4-Provavel",
+        5: "5-Frequente",
+    }
     risk_matrix = [
         {
             "probabilidade": p,
@@ -582,9 +624,7 @@ async def sst_dashboard_v2(
                 {"status": k, "total": v} for k, v in chk_por_status.items()
             ],
             "bloqueio_por_motivo": [
-                {"motivo": k, "total": v}
-                for k, v in bloqueio_motivos.items()
-                if v > 0
+                {"motivo": k, "total": v} for k, v in bloqueio_motivos.items() if v > 0
             ],
             "bloqueio_por_categoria": _top(bloqueio_categoria, "categoria", 8),
             "alerta_fadiga": _top(alerta_fadiga, "alerta", 8),
