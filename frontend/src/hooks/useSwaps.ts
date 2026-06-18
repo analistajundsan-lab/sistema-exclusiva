@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../api/client'
 
 export interface Swap {
@@ -35,6 +35,8 @@ export function useSwaps(initialFilters?: SwapFilters) {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
   const [filters, setFilters] = useState<SwapFilters>(initialFilters || {})
+  // Last-write-wins: descarta respostas obsoletas do auto-refresh (ver useSchedule).
+  const requestSeq = useRef(0)
 
   const buildParams = (f: SwapFilters, skip: number) => {
     const p: Record<string, string> = { skip: String(skip), limit: String(PAGE_SIZE) }
@@ -52,6 +54,7 @@ export function useSwaps(initialFilters?: SwapFilters) {
     opts: { silent?: boolean } = {},
   ) => {
     const { silent = false } = opts
+    const seq = ++requestSeq.current
     if (!silent) setLoading(true)
     setError(null)
     try {
@@ -60,12 +63,13 @@ export function useSwaps(initialFilters?: SwapFilters) {
         api.get('/swaps/', { params }),
         api.get('/swaps/count', { params: { ...params, skip: undefined, limit: undefined } }),
       ])
+      if (seq !== requestSeq.current) return
       setSwaps(prev => JSON.stringify(prev) === JSON.stringify(listRes.data) ? prev : listRes.data)
       setTotal(prev => prev === countRes.data.total ? prev : countRes.data.total)
     } catch {
-      if (!silent) setError('Erro ao carregar trocas')
+      if (!silent && seq === requestSeq.current) setError('Erro ao carregar trocas')
     } finally {
-      if (!silent) setLoading(false)
+      if (!silent && seq === requestSeq.current) setLoading(false)
     }
   }, [filters, page])
 

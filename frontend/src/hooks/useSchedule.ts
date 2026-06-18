@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import api, { apiErrorMessage } from '../api/client'
 
 export interface ScheduleLine {
@@ -67,6 +67,12 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
   const [error, setError] = useState<string | null>(null)
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [importPreview, setImportPreview] = useState<ScheduleImportPreview | null>(null)
+  // Sequenciador de requisicoes (last-write-wins): com o auto-refresh de 8s da
+  // tela de confirmacao, varias chamadas de fetchSchedule ficam em voo ao mesmo
+  // tempo. Sem isso, uma resposta antiga (linha ainda pendente) pode chegar
+  // depois da nova (linha ja confirmada) e sobrescrever a lista, fazendo a
+  // linha confirmada "voltar". Aqui so a requisicao mais recente aplica o estado.
+  const requestSeq = useRef(0)
 
   const paramsFrom = (f: ScheduleFilters, skip = 0) => {
     const params: Record<string, string> = { skip: String(skip), limit: String(PAGE_SIZE) }
@@ -84,6 +90,7 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     opts: { silent?: boolean } = {},
   ) => {
     const { silent = false } = opts
+    const seq = ++requestSeq.current
     if (!silent) setLoading(true)
     setError(null)
     try {
@@ -94,13 +101,16 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
         api.get('/schedule/lines/count', { params: paramsFrom(f, 0) }),
         api.get('/schedule/summary', { params: summaryParams }),
       ])
+      // Resposta obsoleta: outra requisicao mais recente ja foi disparada.
+      // Ignora para nao "ressuscitar" uma linha que ja foi confirmada.
+      if (seq !== requestSeq.current) return
       setLines(prev => JSON.stringify(prev) === JSON.stringify(listRes.data) ? prev : listRes.data)
       setTotal(prev => prev === countRes.data.total ? prev : countRes.data.total)
       setSummary(prev => JSON.stringify(prev) === JSON.stringify(summaryRes.data) ? prev : summaryRes.data)
     } catch (err: any) {
-      if (!silent) setError(apiErrorMessage(err, 'Erro ao carregar escala'))
+      if (!silent && seq === requestSeq.current) setError(apiErrorMessage(err, 'Erro ao carregar escala'))
     } finally {
-      if (!silent) setLoading(false)
+      if (!silent && seq === requestSeq.current) setLoading(false)
     }
   }, [filters, page])
 
