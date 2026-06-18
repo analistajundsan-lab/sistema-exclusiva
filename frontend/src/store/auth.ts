@@ -9,6 +9,7 @@ interface UserProfile {
   unit: string | null
   units: string | null
   has_full_access?: boolean
+  must_change_password?: boolean
 }
 
 interface AuthState {
@@ -22,8 +23,10 @@ interface AuthState {
   userUnit: string | null
   userUnits: string[] | null
   hasFullAccess: boolean
+  mustChangePassword: boolean
   setAuth: (token: string, role: string, refreshToken?: string) => void
   setUserProfile: (profile: UserProfile) => void
+  setMustChangePassword: (v: boolean) => void
   logout: () => void
 }
 
@@ -44,6 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   userUnit: localStorage.getItem('userUnit'),
   userUnits: parseUnits(localStorage.getItem('userUnits')),
   hasFullAccess: localStorage.getItem('hasFullAccess') === 'true',
+  mustChangePassword: localStorage.getItem('mustChangePassword') === 'true',
   setAuth: (token, role, refreshToken) => {
     localStorage.setItem('token', token)
     localStorage.setItem('role', role)
@@ -58,6 +62,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('userUnit', profile.unit || '')
     localStorage.setItem('userUnits', profile.units || '')
     localStorage.setItem('hasFullAccess', profile.has_full_access ? 'true' : 'false')
+    localStorage.setItem('mustChangePassword', profile.must_change_password ? 'true' : 'false')
     set({
       userId: profile.id,
       userName: profile.name,
@@ -66,7 +71,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       userUnit: profile.unit,
       userUnits: parseUnits(profile.units),
       hasFullAccess: !!profile.has_full_access,
+      mustChangePassword: !!profile.must_change_password,
     })
+  },
+  setMustChangePassword: (v) => {
+    localStorage.setItem('mustChangePassword', v ? 'true' : 'false')
+    set({ mustChangePassword: v })
   },
   logout: () => {
     // Revoga a sessao no servidor antes de limpar (best-effort).
@@ -81,6 +91,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('userUnit')
     localStorage.removeItem('userUnits')
     localStorage.removeItem('hasFullAccess')
+    localStorage.removeItem('mustChangePassword')
     set({
       token: null,
       refreshToken: null,
@@ -92,6 +103,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       userUnit: null,
       userUnits: null,
       hasFullAccess: false,
+      mustChangePassword: false,
     })
   },
 }))

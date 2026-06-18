@@ -20,6 +20,7 @@ export function useAuth() {
       unit: me.data.unit,
       units: me.data.units,
       has_full_access: me.data.has_full_access,
+      must_change_password: me.data.must_change_password,
     })
     return { ok: true, mustChangePassword: !!me.data.must_change_password }
   }

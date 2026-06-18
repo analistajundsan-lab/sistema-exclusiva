@@ -84,6 +84,17 @@ api.interceptors.response.use(
 
     // 403 = conta inativa ou must_change_password — não tentar refresh
     if (err.response?.status === 403) {
+      // Senha temporaria: funil para a tela de troca (rede de seguranca caso
+      // o guard de rota nao tenha capturado, ex.: estado antigo em cache).
+      const detail = err.response?.data?.detail
+      if (
+        typeof detail === 'string' &&
+        detail.includes('Troca de senha obrigatoria') &&
+        !window.location.pathname.startsWith('/change-password')
+      ) {
+        localStorage.setItem('mustChangePassword', 'true')
+        window.location.href = '/change-password'
+      }
       return Promise.reject(err)
     }
 

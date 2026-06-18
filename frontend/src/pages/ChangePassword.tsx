@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
+import { useAuthStore } from '../store/auth'
 import { Eye, EyeOff, Lock, AlertCircle, ArrowLeft } from 'lucide-react'
 
 // Regra de senha (espelha a politica do backend): min 8, com maiuscula,
@@ -118,6 +119,7 @@ function PasswordField({
 
 export function ChangePassword() {
   const navigate = useNavigate()
+  const setMustChangePassword = useAuthStore(s => s.setMustChangePassword)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -146,6 +148,8 @@ export function ChangePassword() {
         current_password: currentPassword,
         new_password: newPassword,
       })
+      // Libera o funil: o usuario ja pode acessar o resto do app.
+      setMustChangePassword(false)
       navigate('/')
     } catch (e: any) {
       setError(extractApiError(e, 'Erro ao alterar senha.'))

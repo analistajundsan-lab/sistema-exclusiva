@@ -30,9 +30,21 @@ function InactivityGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+// So exige token (sem o funil de troca de senha) — usado na propria tela de
+// troca de senha para evitar loop de redirecionamento.
+function AuthOnlyRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   if (!token) return <Navigate to="/login" replace />;
+  return <InactivityGuard>{children}</InactivityGuard>;
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.token);
+  const mustChange = useAuthStore((s) => s.mustChangePassword);
+  if (!token) return <Navigate to="/login" replace />;
+  // Senha temporaria: enquanto nao trocar, todo o app fica bloqueado no backend
+  // (403). Funil obrigatorio para a tela de troca de senha.
+  if (mustChange) return <Navigate to="/change-password" replace />;
   return <InactivityGuard>{children}</InactivityGuard>;
 }
 
@@ -43,8 +55,14 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
   const hasFullAccess = useAuthStore((s) => s.hasFullAccess);
+  const mustChange = useAuthStore((s) => s.mustChangePassword);
   if (!token) return <Navigate to="/login" replace />;
-  if (!hasFullAccess && !ADMIN_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
+  if (mustChange) return <Navigate to="/change-password" replace />;
+  if (!hasFullAccess && !ADMIN_ROLES.includes(role || '')) {
+    // SST (tecnico/engenheiro) cai no cockpit SST; demais perfis no plantao.
+    const dest = SST_ROLES.includes(role || '') ? '/sst' : '/on-call'
+    return <Navigate to={dest} replace />;
+  }
   return <InactivityGuard>{children}</InactivityGuard>;
 }
 
@@ -52,7 +70,9 @@ function SSTRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
   const hasFullAccess = useAuthStore((s) => s.hasFullAccess);
+  const mustChange = useAuthStore((s) => s.mustChangePassword);
   if (!token) return <Navigate to="/login" replace />;
+  if (mustChange) return <Navigate to="/change-password" replace />;
   if (!hasFullAccess && !SST_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
   return <InactivityGuard>{children}</InactivityGuard>;
 }
@@ -66,7 +86,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/v/:token" element={<PublicSafetyChecklist />} />
-        <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+        <Route path="/change-password" element={<AuthOnlyRoute><ChangePassword /></AuthOnlyRoute>} />
         <Route path="/" element={<AdminRoute><Dashboard /></AdminRoute>} />
         <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
         <Route path="/on-call" element={<ProtectedRoute><OnCall /></ProtectedRoute>} />
