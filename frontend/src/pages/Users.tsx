@@ -130,6 +130,21 @@ export function Users() {
     } catch { alert('Erro ao alterar status do usuário') }
   }
 
+  const handleDelete = async (u: User) => {
+    const ok = window.confirm(
+      `Excluir definitivamente o usuário "${u.name}"?\n\n` +
+      'Esta ação é IRREVERSÍVEL e apaga o cadastro, sessões, tokens e ' +
+      'notificações deste perfil. Para apenas bloquear o acesso, use "Desativar".'
+    )
+    if (!ok) return
+    try {
+      await api.delete(`/auth/users/${u.id}`)
+      setUsers(prev => prev.filter(x => x.id !== u.id))
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Erro ao excluir usuário')
+    }
+  }
+
   const buildUnitPayload = () => {
     if (isMultiUnit) {
       const joined = form.units.join(',')
@@ -142,7 +157,7 @@ export function Users() {
   }
 
   const handleCreate = async () => {
-    if (!form.cpf || !form.name || !form.email || !form.password) {
+    if (!form.cpf || !form.name || !form.email) {
       setFormError('Preencha todos os campos obrigatórios')
       return
     }
@@ -161,9 +176,7 @@ export function Users() {
         cpf: form.cpf,
         email: form.email,
         name: form.name,
-        password: form.password,
         role: form.role,
-        must_change_password: form.must_change_password,
         ...buildUnitPayload(),
       })
       setModal(false)
@@ -271,8 +284,12 @@ export function Users() {
                       <div className="flex flex-col gap-1">
                         <button onClick={() => openEdit(u)} className="text-xs text-brand-600 dark:text-brand-400 hover:underline">Editar</button>
                         <button onClick={() => handleToggle(u.id)}
-                          className={`text-xs hover:underline ${u.is_active ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                          className={`text-xs hover:underline ${u.is_active ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
                           {u.is_active ? 'Desativar' : 'Ativar'}
+                        </button>
+                        <button onClick={() => handleDelete(u)}
+                          className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium">
+                          Excluir
                         </button>
                       </div>
                     </td>
@@ -311,10 +328,9 @@ export function Users() {
                   className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
               </div>
               {modalMode === 'create' && (
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Senha * (mín. 8: maiúscula, minúscula, número e especial)</label>
-                  <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+                <div className="text-xs bg-brand-50 dark:bg-brand-900/20 text-brand-800 dark:text-brand-200 border border-brand-200 dark:border-brand-800 rounded px-3 py-2">
+                  A senha temporária é definida automaticamente: <strong>Exclusiva@2026</strong>.
+                  O usuário deverá trocá-la no primeiro acesso.
                 </div>
               )}
               <div>

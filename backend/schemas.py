@@ -34,7 +34,9 @@ class UserCreate(BaseModel):
     cpf: str = Field(..., min_length=11, max_length=14)
     email: EmailStr
     name: str = Field(..., min_length=3, max_length=255)
-    password: str = Field(..., min_length=8)
+    # Opcional: na criacao por admin a senha temporaria e definida pelo servidor
+    # (Exclusiva@2026). Continua obrigatoria no cadastro publico (/auth/register).
+    password: Optional[str] = Field(None, min_length=8)
     role: UserRole = UserRole.PLANTONISTA
     unit: Optional[str] = Field(None, max_length=80)
     units: Optional[str] = None
@@ -89,6 +91,13 @@ class UserResponse(BaseModel):
 class LoginRequest(BaseModel):
     cpf: str = Field(..., min_length=11, max_length=14)
     password: str
+
+    @field_validator("cpf")
+    @classmethod
+    def cpf_only_digits(cls, v: str) -> str:
+        # Normaliza igual ao cadastro: o login deve casar com o mesmo formato
+        # de CPF usado na criacao, independente de mascara digitada.
+        return re.sub(r"\D", "", v)
 
 
 class TokenResponse(BaseModel):

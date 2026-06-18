@@ -39,7 +39,13 @@ from auth import (
 from config import settings
 from rate_limit import rate_limit, get_remaining_requests
 from metrics_middleware import auth_metrics, rate_limit_metric
-from models import AuditLog, PasswordResetToken, UserSession, UserRole
+from models import (
+    AuditLog,
+    PasswordResetToken,
+    PushSubscription,
+    UserSession,
+    UserRole,
+)
 import email_service
 from datetime import datetime, timedelta, timezone
 
@@ -47,6 +53,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 RESET_TOKEN_TTL_MINUTES = 30
 logger = logging.getLogger(__name__)
+
+# Senha temporaria padrao para usuarios criados pelo admin. O usuario e
+# obrigado a troca-la no primeiro acesso (must_change_password=True).
+DEFAULT_TEMP_PASSWORD = "Exclusiva@2026"
 
 MULTI_UNIT_ROLES = {
     UserRole.PLANTONISTA,
@@ -317,6 +327,10 @@ async def register(request: UserCreate, req: Request, db: Session = Depends(get_
             detail="Muitos registros do mesmo IP. Tente novamente mais tarde.",
         )
 
+    if not request.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Senha obrigatoria"
+        )
     validate_password_policy(request.password)
 
     existing, _ = find_user_by_cpf(db, request.cpf)
@@ -349,7 +363,10 @@ async def create_user_by_admin(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    validate_password_policy(request.password)
+    # Senha temporaria definida automaticamente pelo servidor (nao vem do
+    # cliente). O usuario troca no primeiro acesso (must_change_password=True).
+    temp_password = DEFAULT_TEMP_PASSWORD
+    validate_password_policy(temp_password)
     _validate_user_unit_scope(request.role, request.unit, request.units)
     existing, _ = find_user_by_cpf(db, request.cpf)
     if existing:
@@ -374,7 +391,7 @@ async def create_user_by_admin(
         cpf_hash=hash_cpf(request.cpf),
         email=email_clean or request.email,
         name=request.name,
-        password_hash=hash_password(request.password),
+        password_hash=hash_password(temp_password),
         role=request.role,
         unit=request.unit,
         units=request.units,
@@ -995,3 +1012,65 @@ async def admin_update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    """Exclui definitivamente um usuario e todos os dados pessoais do perfil.
+
+    Apaga, alem do proprio cadastro: sessoes, tokens de reset de senha,
+    inscricoes de push e a trilha de auditoria gerada POR ele. Mantem um unico
+    registro de auditoria da exclusao sob o admin que executou a acao.
+
+    Operacao irreversivel (LGPD - direito de eliminacao). Registros
+    operacionais atribuidos ao usuario (incidentes, trocas, edicoes de
+    sinistro) sao preservados por integridade operacional, referenciados apenas
+    pelo id numerico.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario nao encontrado")
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=400, detail="Nao e possivel excluir o proprio usuario"
+        )
+    if user.is_super_admin and not current_user.is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas o super administrador pode excluir outro super admin",
+        )
+
+    deleted_label = f"{user.name} <{user.email}>"
+
+    # Apaga dados pessoais/credenciais vinculados ao perfil.
+    db.query(UserSession).filter(UserSession.user_id == user_id).delete(
+        synchronize_session=False
+    )
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user_id
+    ).delete(synchronize_session=False)
+    db.query(PushSubscription).filter(PushSubscription.user_id == user_id).delete(
+        synchronize_session=False
+    )
+    db.query(AuditLog).filter(AuditLog.user_id == user_id).delete(
+        synchronize_session=False
+    )
+
+    db.delete(user)
+
+    # Registro da exclusao sob o admin executor (auditavel sem reter PII do alvo).
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="ADMIN_DELETE_USER",
+            resource="user",
+            resource_id=user_id,
+            details=deleted_label,
+        )
+    )
+    db.commit()
+    return None

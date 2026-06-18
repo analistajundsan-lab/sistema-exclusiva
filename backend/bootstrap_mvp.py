@@ -18,9 +18,10 @@ from models import (
     UserRole,
     engine,
 )
-from routes_auth import hash_cpf, find_user_by_cpf
+from routes_auth import hash_cpf, find_user_by_cpf, DEFAULT_TEMP_PASSWORD
 
-TEMP_PASSWORD = "Exclusiva@2026"
+# Fonte unica da senha temporaria (definida em routes_auth).
+TEMP_PASSWORD = DEFAULT_TEMP_PASSWORD
 
 
 def ensure_column(table: str, column: str, ddl: str) -> None:
