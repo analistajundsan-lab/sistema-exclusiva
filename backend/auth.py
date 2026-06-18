@@ -17,12 +17,12 @@ def hash_token(token: str) -> str:
 
 security = HTTPBearer(auto_error=False)
 
+# Apenas Admin (e super_admin via has_full_access) enxerga todas as garagens.
+# Os demais cargos — inclusive TST e Engenheiro de Segurança — ficam escopados
+# pelas unidades atribuídas no cadastro. Os cargos legados (gerente/supervisão/
+# supervisor) foram descontinuados e não recebem mais acesso irrestrito.
 UNRESTRICTED_UNIT_ROLES = {
     UserRole.ADMIN,
-    UserRole.GERENTE,
-    UserRole.SUPERVISAO,
-    UserRole.SUPERVISOR,
-    UserRole.ENGENHEIRO_SEGURANCA,
 }
 
 

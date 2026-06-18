@@ -20,18 +20,21 @@ const SST_ROLES = ['admin', 'tecnico_seguranca', 'engenheiro_seguranca']
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin'] },
-  { to: '/on-call', label: 'Confirmação', icon: ClipboardCheck },
-  { to: '/incidents', label: 'Ocorrências', icon: AlertTriangle },
-  { to: '/schedule', label: 'Escala', icon: Calendar, roles: ['admin', 'gerente', 'supervisao', 'supervisor', 'plantonista', 'analista'] },
-  { to: '/consulta', label: 'Consulta', icon: Search },
+  // ── Operacional ──
+  { to: '/on-call', label: 'Confirmação de Escala', icon: ClipboardCheck, roles: ['admin', 'analista', 'plantonista'] },
+  { to: '/incidents', label: 'Ocorrências', icon: AlertTriangle, roles: ['admin', 'analista', 'plantonista'] },
+  { to: '/schedule', label: 'Escala', icon: Calendar, roles: ['admin', 'analista', 'plantonista'] },
+  { to: '/consulta', label: 'Consulta', icon: Search, roles: ['admin', 'plantonista'] },
   { to: '/vistoria', label: 'Vistoria', icon: ClipboardList, roles: ['admin', 'analista'] },
-  { to: '/checklist', label: 'Check-list ST', icon: ClipboardCheck, roles: ['admin', 'gerente', 'supervisao', 'analista'] },
+  { to: '/checklist', label: 'Check-list', icon: ClipboardCheck, roles: ['admin', 'analista'] },
+  // ── SST ──
+  { to: '/sst', label: 'Cockpit SST', icon: Shield, roles: ['admin', 'engenheiro_seguranca'] },
   { to: '/sst/checklist', label: 'Check-list SST', icon: ClipboardList, roles: SST_ROLES },
-  { to: '/sst', label: 'SST Dashboard', icon: Shield, roles: SST_ROLES },
-  { to: '/sst/sinistros', label: 'Sinistros', icon: AlertTriangle, roles: SST_ROLES },
-  { to: '/sst/ocorrencias', label: 'Ocorr. SST', icon: ClipboardList, roles: SST_ROLES },
-  { to: '/sst/liberacao', label: 'Liberação', icon: UserCheck, roles: SST_ROLES },
-  { to: '/sst/saude', label: 'Saúde', icon: Heart, roles: SST_ROLES },
+  { to: '/sst/sinistros', label: 'Registro de Sinistros', icon: AlertTriangle, roles: SST_ROLES },
+  { to: '/sst/ocorrencias', label: 'Ocorrências SST', icon: ClipboardList, roles: SST_ROLES },
+  { to: '/sst/liberacao', label: 'Liberação de Condutor', icon: UserCheck, roles: SST_ROLES },
+  { to: '/sst/saude', label: 'Saúde e Bem-Estar', icon: Heart, roles: SST_ROLES },
+  // ── Administração ──
   { to: '/audit', label: 'Auditoria', icon: Shield, roles: ['admin'] },
   { to: '/users', label: 'Usuários', icon: Users, roles: ['admin'] },
 ]
@@ -77,10 +80,13 @@ export function Layout({ children }: { children: ReactNode }) {
     to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
 
   const roleLabel: Record<string, string> = {
-    admin: 'Administrador', gerente: 'Gerente', supervisao: 'Supervisão',
-    analista: 'Analista', plantonista: 'Plantonista',
-    tecnico_seguranca: 'Técnico de Segurança',
+    admin: 'Administrador',
+    analista: 'Analista',
+    plantonista: 'Tráfego',
+    tecnico_seguranca: 'TST',
     engenheiro_seguranca: 'Engenheiro de Segurança',
+    // cargos descontinuados (mantidos só para exibir cadastros legados)
+    gerente: 'Gerente', supervisao: 'Supervisão',
     supervisor: 'Supervisor', operator: 'Operador',
   }
 

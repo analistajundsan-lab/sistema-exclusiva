@@ -18,14 +18,14 @@ interface User {
 }
 
 const ROLES = [
-  { value: 'plantonista', label: 'Plantonista' },
+  { value: 'plantonista', label: 'Tráfego' },
   { value: 'analista', label: 'Analista' },
-  { value: 'gerente', label: 'Gerente' },
-  { value: 'supervisao', label: 'Supervisão' },
-  { value: 'tecnico_seguranca', label: 'Técnico de Segurança' },
+  { value: 'tecnico_seguranca', label: 'TST' },
   { value: 'engenheiro_seguranca', label: 'Engenheiro de Segurança' },
   { value: 'admin', label: 'Admin' },
-  // legados (não exibidos no select de criação, mas mantidos na listagem)
+  // cargos descontinuados (não exibidos no select de criação, só rotulam legados)
+  { value: 'gerente', label: 'Gerente (legado)' },
+  { value: 'supervisao', label: 'Supervisão (legado)' },
   { value: 'operator', label: 'Operador (legado)' },
   { value: 'supervisor', label: 'Supervisor (legado)' },
 ]
@@ -337,11 +337,9 @@ export function Users() {
                 <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Cargo</label>
                 <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value, units: [], unit: '' }))}
                   className="w-full border dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                  <option value="plantonista">Plantonista</option>
+                  <option value="plantonista">Tráfego</option>
                   <option value="analista">Analista</option>
-                  <option value="gerente">Gerente</option>
-                  <option value="supervisao">Supervisão</option>
-                  <option value="tecnico_seguranca">Técnico de Segurança</option>
+                  <option value="tecnico_seguranca">TST</option>
                   <option value="engenheiro_seguranca">Engenheiro de Segurança</option>
                   <option value="admin">Admin</option>
                 </select>

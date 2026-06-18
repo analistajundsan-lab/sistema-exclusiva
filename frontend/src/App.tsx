@@ -30,7 +30,23 @@ function InactivityGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-// So exige token (sem o funil de troca de senha) — usado na propria tela de
+const SST_ROLES = ['admin', 'tecnico_seguranca', 'engenheiro_seguranca']
+
+// Página inicial de cada cargo (para onde redirecionar quando não tem acesso).
+const HOME_BY_ROLE: Record<string, string> = {
+  admin: '/',
+  analista: '/on-call',
+  plantonista: '/on-call',
+  tecnico_seguranca: '/sst/sinistros',
+  engenheiro_seguranca: '/sst',
+}
+
+function homeFor(role: string | null, hasFullAccess: boolean): string {
+  if (hasFullAccess) return '/'
+  return HOME_BY_ROLE[role || ''] || '/on-call'
+}
+
+// Só exige token (sem o funil de troca de senha) — usado na própria tela de
 // troca de senha para evitar loop de redirecionamento.
 function AuthOnlyRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -42,39 +58,38 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const mustChange = useAuthStore((s) => s.mustChangePassword);
   if (!token) return <Navigate to="/login" replace />;
-  // Senha temporaria: enquanto nao trocar, todo o app fica bloqueado no backend
-  // (403). Funil obrigatorio para a tela de troca de senha.
+  // Senha temporária: enquanto não trocar, todo o app fica bloqueado (funil).
   if (mustChange) return <Navigate to="/change-password" replace />;
   return <InactivityGuard>{children}</InactivityGuard>;
 }
 
-const ADMIN_ROLES = ['admin']
-const SST_ROLES = ['admin', 'tecnico_seguranca', 'engenheiro_seguranca']
-
-function AdminRoute({ children }: { children: React.ReactNode }) {
+// Guard genérico por cargo. Admin/super (hasFullAccess) sempre passa.
+function RoleRoute({ allow, children }: { allow: string[]; children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
   const hasFullAccess = useAuthStore((s) => s.hasFullAccess);
   const mustChange = useAuthStore((s) => s.mustChangePassword);
   if (!token) return <Navigate to="/login" replace />;
   if (mustChange) return <Navigate to="/change-password" replace />;
-  if (!hasFullAccess && !ADMIN_ROLES.includes(role || '')) {
-    // SST (tecnico/engenheiro) cai no cockpit SST; demais perfis no plantao.
-    const dest = SST_ROLES.includes(role || '') ? '/sst' : '/on-call'
-    return <Navigate to={dest} replace />;
+  if (!hasFullAccess && !allow.includes(role || '')) {
+    return <Navigate to={homeFor(role, hasFullAccess)} replace />;
   }
   return <InactivityGuard>{children}</InactivityGuard>;
 }
 
-function SSTRoute({ children }: { children: React.ReactNode }) {
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  return <RoleRoute allow={['admin']}>{children}</RoleRoute>;
+}
+
+// Redireciona para a home do cargo logado (rota raiz curinga / fallback).
+function HomeRedirect() {
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
   const hasFullAccess = useAuthStore((s) => s.hasFullAccess);
   const mustChange = useAuthStore((s) => s.mustChangePassword);
   if (!token) return <Navigate to="/login" replace />;
   if (mustChange) return <Navigate to="/change-password" replace />;
-  if (!hasFullAccess && !SST_ROLES.includes(role || '')) return <Navigate to="/on-call" replace />;
-  return <InactivityGuard>{children}</InactivityGuard>;
+  return <Navigate to={homeFor(role, hasFullAccess)} replace />;
 }
 
 
@@ -88,25 +103,29 @@ export default function App() {
         <Route path="/v/:token" element={<PublicSafetyChecklist />} />
         <Route path="/change-password" element={<AuthOnlyRoute><ChangePassword /></AuthOnlyRoute>} />
         <Route path="/" element={<AdminRoute><Dashboard /></AdminRoute>} />
-        <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
-        <Route path="/on-call" element={<ProtectedRoute><OnCall /></ProtectedRoute>} />
-        <Route path="/audit" element={<AdminRoute><Audit /></AdminRoute>} />
-        <Route path="/consulta" element={<ProtectedRoute><Consulta /></ProtectedRoute>} />
-        <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
-        <Route path="/swaps" element={<ProtectedRoute><Swaps /></ProtectedRoute>} />
-        <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-        <Route path="/vistoria" element={<ProtectedRoute><ChecklistConsulta /></ProtectedRoute>} />
-        <Route path="/vistoria/novo" element={<ProtectedRoute><ChecklistNovo /></ProtectedRoute>} />
-        <Route path="/checklist" element={<ProtectedRoute><Safety /></ProtectedRoute>} />
+        {/* ── Operacional ── */}
+        <Route path="/on-call" element={<RoleRoute allow={['admin', 'analista', 'plantonista']}><OnCall /></RoleRoute>} />
+        <Route path="/incidents" element={<RoleRoute allow={['admin', 'analista', 'plantonista']}><Incidents /></RoleRoute>} />
+        <Route path="/schedule" element={<RoleRoute allow={['admin', 'analista', 'plantonista']}><Schedule /></RoleRoute>} />
+        <Route path="/consulta" element={<RoleRoute allow={['admin', 'plantonista']}><Consulta /></RoleRoute>} />
+        <Route path="/vistoria" element={<RoleRoute allow={['admin', 'analista']}><ChecklistConsulta /></RoleRoute>} />
+        <Route path="/vistoria/novo" element={<RoleRoute allow={['admin', 'analista']}><ChecklistNovo /></RoleRoute>} />
+        <Route path="/checklist" element={<RoleRoute allow={['admin', 'analista']}><Safety /></RoleRoute>} />
         <Route path="/checklist/novo" element={<Navigate to="/vistoria/novo" replace />} />
-        <Route path="/sst" element={<SSTRoute><SSTDashboard /></SSTRoute>} />
-        <Route path="/sst/sinistros" element={<SSTRoute><SSTSinistros /></SSTRoute>} />
-        <Route path="/sst/ocorrencias" element={<SSTRoute><SSTOcorrencias /></SSTRoute>} />
-        <Route path="/sst/liberacao" element={<SSTRoute><SSTLiberacao /></SSTRoute>} />
-        <Route path="/sst/saude" element={<SSTRoute><SSTSaude /></SSTRoute>} />
-        <Route path="/sst/checklist" element={<SSTRoute><SSTChecklistView /></SSTRoute>} />
-        <Route path="*" element={<Navigate to="/on-call" replace />} />
+        {/* ── SST ── */}
+        <Route path="/sst" element={<RoleRoute allow={['admin', 'engenheiro_seguranca']}><SSTDashboard /></RoleRoute>} />
+        <Route path="/sst/sinistros" element={<RoleRoute allow={SST_ROLES}><SSTSinistros /></RoleRoute>} />
+        <Route path="/sst/ocorrencias" element={<RoleRoute allow={SST_ROLES}><SSTOcorrencias /></RoleRoute>} />
+        <Route path="/sst/liberacao" element={<RoleRoute allow={SST_ROLES}><SSTLiberacao /></RoleRoute>} />
+        <Route path="/sst/saude" element={<RoleRoute allow={SST_ROLES}><SSTSaude /></RoleRoute>} />
+        <Route path="/sst/checklist" element={<RoleRoute allow={SST_ROLES}><SSTChecklistView /></RoleRoute>} />
+        {/* ── Administração ── */}
+        <Route path="/audit" element={<AdminRoute><Audit /></AdminRoute>} />
+        <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
+        {/* ── Comum a qualquer logado ── */}
+        <Route path="/swaps" element={<ProtectedRoute><Swaps /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="*" element={<HomeRedirect />} />
       </Routes>
     </BrowserRouter>
   );
