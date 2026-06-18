@@ -580,6 +580,24 @@ class SinistroCreate(BaseModel):
     danos_identificados: Optional[List[str]] = None
     evidencias: Optional[List[str]] = None
     envolvidos: Optional[List[str]] = None
+    gravidade: Optional[str] = Field(None, max_length=20)
+    probabilidade: Optional[str] = Field(None, max_length=20)
+    turno: Optional[str] = Field(None, max_length=20)
+    tipo_operacao: Optional[str] = Field(None, max_length=80)
+    cliente_cad: Optional[str] = Field(None, max_length=120)
+    fator_contribuinte: Optional[str] = Field(None, max_length=120)
+    condicao_ambiental: Optional[str] = Field(None, max_length=80)
+    houve_vitima: Optional[bool] = None
+    houve_terceiro: Optional[bool] = None
+    tipo_lesao: Optional[str] = Field(None, max_length=80)
+    houve_afastamento: Optional[bool] = None
+    tipo_trajeto: Optional[str] = Field(None, max_length=80)
+    custo_final: Optional[float] = None
+    responsabilidade: Optional[str] = Field(None, max_length=40)
+    tratativa_acao: Optional[str] = None
+    responsavel_acao: Optional[str] = Field(None, max_length=255)
+    prazo_acao: Optional[date] = None
+    status_acao: Optional[str] = Field(None, max_length=30)
     status: SinistroStatus = SinistroStatus.ABERTO
 
 
@@ -603,6 +621,24 @@ class SinistroUpdate(BaseModel):
     danos_identificados: Optional[List[str]] = None
     evidencias: Optional[List[str]] = None
     envolvidos: Optional[List[str]] = None
+    gravidade: Optional[str] = Field(None, max_length=20)
+    probabilidade: Optional[str] = Field(None, max_length=20)
+    turno: Optional[str] = Field(None, max_length=20)
+    tipo_operacao: Optional[str] = Field(None, max_length=80)
+    cliente_cad: Optional[str] = Field(None, max_length=120)
+    fator_contribuinte: Optional[str] = Field(None, max_length=120)
+    condicao_ambiental: Optional[str] = Field(None, max_length=80)
+    houve_vitima: Optional[bool] = None
+    houve_terceiro: Optional[bool] = None
+    tipo_lesao: Optional[str] = Field(None, max_length=80)
+    houve_afastamento: Optional[bool] = None
+    tipo_trajeto: Optional[str] = Field(None, max_length=80)
+    custo_final: Optional[float] = None
+    responsabilidade: Optional[str] = Field(None, max_length=40)
+    tratativa_acao: Optional[str] = None
+    responsavel_acao: Optional[str] = Field(None, max_length=255)
+    prazo_acao: Optional[date] = None
+    status_acao: Optional[str] = Field(None, max_length=30)
     status: Optional[SinistroStatus] = None
 
 
@@ -631,6 +667,24 @@ class SinistroResponse(BaseModel):
     danos_identificados: Optional[List[str]] = None
     evidencias: Optional[List[str]] = None
     envolvidos: Optional[List[str]] = None
+    gravidade: Optional[str] = None
+    probabilidade: Optional[str] = None
+    turno: Optional[str] = None
+    tipo_operacao: Optional[str] = None
+    cliente_cad: Optional[str] = None
+    fator_contribuinte: Optional[str] = None
+    condicao_ambiental: Optional[str] = None
+    houve_vitima: Optional[bool] = None
+    houve_terceiro: Optional[bool] = None
+    tipo_lesao: Optional[str] = None
+    houve_afastamento: Optional[bool] = None
+    tipo_trajeto: Optional[str] = None
+    custo_final: Optional[float] = None
+    responsabilidade: Optional[str] = None
+    tratativa_acao: Optional[str] = None
+    responsavel_acao: Optional[str] = None
+    prazo_acao: Optional[date] = None
+    status_acao: Optional[str] = None
     status: SinistroStatus
     created_by: int
     created_at: datetime
@@ -666,6 +720,10 @@ class LiberacaoCreate(BaseModel):
     aso_ok: Optional[bool] = None
     reciclagem_ok: Optional[bool] = None
     avaliacoes_sst_ok: Optional[bool] = None
+    respostas: Optional[List[dict]] = None
+    score_aptidao: Optional[int] = Field(None, ge=0, le=100)
+    categoria_bloqueio: Optional[str] = Field(None, max_length=40)
+    alerta_fadiga: Optional[str] = Field(None, max_length=40)
     resultado: LiberacaoStatus = LiberacaoStatus.PENDENTE
     observacoes: Optional[str] = None
     restricoes: Optional[str] = None
@@ -682,6 +740,10 @@ class LiberacaoUpdate(BaseModel):
     aso_ok: Optional[bool] = None
     reciclagem_ok: Optional[bool] = None
     avaliacoes_sst_ok: Optional[bool] = None
+    respostas: Optional[List[dict]] = None
+    score_aptidao: Optional[int] = Field(None, ge=0, le=100)
+    categoria_bloqueio: Optional[str] = Field(None, max_length=40)
+    alerta_fadiga: Optional[str] = Field(None, max_length=40)
     resultado: Optional[LiberacaoStatus] = None
     observacoes: Optional[str] = None
     restricoes: Optional[str] = None
@@ -702,6 +764,10 @@ class LiberacaoResponse(BaseModel):
     aso_ok: Optional[bool] = None
     reciclagem_ok: Optional[bool] = None
     avaliacoes_sst_ok: Optional[bool] = None
+    respostas: Optional[List[dict]] = None
+    score_aptidao: Optional[int] = None
+    categoria_bloqueio: Optional[str] = None
+    alerta_fadiga: Optional[str] = None
     resultado: LiberacaoStatus
     observacoes: Optional[str] = None
     restricoes: Optional[str] = None

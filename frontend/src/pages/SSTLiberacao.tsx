@@ -270,6 +270,36 @@ export function SSTLiberacao() {
                 </div>
               </div>
 
+              {/* Classificação do bloqueio (Fase 3) */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-500">Categoria do bloqueio</span>
+                  <select value={form.categoria_bloqueio || ''} onChange={(e) => setForm((f) => ({ ...f, categoria_bloqueio: e.target.value }))} className="input w-full mt-1">
+                    <option value="">—</option>
+                    <option value="fisica">Física</option>
+                    <option value="fadiga">Fadiga</option>
+                    <option value="psicossocial">Psicossocial</option>
+                    <option value="seguranca">Segurança operacional</option>
+                    <option value="jornada">Jornada</option>
+                    <option value="documental">Documental</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-500">Alerta de fadiga</span>
+                  <select value={form.alerta_fadiga || ''} onChange={(e) => setForm((f) => ({ ...f, alerta_fadiga: e.target.value }))} className="input w-full mt-1">
+                    <option value="">—</option>
+                    <option value="menos_4h">Dormiu &lt; 4h</option>
+                    <option value="4_6h">Dormiu 4-6h</option>
+                    <option value="jornada_excessiva">Jornada excessiva</option>
+                    <option value="outra_atividade_12h">Outra atividade nas 12h</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-500">Score de aptidão (0-100)</span>
+                  <input type="number" min={0} max={100} value={form.score_aptidao ?? ''} onChange={(e) => setForm((f) => ({ ...f, score_aptidao: e.target.value === '' ? null : Number(e.target.value) }))} className="input w-full mt-1" />
+                </label>
+              </div>
+
               <label className="block">
                 <span className="text-xs font-medium text-gray-500">Resultado</span>
                 <select value={form.resultado || 'pendente'} onChange={(e) => setForm((f) => ({ ...f, resultado: e.target.value as LiberacaoStatus }))}

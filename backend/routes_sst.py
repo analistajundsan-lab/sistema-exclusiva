@@ -80,6 +80,7 @@ def _serialize_sinistro(s: Sinistro) -> dict:
 def _serialize_liberacao(lb: LiberacaoCondutor) -> dict:
     d = {c.name: getattr(lb, c.name) for c in lb.__table__.columns}
     d["evidencias"] = _json_list(lb.evidencias)
+    d["respostas"] = _json_list(lb.respostas)
     return d
 
 
@@ -315,28 +316,26 @@ async def sst_dashboard_v2(
 
     months = _last_12_months(today)
     fetch_start = min(d_start, prev_start, date_type(int(months[0][:4]), int(months[0][5:]), 1))
-    rows = (
-        _sin_q()
-        .filter(Sinistro.data_ocorrencia >= fetch_start)
-        .with_entities(
-            Sinistro.data_ocorrencia,
-            Sinistro.hora_ocorrencia,
-            Sinistro.tipo_sinistro,
-            Sinistro.unit,
-            Sinistro.prefixo,
-            Sinistro.condutor_nome,
-            Sinistro.cidade,
-            Sinistro.status,
-        )
-        .all()
-    )
+    sin_objs = _sin_q().filter(Sinistro.data_ocorrencia >= fetch_start).all()
 
     por_mes = {mo: 0 for mo in months}
     por_tipo, por_turno, por_unidade = {}, {}, {}
     rk_cond, rk_veic, rk_cidade = {}, {}, {}
+    por_gravidade, por_fator, por_responsabilidade = {}, {}, {}
+    matrix = {}  # (prob, grav) -> total
+    custo_total = 0.0
+    com_vitima = com_terceiro = com_afastamento = 0
     sinistros_periodo = sinistros_prev = 0
 
-    for data_oc, hora, tipo, u, prefixo, condutor, cidade, st in rows:
+    def _norm15(v):
+        try:
+            n = int(str(v).strip()[0])
+            return n if 1 <= n <= 5 else None
+        except (ValueError, IndexError, TypeError):
+            return None
+
+    for s in sin_objs:
+        data_oc = s.data_ocorrencia
         if data_oc is None:
             continue
         mo = f"{data_oc.year:04d}-{data_oc.month:02d}"
@@ -344,17 +343,35 @@ async def sst_dashboard_v2(
             por_mes[mo] += 1
         if d_start <= data_oc <= d_end:
             sinistros_periodo += 1
-            if tipo:
-                por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
-            por_turno[_turno_label(hora)] = por_turno.get(_turno_label(hora), 0) + 1
-            if u:
-                por_unidade[u] = por_unidade.get(u, 0) + 1
-            if condutor:
-                rk_cond[condutor] = rk_cond.get(condutor, 0) + 1
-            if prefixo:
-                rk_veic[prefixo] = rk_veic.get(prefixo, 0) + 1
-            if cidade:
-                rk_cidade[cidade] = rk_cidade.get(cidade, 0) + 1
+            if s.tipo_sinistro:
+                por_tipo[s.tipo_sinistro] = por_tipo.get(s.tipo_sinistro, 0) + 1
+            tlabel = s.turno or _turno_label(s.hora_ocorrencia)
+            por_turno[tlabel] = por_turno.get(tlabel, 0) + 1
+            if s.unit:
+                por_unidade[s.unit] = por_unidade.get(s.unit, 0) + 1
+            if s.condutor_nome:
+                rk_cond[s.condutor_nome] = rk_cond.get(s.condutor_nome, 0) + 1
+            if s.prefixo:
+                rk_veic[s.prefixo] = rk_veic.get(s.prefixo, 0) + 1
+            if s.cidade:
+                rk_cidade[s.cidade] = rk_cidade.get(s.cidade, 0) + 1
+            if s.gravidade:
+                por_gravidade[str(s.gravidade)] = por_gravidade.get(str(s.gravidade), 0) + 1
+            if s.fator_contribuinte:
+                por_fator[s.fator_contribuinte] = por_fator.get(s.fator_contribuinte, 0) + 1
+            if s.responsabilidade:
+                por_responsabilidade[s.responsabilidade] = por_responsabilidade.get(s.responsabilidade, 0) + 1
+            g, p = _norm15(s.gravidade), _norm15(s.probabilidade)
+            if g and p:
+                matrix[(p, g)] = matrix.get((p, g), 0) + 1
+            if s.custo_final:
+                custo_total += float(s.custo_final)
+            if s.houve_vitima:
+                com_vitima += 1
+            if s.houve_terceiro:
+                com_terceiro += 1
+            if s.houve_afastamento:
+                com_afastamento += 1
         elif prev_start <= data_oc <= prev_end:
             sinistros_prev += 1
 
@@ -366,6 +383,35 @@ async def sst_dashboard_v2(
     sinistros_investigacao = _sin_q().filter(
         Sinistro.status == SinistroStatus.EM_INVESTIGACAO
     ).count()
+
+    # ── Plano de acao (Fase 2): tarefas abertas/vencidas/concluidas ──
+    acoes = []
+    acoes_abertas = acoes_vencidas = acoes_concluidas = 0
+    for s in sin_objs:
+        st_acao = (s.status_acao or "").lower()
+        if not st_acao and not s.responsavel_acao and not s.prazo_acao and not s.tratativa_acao:
+            continue
+        if st_acao == "concluida":
+            acoes_concluidas += 1
+            continue
+        dias_atraso = 0
+        if s.prazo_acao:
+            dias_atraso = (today - s.prazo_acao).days
+        if dias_atraso > 0:
+            acoes_vencidas += 1
+        acoes_abertas += 1
+        acoes.append({
+            "sinistro_id": s.id,
+            "numero": s.numero,
+            "unit": s.unit,
+            "tipo": s.tipo_sinistro,
+            "responsavel": s.responsavel_acao,
+            "prazo": s.prazo_acao.isoformat() if s.prazo_acao else None,
+            "status_acao": s.status_acao or "pendente",
+            "dias_atraso": max(0, dias_atraso),
+            "gravidade": s.gravidade,
+        })
+    acoes.sort(key=lambda a: a["dias_atraso"], reverse=True)
 
     # ── Veiculos + conformidade de check-list ──
     veiculo_q = apply_user_unit_scope(
@@ -437,6 +483,7 @@ async def sst_dashboard_v2(
         ("avaliacoes_sst_ok", "Avaliacoes SST"),
     ]
     bloqueio_motivos = {label: 0 for _, label in flag_labels}
+    bloqueio_categoria, alerta_fadiga = {}, {}
     for lb in lib_q.filter(
         LiberacaoCondutor.resultado.in_(
             [LiberacaoStatus.NAO_LIBERADO, LiberacaoStatus.LIBERADO_COM_RESTRICAO]
@@ -445,6 +492,23 @@ async def sst_dashboard_v2(
         for attr, label in flag_labels:
             if getattr(lb, attr) is False:
                 bloqueio_motivos[label] += 1
+        if lb.categoria_bloqueio:
+            bloqueio_categoria[lb.categoria_bloqueio] = bloqueio_categoria.get(lb.categoria_bloqueio, 0) + 1
+        if lb.alerta_fadiga:
+            alerta_fadiga[lb.alerta_fadiga] = alerta_fadiga.get(lb.alerta_fadiga, 0) + 1
+
+    # Alertas de saude/bem-estar (Fase 3) — fadiga e jornada excessiva
+    saude_q = apply_user_unit_scope(
+        db.query(SaudeBeEstarCondutor), SaudeBeEstarCondutor.unit, current_user
+    )
+    if unit:
+        saude_q = saude_q.filter(SaudeBeEstarCondutor.unit == unit)
+    saude_fadiga_alta = saude_q.filter(
+        func.lower(SaudeBeEstarCondutor.fadiga).in_(["alta", "alto", "critico", "critica"])
+    ).count()
+    saude_jornada_excessiva = saude_q.filter(
+        SaudeBeEstarCondutor.jornada_excessiva.is_(True)
+    ).count()
 
     # ── Ocorrencias SST encaminhadas (escopadas) ──
     ocorrencia_q = apply_user_unit_scope(
@@ -463,6 +527,21 @@ async def sst_dashboard_v2(
         round(sinistros_periodo * 8 + condutores_bloqueados * 12 + (100 - compliance_pct) * 0.4),
     )
 
+    grav_labels = {1: "1-Leve", 2: "2-Moderada", 3: "3-Grave", 4: "4-Gravissima", 5: "5-Catastrofica"}
+    prob_labels = {1: "1-Rara", 2: "2-Improvavel", 3: "3-Possivel", 4: "4-Provavel", 5: "5-Frequente"}
+    risk_matrix = [
+        {
+            "probabilidade": p,
+            "probabilidade_label": prob_labels[p],
+            "gravidade": g,
+            "gravidade_label": grav_labels[g],
+            "indice": p * g,
+            "total": matrix.get((p, g), 0),
+        }
+        for p in range(1, 6)
+        for g in range(1, 6)
+    ]
+
     return {
         "period": {"start": d_start.isoformat(), "end": d_end.isoformat()},
         "summary": {
@@ -475,6 +554,15 @@ async def sst_dashboard_v2(
             "sinistros_investigacao": sinistros_investigacao,
             "ocorrencias_sst": ocorrencias_sst,
             "total_veiculos": total_veiculos,
+            "custo_total": round(custo_total, 2),
+            "acoes_abertas": acoes_abertas,
+            "acoes_vencidas": acoes_vencidas,
+            "acoes_concluidas": acoes_concluidas,
+            "com_vitima": com_vitima,
+            "com_terceiro": com_terceiro,
+            "com_afastamento": com_afastamento,
+            "fadiga_alta": saude_fadiga_alta,
+            "jornada_excessiva": saude_jornada_excessiva,
         },
         "trends": {
             "sinistros_por_mes": [{"mes": k, "total": v} for k, v in por_mes.items()],
@@ -498,12 +586,19 @@ async def sst_dashboard_v2(
                 for k, v in bloqueio_motivos.items()
                 if v > 0
             ],
+            "bloqueio_por_categoria": _top(bloqueio_categoria, "categoria", 8),
+            "alerta_fadiga": _top(alerta_fadiga, "alerta", 8),
+            "por_gravidade": _top(por_gravidade, "gravidade", 8),
+            "por_fator_contribuinte": _top(por_fator, "fator", 10),
+            "por_responsabilidade": _top(por_responsabilidade, "responsabilidade", 8),
         },
+        "risk_matrix": risk_matrix,
         "rankings": {
             "condutores": _top(rk_cond, "nome"),
             "veiculos": _top(rk_veic, "prefixo"),
             "cidades": _top(rk_cidade, "cidade"),
         },
+        "actions": acoes[:50],
     }
 
 
@@ -761,6 +856,7 @@ async def create_liberacao(
 
     data = body.model_dump()
     data["evidencias"] = _to_json(data.pop("evidencias"))
+    data["respostas"] = _to_json(data.pop("respostas"))
 
     lib = LiberacaoCondutor(**data, created_by=current_user.id)
     db.add(lib)
@@ -837,6 +933,8 @@ async def update_liberacao(
     update_data = body.model_dump(exclude_unset=True)
     if "evidencias" in update_data:
         update_data["evidencias"] = _to_json(update_data["evidencias"])
+    if "respostas" in update_data:
+        update_data["respostas"] = _to_json(update_data["respostas"])
 
     for field, value in update_data.items():
         setattr(lib, field, value)

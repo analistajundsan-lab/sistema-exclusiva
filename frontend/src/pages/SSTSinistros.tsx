@@ -362,6 +362,101 @@ export function SSTSinistros() {
                 </div>
               </div>
 
+              {/* Análise de risco (Fase 2) */}
+              <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
+                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Análise de risco</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Gravidade</span>
+                    <select value={form.gravidade || ''} onChange={(e) => setForm((f) => ({ ...f, gravidade: e.target.value }))} className="input w-full mt-1">
+                      <option value="">—</option>
+                      <option value="1">1 - Leve</option>
+                      <option value="2">2 - Moderada</option>
+                      <option value="3">3 - Grave</option>
+                      <option value="4">4 - Gravíssima</option>
+                      <option value="5">5 - Catastrófica</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Probabilidade</span>
+                    <select value={form.probabilidade || ''} onChange={(e) => setForm((f) => ({ ...f, probabilidade: e.target.value }))} className="input w-full mt-1">
+                      <option value="">—</option>
+                      <option value="1">1 - Rara</option>
+                      <option value="2">2 - Improvável</option>
+                      <option value="3">3 - Possível</option>
+                      <option value="4">4 - Provável</option>
+                      <option value="5">5 - Frequente</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Turno</span>
+                    <select value={form.turno || ''} onChange={(e) => setForm((f) => ({ ...f, turno: e.target.value }))} className="input w-full mt-1">
+                      <option value="">—</option>
+                      <option value="Madrugada">Madrugada</option>
+                      <option value="Manha">Manhã</option>
+                      <option value="Tarde">Tarde</option>
+                      <option value="Noite">Noite</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Fator contribuinte</span>
+                    <input value={form.fator_contribuinte || ''} onChange={(e) => setForm((f) => ({ ...f, fator_contribuinte: e.target.value }))} className="input w-full mt-1" placeholder="Ex: Distração" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Responsabilidade</span>
+                    <select value={form.responsabilidade || ''} onChange={(e) => setForm((f) => ({ ...f, responsabilidade: e.target.value }))} className="input w-full mt-1">
+                      <option value="">—</option>
+                      <option value="propria">Própria</option>
+                      <option value="terceiro">Terceiro</option>
+                      <option value="indefinida">Indefinida</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Custo final (R$)</span>
+                    <input type="number" step="0.01" value={form.custo_final ?? ''} onChange={(e) => setForm((f) => ({ ...f, custo_final: e.target.value === '' ? null : Number(e.target.value) }))} className="input w-full mt-1" />
+                  </label>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <input type="checkbox" checked={!!form.houve_vitima} onChange={(e) => setForm((f) => ({ ...f, houve_vitima: e.target.checked }))} /> Houve vítima
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <input type="checkbox" checked={!!form.houve_terceiro} onChange={(e) => setForm((f) => ({ ...f, houve_terceiro: e.target.checked }))} /> Envolveu terceiro
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <input type="checkbox" checked={!!form.houve_afastamento} onChange={(e) => setForm((f) => ({ ...f, houve_afastamento: e.target.checked }))} /> Houve afastamento
+                  </label>
+                </div>
+              </div>
+
+              {/* Plano de ação (Fase 2) */}
+              <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
+                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Plano de ação</p>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-500">Tratativa / ação corretiva</span>
+                  <textarea value={form.tratativa_acao || ''} onChange={(e) => setForm((f) => ({ ...f, tratativa_acao: e.target.value }))} rows={2} className="input w-full mt-1 resize-none" />
+                </label>
+                <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Responsável</span>
+                    <input value={form.responsavel_acao || ''} onChange={(e) => setForm((f) => ({ ...f, responsavel_acao: e.target.value }))} className="input w-full mt-1" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Prazo</span>
+                    <input type="date" value={form.prazo_acao || ''} onChange={(e) => setForm((f) => ({ ...f, prazo_acao: e.target.value }))} className="input w-full mt-1" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-500">Status da ação</span>
+                    <select value={form.status_acao || ''} onChange={(e) => setForm((f) => ({ ...f, status_acao: e.target.value }))} className="input w-full mt-1">
+                      <option value="">—</option>
+                      <option value="pendente">Pendente</option>
+                      <option value="em_andamento">Em andamento</option>
+                      <option value="concluida">Concluída</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
               <label className="block">
                 <span className="text-xs font-medium text-gray-500">Status</span>
                 <select value={form.status || 'aberto'} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as SinistroStatus }))}

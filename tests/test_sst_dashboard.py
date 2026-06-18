@@ -131,6 +131,64 @@ def test_dashboard_v2_structure(admin_headers):
     assert any(c["nome"] == "Motorista A" for c in d["rankings"]["condutores"])
 
 
+def test_dashboard_v2_fase2_fields(admin_headers):
+    # cria sinistro com campos analiticos + plano de acao vencido
+    payload = {
+        "unit": "Caieiras",
+        "tipo_sinistro": "Colisao",
+        "data_ocorrencia": date.today().isoformat(),
+        "hora_ocorrencia": "08:00",
+        "gravidade": "4",
+        "probabilidade": "3",
+        "fator_contribuinte": "Distracao",
+        "responsabilidade": "propria",
+        "custo_final": 1500.50,
+        "houve_vitima": True,
+        "responsavel_acao": "Tecnico SST",
+        "prazo_acao": "2020-01-01",
+        "status_acao": "pendente",
+    }
+    r = client.post("/sst/sinistros", json=payload, headers=admin_headers)
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["gravidade"] == "4"
+    assert body["custo_final"] == 1500.50
+
+    d = client.get("/sst/dashboard-v2", headers=admin_headers).json()
+    assert d["summary"]["custo_total"] == 1500.5
+    assert d["summary"]["com_vitima"] == 1
+    assert d["summary"]["acoes_vencidas"] >= 1
+    assert any(c["gravidade"] == "4" for c in d["breakdowns"]["por_gravidade"])
+    assert any(f["fator"] == "Distracao" for f in d["breakdowns"]["por_fator_contribuinte"])
+    cell = next(c for c in d["risk_matrix"] if c["probabilidade"] == 3 and c["gravidade"] == 4)
+    assert cell["total"] == 1 and cell["indice"] == 12
+    assert len(d["actions"]) >= 1 and d["actions"][0]["dias_atraso"] > 0
+
+
+def test_liberacao_item_a_item(admin_headers):
+    payload = {
+        "unit": "Caieiras",
+        "condutor_nome": "Motorista X",
+        "motivo_avaliacao": "Inicio de jornada",
+        "respostas": [
+            {"item": "Dormiu bem?", "categoria": "fadiga", "impeditivo": True, "resposta": "nao"},
+        ],
+        "score_aptidao": 65,
+        "categoria_bloqueio": "fadiga",
+        "alerta_fadiga": "menos_4h",
+        "resultado": "nao_liberado",
+    }
+    r = client.post("/sst/liberacoes", json=payload, headers=admin_headers)
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["score_aptidao"] == 65
+    assert body["respostas"][0]["categoria"] == "fadiga"
+
+    d = client.get("/sst/dashboard-v2", headers=admin_headers).json()
+    assert any(c["categoria"] == "fadiga" for c in d["breakdowns"]["bloqueio_por_categoria"])
+    assert any(a["alerta"] == "menos_4h" for a in d["breakdowns"]["alerta_fadiga"])
+
+
 def test_dashboard_v2_requires_sst_role():
     db = TestingSessionLocal()
     db.add(

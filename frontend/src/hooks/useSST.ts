@@ -56,6 +56,24 @@ export interface Sinistro {
   danos_identificados: string[] | null
   evidencias: string[] | null
   envolvidos: string[] | null
+  gravidade?: string | null
+  probabilidade?: string | null
+  turno?: string | null
+  tipo_operacao?: string | null
+  cliente_cad?: string | null
+  fator_contribuinte?: string | null
+  condicao_ambiental?: string | null
+  houve_vitima?: boolean | null
+  houve_terceiro?: boolean | null
+  tipo_lesao?: string | null
+  houve_afastamento?: boolean | null
+  tipo_trajeto?: string | null
+  custo_final?: number | null
+  responsabilidade?: string | null
+  tratativa_acao?: string | null
+  responsavel_acao?: string | null
+  prazo_acao?: string | null
+  status_acao?: string | null
   status: SinistroStatus
   created_by: number
   created_at: string
@@ -100,6 +118,10 @@ export interface LiberacaoCondutor {
   aso_ok: boolean | null
   reciclagem_ok: boolean | null
   avaliacoes_sst_ok: boolean | null
+  respostas?: Record<string, any>[] | null
+  score_aptidao?: number | null
+  categoria_bloqueio?: string | null
+  alerta_fadiga?: string | null
   resultado: LiberacaoStatus
   observacoes: string | null
   restricoes: string | null
@@ -156,6 +178,15 @@ export interface SSTDashboardV2 {
     sinistros_investigacao: number
     ocorrencias_sst: number
     total_veiculos: number
+    custo_total: number
+    acoes_abertas: number
+    acoes_vencidas: number
+    acoes_concluidas: number
+    com_vitima: number
+    com_terceiro: number
+    com_afastamento: number
+    fadiga_alta: number
+    jornada_excessiva: number
   }
   trends: {
     sinistros_por_mes: { mes: string; total: number }[]
@@ -167,12 +198,36 @@ export interface SSTDashboardV2 {
     por_unidade: { unidade: string; total: number }[]
     checklist_por_status: { status: string; total: number }[]
     bloqueio_por_motivo: { motivo: string; total: number }[]
+    bloqueio_por_categoria: { categoria: string; total: number }[]
+    alerta_fadiga: { alerta: string; total: number }[]
+    por_gravidade: { gravidade: string; total: number }[]
+    por_fator_contribuinte: { fator: string; total: number }[]
+    por_responsabilidade: { responsabilidade: string; total: number }[]
   }
+  risk_matrix: {
+    probabilidade: number
+    probabilidade_label: string
+    gravidade: number
+    gravidade_label: string
+    indice: number
+    total: number
+  }[]
   rankings: {
     condutores: { nome: string; total: number }[]
     veiculos: { prefixo: string; total: number }[]
     cidades: { cidade: string; total: number }[]
   }
+  actions: {
+    sinistro_id: number
+    numero: string | null
+    unit: string
+    tipo: string
+    responsavel: string | null
+    prazo: string | null
+    status_acao: string
+    dias_atraso: number
+    gravidade: string | null
+  }[]
 }
 
 export interface SSTDashboardV2Filters {

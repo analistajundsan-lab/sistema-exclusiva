@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
   ClipboardList,
+  DollarSign,
   Gauge,
   Heart,
+  HeartPulse,
   Shield,
   ShieldAlert,
   UserCheck,
@@ -65,6 +67,95 @@ const RankingList = ({
         </li>
       ))}
     </ol>
+  </ChartPanel>
+)
+
+const riskBand = (indice: number) =>
+  indice >= 15
+    ? 'bg-red-500/85 text-white'
+    : indice >= 10
+      ? 'bg-orange-400/85 text-white'
+      : indice >= 5
+        ? 'bg-yellow-300/80 text-gray-900'
+        : 'bg-green-400/70 text-gray-900'
+
+const RiskMatrix = ({ cells }: { cells: SSTDashboardV2['risk_matrix'] }) => {
+  const total = cells.reduce((a, c) => a + c.total, 0)
+  const get = (p: number, g: number) => cells.find(c => c.probabilidade === p && c.gravidade === g)
+  return (
+    <ChartPanel title="Matriz de risco" subtitle="Probabilidade (linha) × Gravidade (coluna)" empty={total === 0}>
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-[28px_repeat(5,minmax(40px,1fr))] gap-1 text-center text-xs">
+          <div />
+          {[1, 2, 3, 4, 5].map(g => (
+            <div key={g} className="pb-1 font-semibold text-gray-500 dark:text-gray-400">G{g}</div>
+          ))}
+          {[5, 4, 3, 2, 1].map(p => (
+            <Fragment key={p}>
+              <div className="flex items-center justify-end pr-0.5 font-semibold text-gray-500 dark:text-gray-400">P{p}</div>
+              {[1, 2, 3, 4, 5].map(g => {
+                const tot = get(p, g)?.total || 0
+                return (
+                  <div
+                    key={g}
+                    className={`rounded py-2.5 font-bold ${riskBand(p * g)} ${tot === 0 ? 'opacity-25' : ''}`}
+                    title={`Prob ${p} × Grav ${g} = índice ${p * g}`}
+                  >
+                    {tot}
+                  </div>
+                )
+              })}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    </ChartPanel>
+  )
+}
+
+const ActionStatusBadge = ({ status }: { status: string }) => {
+  const map: Record<string, string> = {
+    pendente: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    em_andamento: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    concluida: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  }
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${map[status] || map.pendente}`}>{status.replace('_', ' ')}</span>
+}
+
+const ActionTable = ({ actions }: { actions: SSTDashboardV2['actions'] }) => (
+  <ChartPanel title="Plano de ação" subtitle="Tratativas de sinistros (mais atrasadas primeiro)" empty={actions.length === 0}>
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase text-gray-400">
+            <th className="py-1 font-semibold">Sinistro</th>
+            <th className="font-semibold">Unidade</th>
+            <th className="font-semibold">Responsável</th>
+            <th className="font-semibold">Prazo</th>
+            <th className="font-semibold">Atraso</th>
+            <th className="font-semibold">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {actions.map(a => (
+            <tr key={a.sinistro_id} className="border-t border-gray-100 dark:border-gray-800">
+              <td className="py-1.5 text-gray-700 dark:text-gray-300">{a.numero || `#${a.sinistro_id}`} · {a.tipo}</td>
+              <td className="text-gray-600 dark:text-gray-400">{a.unit}</td>
+              <td className="text-gray-600 dark:text-gray-400">{a.responsavel || '—'}</td>
+              <td className="text-gray-600 dark:text-gray-400">{a.prazo ? a.prazo.split('-').reverse().join('/') : '—'}</td>
+              <td>
+                {a.dias_atraso > 0 ? (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">{a.dias_atraso}d</span>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </td>
+              <td><ActionStatusBadge status={a.status_acao} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   </ChartPanel>
 )
 
@@ -194,6 +285,16 @@ export function SSTDashboard() {
             <KpiCard label="Ocorrências SST" value={s.ocorrencias_sst} icon={AlertTriangle} color="red" />
           </div>
 
+          {/* Faixa 1b — KPIs de impacto (Fase 2/3) */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <KpiCard label="Custo total" value={`R$ ${s.custo_total.toLocaleString('pt-BR')}`} icon={DollarSign} color="red" hint="Soma de custo_final dos sinistros no período." />
+            <KpiCard label="Ações vencidas" value={s.acoes_vencidas} icon={AlertTriangle} color={s.acoes_vencidas > 0 ? 'red' : 'green'} />
+            <KpiCard label="Ações abertas" value={s.acoes_abertas} icon={ClipboardList} color="yellow" />
+            <KpiCard label="Com vítima" value={s.com_vitima} icon={HeartPulse} color="red" />
+            <KpiCard label="Fadiga alta" value={s.fadiga_alta} icon={HeartPulse} color="yellow" hint="Avaliações de saúde com fadiga alta/crítica." />
+            <KpiCard label="Jornada excessiva" value={s.jornada_excessiva} icon={AlertTriangle} color="yellow" />
+          </div>
+
           {/* Faixa 2 — Tendência */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ChartPanel title="Sinistros por mês" subtitle="Últimos 12 meses">
@@ -247,6 +348,24 @@ export function SSTDashboard() {
               </ResponsiveContainer>
             </ChartPanel>
           </div>
+
+          {/* Faixa 3b — Matriz de risco + Pareto de fatores */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <RiskMatrix cells={data.risk_matrix} />
+            <ChartPanel title="Pareto — fatores contribuintes" subtitle="Maiores causas de sinistro" empty={data.breakdowns.por_fator_contribuinte.length === 0}>
+              <ResponsiveContainer width="100%" height={Math.max(160, data.breakdowns.por_fator_contribuinte.length * 36)}>
+                <BarChart layout="vertical" data={data.breakdowns.por_fator_contribuinte} margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+                  <XAxis type="number" allowDecimals={false} fontSize={11} stroke="#9ca3af" />
+                  <YAxis type="category" dataKey="fator" width={130} fontSize={11} stroke="#9ca3af" />
+                  <Tooltip />
+                  <Bar dataKey="total" fill="#7c3aed" radius={[0, 4, 4, 0]} name="Sinistros" />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          </div>
+
+          {/* Plano de ação */}
+          <ActionTable actions={data.actions} />
 
           {/* Faixa 4 — Rankings */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

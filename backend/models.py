@@ -1,6 +1,7 @@
 from sqlalchemy import (
     Column,
     Integer,
+    Float,
     String,
     Boolean,
     Date,
@@ -498,6 +499,27 @@ class Sinistro(Base):
     evidencias = Column(Text)  # JSON array
     envolvidos = Column(Text)  # JSON array
 
+    # ── Fase 2: campos analiticos (planilha REV3) ──
+    gravidade = Column(String(20), index=True)  # "1".."5" (matriz de risco)
+    probabilidade = Column(String(20), index=True)  # "1".."5"
+    turno = Column(String(20), index=True)
+    tipo_operacao = Column(String(80))
+    cliente_cad = Column(String(120), index=True)
+    fator_contribuinte = Column(String(120), index=True)
+    condicao_ambiental = Column(String(80))
+    houve_vitima = Column(Boolean)
+    houve_terceiro = Column(Boolean)
+    tipo_lesao = Column(String(80))
+    houve_afastamento = Column(Boolean)
+    tipo_trajeto = Column(String(80))
+    custo_final = Column(Float)
+    responsabilidade = Column(String(40), index=True)  # propria/terceiro/indefinida
+    # Plano de acao
+    tratativa_acao = Column(Text)
+    responsavel_acao = Column(String(255))
+    prazo_acao = Column(Date, index=True)
+    status_acao = Column(String(30), index=True)  # pendente/em_andamento/concluida
+
     status = Column(
         Enum(SinistroStatus),
         default=SinistroStatus.ABERTO,
@@ -538,6 +560,12 @@ class LiberacaoCondutor(Base):
     aso_ok = Column(Boolean)
     reciclagem_ok = Column(Boolean)
     avaliacoes_sst_ok = Column(Boolean)
+
+    # ── Fase 3: respostas item a item + score/categoria/alerta ──
+    respostas = Column(Text)  # JSON: [{item, categoria, impeditivo, resposta}]
+    score_aptidao = Column(Integer)  # 0-100
+    categoria_bloqueio = Column(String(40), index=True)  # fisica/fadiga/psicossocial/seguranca/jornada/documental
+    alerta_fadiga = Column(String(40), index=True)  # menos_4h/4_6h/jornada_excessiva/outra_atividade_12h
 
     resultado = Column(
         Enum(LiberacaoStatus),

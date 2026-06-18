@@ -155,6 +155,36 @@ def migrate_existing_sqlite() -> None:
         ensure_column(
             "vehicle_checklists", "bolsa_documentos", "bolsa_documentos VARCHAR(20)"
         )
+    if "sinistros" in tables:
+        for col, ddl in [
+            ("gravidade", "gravidade VARCHAR(20)"),
+            ("probabilidade", "probabilidade VARCHAR(20)"),
+            ("turno", "turno VARCHAR(20)"),
+            ("tipo_operacao", "tipo_operacao VARCHAR(80)"),
+            ("cliente_cad", "cliente_cad VARCHAR(120)"),
+            ("fator_contribuinte", "fator_contribuinte VARCHAR(120)"),
+            ("condicao_ambiental", "condicao_ambiental VARCHAR(80)"),
+            ("houve_vitima", "houve_vitima BOOLEAN"),
+            ("houve_terceiro", "houve_terceiro BOOLEAN"),
+            ("tipo_lesao", "tipo_lesao VARCHAR(80)"),
+            ("houve_afastamento", "houve_afastamento BOOLEAN"),
+            ("tipo_trajeto", "tipo_trajeto VARCHAR(80)"),
+            ("custo_final", "custo_final FLOAT"),
+            ("responsabilidade", "responsabilidade VARCHAR(40)"),
+            ("tratativa_acao", "tratativa_acao TEXT"),
+            ("responsavel_acao", "responsavel_acao VARCHAR(255)"),
+            ("prazo_acao", "prazo_acao DATE"),
+            ("status_acao", "status_acao VARCHAR(30)"),
+        ]:
+            ensure_column("sinistros", col, ddl)
+    if "liberacoes_condutor" in tables:
+        for col, ddl in [
+            ("respostas", "respostas TEXT"),
+            ("score_aptidao", "score_aptidao INTEGER"),
+            ("categoria_bloqueio", "categoria_bloqueio VARCHAR(40)"),
+            ("alerta_fadiga", "alerta_fadiga VARCHAR(40)"),
+        ]:
+            ensure_column("liberacoes_condutor", col, ddl)
 
 
 DAILY_SAFETY_ITEMS = [
