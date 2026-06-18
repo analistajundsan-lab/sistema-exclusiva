@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, date as date_type
+from datetime import datetime, date as date_type, timedelta
 from zoneinfo import ZoneInfo
 from typing import List, Optional
 
@@ -170,12 +170,6 @@ async def sst_dashboard(
         LiberacaoCondutor.resultado == LiberacaoStatus.LIBERADO
     ).count()
 
-    checklist_q = db.query(DriverChecklistSubmission)
-    checklists_hoje = checklist_q.filter(
-        func.date(DriverChecklistSubmission.submitted_at) == today
-    ).count()
-    checklists_pendentes = 0
-
     veiculo_q = apply_user_unit_scope(
         db.query(SafetyVehicle), SafetyVehicle.unit, current_user
     )
@@ -183,9 +177,44 @@ async def sst_dashboard(
         veiculo_q = veiculo_q.filter(SafetyVehicle.unit == unit)
     total_veiculos = veiculo_q.filter(SafetyVehicle.active.is_(True)).count()
 
-    ocorrencias_sst = (
-        db.query(Incident).filter(Incident.sst_forwarded.is_(True)).count()
+    # Check-list escopado por unidade via join com o veiculo (a submissao nao
+    # tem coluna unit propria).
+    def _scoped_checklist_query():
+        q = db.query(DriverChecklistSubmission).join(
+            SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id
+        )
+        q = apply_user_unit_scope(q, SafetyVehicle.unit, current_user)
+        if unit:
+            q = q.filter(SafetyVehicle.unit == unit)
+        return q
+
+    checklists_hoje = _scoped_checklist_query().filter(
+        func.date(DriverChecklistSubmission.submitted_at) == today
+    ).count()
+    veiculos_com_checklist_hoje = (
+        _scoped_checklist_query()
+        .filter(func.date(DriverChecklistSubmission.submitted_at) == today)
+        .with_entities(DriverChecklistSubmission.vehicle_id)
+        .distinct()
+        .count()
     )
+    checklists_pendentes = max(0, total_veiculos - veiculos_com_checklist_hoje)
+
+    total_motoristas = (
+        _scoped_checklist_query()
+        .with_entities(DriverChecklistSubmission.driver_registration)
+        .distinct()
+        .count()
+    )
+
+    ocorrencia_q = apply_user_unit_scope(
+        db.query(Incident).filter(Incident.sst_forwarded.is_(True)),
+        Incident.unit,
+        current_user,
+    )
+    if unit:
+        ocorrencia_q = ocorrencia_q.filter(Incident.unit == unit)
+    ocorrencias_sst = ocorrencia_q.count()
 
     top_condutores_raw = (
         sinistro_q.filter(Sinistro.condutor_nome.isnot(None))
@@ -209,7 +238,7 @@ async def sst_dashboard(
 
     return SSTDashboardResponse(
         total_veiculos=total_veiculos,
-        total_motoristas=0,
+        total_motoristas=total_motoristas,
         sinistros_mes=sinistros_mes,
         sinistros_ano=sinistros_ano,
         sinistros_investigacao=sinistros_investigacao,
@@ -224,6 +253,258 @@ async def sst_dashboard(
         top_condutores=top_condutores,
         top_veiculos=top_veiculos,
     )
+
+
+def _turno_label(hora: Optional[str]) -> str:
+    try:
+        h = int((hora or "").split(":")[0])
+    except (ValueError, IndexError):
+        return "Nao informado"
+    if 0 <= h <= 5:
+        return "Madrugada"
+    if 6 <= h <= 11:
+        return "Manha"
+    if 12 <= h <= 17:
+        return "Tarde"
+    return "Noite"
+
+
+def _last_12_months(today: date_type) -> list[str]:
+    months = []
+    y, m = today.year, today.month
+    for i in range(11, -1, -1):
+        mm, yy = m - i, y
+        while mm <= 0:
+            mm += 12
+            yy -= 1
+        months.append(f"{yy:04d}-{mm:02d}")
+    return months
+
+
+def _top(counter: dict, key_name: str, limit: int = 5) -> list[dict]:
+    items = sorted(counter.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return [{key_name: k, "total": v} for k, v in items]
+
+
+@router.get("/dashboard-v2")
+async def sst_dashboard_v2(
+    unit: Optional[str] = None,
+    date_start: Optional[date_type] = None,
+    date_end: Optional[date_type] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(*SST_ROLES)),
+):
+    """Cockpit BI agregado de SST (Fase 1): tendencias, breakdowns, rankings,
+    conformidade de check-list e KPIs com variacao — usando os dados ja existentes."""
+    now = datetime.now(BRASILIA_TZ)
+    today = now.date()
+
+    d_end = date_end or today
+    d_start = date_start or (d_end - timedelta(days=29))
+    if d_start > d_end:
+        d_start, d_end = d_end, d_start
+    period_days = (d_end - d_start).days + 1
+    prev_end = d_start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=period_days - 1)
+
+    def _sin_q():
+        q = apply_user_unit_scope(db.query(Sinistro), Sinistro.unit, current_user)
+        if unit:
+            q = q.filter(Sinistro.unit == unit)
+        return q
+
+    months = _last_12_months(today)
+    fetch_start = min(d_start, prev_start, date_type(int(months[0][:4]), int(months[0][5:]), 1))
+    rows = (
+        _sin_q()
+        .filter(Sinistro.data_ocorrencia >= fetch_start)
+        .with_entities(
+            Sinistro.data_ocorrencia,
+            Sinistro.hora_ocorrencia,
+            Sinistro.tipo_sinistro,
+            Sinistro.unit,
+            Sinistro.prefixo,
+            Sinistro.condutor_nome,
+            Sinistro.cidade,
+            Sinistro.status,
+        )
+        .all()
+    )
+
+    por_mes = {mo: 0 for mo in months}
+    por_tipo, por_turno, por_unidade = {}, {}, {}
+    rk_cond, rk_veic, rk_cidade = {}, {}, {}
+    sinistros_periodo = sinistros_prev = 0
+
+    for data_oc, hora, tipo, u, prefixo, condutor, cidade, st in rows:
+        if data_oc is None:
+            continue
+        mo = f"{data_oc.year:04d}-{data_oc.month:02d}"
+        if mo in por_mes:
+            por_mes[mo] += 1
+        if d_start <= data_oc <= d_end:
+            sinistros_periodo += 1
+            if tipo:
+                por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
+            por_turno[_turno_label(hora)] = por_turno.get(_turno_label(hora), 0) + 1
+            if u:
+                por_unidade[u] = por_unidade.get(u, 0) + 1
+            if condutor:
+                rk_cond[condutor] = rk_cond.get(condutor, 0) + 1
+            if prefixo:
+                rk_veic[prefixo] = rk_veic.get(prefixo, 0) + 1
+            if cidade:
+                rk_cidade[cidade] = rk_cidade.get(cidade, 0) + 1
+        elif prev_start <= data_oc <= prev_end:
+            sinistros_prev += 1
+
+    if sinistros_prev > 0:
+        delta_pct = round((sinistros_periodo - sinistros_prev) / sinistros_prev * 100)
+    else:
+        delta_pct = 100 if sinistros_periodo > 0 else 0
+
+    sinistros_investigacao = _sin_q().filter(
+        Sinistro.status == SinistroStatus.EM_INVESTIGACAO
+    ).count()
+
+    # ── Veiculos + conformidade de check-list ──
+    veiculo_q = apply_user_unit_scope(
+        db.query(SafetyVehicle), SafetyVehicle.unit, current_user
+    )
+    if unit:
+        veiculo_q = veiculo_q.filter(SafetyVehicle.unit == unit)
+    total_veiculos = veiculo_q.filter(SafetyVehicle.active.is_(True)).count()
+
+    def _chk_q():
+        q = db.query(DriverChecklistSubmission).join(
+            SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id
+        )
+        q = apply_user_unit_scope(q, SafetyVehicle.unit, current_user)
+        if unit:
+            q = q.filter(SafetyVehicle.unit == unit)
+        return q
+
+    veic_chk_hoje = (
+        _chk_q()
+        .filter(func.date(DriverChecklistSubmission.submitted_at) == today)
+        .with_entities(DriverChecklistSubmission.vehicle_id)
+        .distinct()
+        .count()
+    )
+    compliance_pct = round(veic_chk_hoje / total_veiculos * 100) if total_veiculos else 0
+
+    chk_rows = (
+        _chk_q()
+        .filter(func.date(DriverChecklistSubmission.submitted_at) >= today - timedelta(days=13))
+        .with_entities(
+            DriverChecklistSubmission.submitted_at,
+            DriverChecklistSubmission.overall_status,
+        )
+        .all()
+    )
+    checklists_por_dia = {
+        (today - timedelta(days=i)).isoformat(): 0 for i in range(13, -1, -1)
+    }
+    chk_por_status = {}
+    for submitted_at, ov in chk_rows:
+        if submitted_at is None:
+            continue
+        d = submitted_at.date().isoformat()
+        if d in checklists_por_dia:
+            checklists_por_dia[d] += 1
+        key = getattr(ov, "value", str(ov))
+        chk_por_status[key] = chk_por_status.get(key, 0) + 1
+
+    # ── Liberacao de condutor ──
+    lib_q = apply_user_unit_scope(
+        db.query(LiberacaoCondutor), LiberacaoCondutor.unit, current_user
+    )
+    if unit:
+        lib_q = lib_q.filter(LiberacaoCondutor.unit == unit)
+    condutores_bloqueados = lib_q.filter(
+        LiberacaoCondutor.resultado == LiberacaoStatus.NAO_LIBERADO
+    ).count()
+    condutores_restricao = lib_q.filter(
+        LiberacaoCondutor.resultado == LiberacaoStatus.LIBERADO_COM_RESTRICAO
+    ).count()
+
+    flag_labels = [
+        ("documentacao_ok", "Documentacao"),
+        ("treinamentos_ok", "Treinamentos"),
+        ("exames_ok", "Exames"),
+        ("aso_ok", "ASO"),
+        ("reciclagem_ok", "Reciclagem"),
+        ("avaliacoes_sst_ok", "Avaliacoes SST"),
+    ]
+    bloqueio_motivos = {label: 0 for _, label in flag_labels}
+    for lb in lib_q.filter(
+        LiberacaoCondutor.resultado.in_(
+            [LiberacaoStatus.NAO_LIBERADO, LiberacaoStatus.LIBERADO_COM_RESTRICAO]
+        )
+    ).all():
+        for attr, label in flag_labels:
+            if getattr(lb, attr) is False:
+                bloqueio_motivos[label] += 1
+
+    # ── Ocorrencias SST encaminhadas (escopadas) ──
+    ocorrencia_q = apply_user_unit_scope(
+        db.query(Incident).filter(Incident.sst_forwarded.is_(True)),
+        Incident.unit,
+        current_user,
+    )
+    if unit:
+        ocorrencia_q = ocorrencia_q.filter(Incident.unit == unit)
+    ocorrencias_sst = ocorrencia_q.count()
+
+    # Indice de atencao (heuristico, 0-100): sinistros do periodo + bloqueios +
+    # nao-conformidade de check-list. Nao e formula oficial de risco.
+    risk_score = min(
+        100,
+        round(sinistros_periodo * 8 + condutores_bloqueados * 12 + (100 - compliance_pct) * 0.4),
+    )
+
+    return {
+        "period": {"start": d_start.isoformat(), "end": d_end.isoformat()},
+        "summary": {
+            "risk_score": risk_score,
+            "sinistros_periodo": sinistros_periodo,
+            "sinistros_delta_pct": delta_pct,
+            "checklist_compliance_pct": compliance_pct,
+            "condutores_bloqueados": condutores_bloqueados,
+            "condutores_restricao": condutores_restricao,
+            "sinistros_investigacao": sinistros_investigacao,
+            "ocorrencias_sst": ocorrencias_sst,
+            "total_veiculos": total_veiculos,
+        },
+        "trends": {
+            "sinistros_por_mes": [{"mes": k, "total": v} for k, v in por_mes.items()],
+            "checklists_por_dia": [
+                {"dia": k, "total": v} for k, v in checklists_por_dia.items()
+            ],
+        },
+        "breakdowns": {
+            "por_tipo": _top(por_tipo, "tipo", 8),
+            "por_turno": [
+                {"turno": t, "total": por_turno.get(t, 0)}
+                for t in ["Madrugada", "Manha", "Tarde", "Noite", "Nao informado"]
+                if por_turno.get(t, 0) > 0
+            ],
+            "por_unidade": _top(por_unidade, "unidade", 8),
+            "checklist_por_status": [
+                {"status": k, "total": v} for k, v in chk_por_status.items()
+            ],
+            "bloqueio_por_motivo": [
+                {"motivo": k, "total": v}
+                for k, v in bloqueio_motivos.items()
+                if v > 0
+            ],
+        },
+        "rankings": {
+            "condutores": _top(rk_cond, "nome"),
+            "veiculos": _top(rk_veic, "prefixo"),
+            "cidades": _top(rk_cidade, "cidade"),
+        },
+    }
 
 
 # ── Sinistros ─────────────────────────────────────────────────────────────────

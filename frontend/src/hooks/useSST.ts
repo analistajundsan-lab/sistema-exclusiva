@@ -144,6 +144,54 @@ export async function getSSTDashboard(unit?: string): Promise<SSTDashboard> {
   return res.data
 }
 
+export interface SSTDashboardV2 {
+  period: { start: string; end: string }
+  summary: {
+    risk_score: number
+    sinistros_periodo: number
+    sinistros_delta_pct: number
+    checklist_compliance_pct: number
+    condutores_bloqueados: number
+    condutores_restricao: number
+    sinistros_investigacao: number
+    ocorrencias_sst: number
+    total_veiculos: number
+  }
+  trends: {
+    sinistros_por_mes: { mes: string; total: number }[]
+    checklists_por_dia: { dia: string; total: number }[]
+  }
+  breakdowns: {
+    por_tipo: { tipo: string; total: number }[]
+    por_turno: { turno: string; total: number }[]
+    por_unidade: { unidade: string; total: number }[]
+    checklist_por_status: { status: string; total: number }[]
+    bloqueio_por_motivo: { motivo: string; total: number }[]
+  }
+  rankings: {
+    condutores: { nome: string; total: number }[]
+    veiculos: { prefixo: string; total: number }[]
+    cidades: { cidade: string; total: number }[]
+  }
+}
+
+export interface SSTDashboardV2Filters {
+  unit?: string
+  date_start?: string
+  date_end?: string
+}
+
+export async function getSSTDashboardV2(
+  filters: SSTDashboardV2Filters = {},
+): Promise<SSTDashboardV2> {
+  const params: Record<string, string> = {}
+  if (filters.unit) params.unit = filters.unit
+  if (filters.date_start) params.date_start = filters.date_start
+  if (filters.date_end) params.date_end = filters.date_end
+  const res = await api.get('/sst/dashboard-v2', { params })
+  return res.data
+}
+
 // ── Sinistros ─────────────────────────────────────────────────────────────────
 export async function listSinistros(params: Record<string, unknown> = {}): Promise<Sinistro[]> {
   const res = await api.get('/sst/sinistros', { params })
