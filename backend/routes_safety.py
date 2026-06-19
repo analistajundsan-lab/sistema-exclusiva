@@ -56,6 +56,13 @@ SAFETY_ROLES = {
 }
 # Aprovação de ticket para SST é ação de gestão — restrita ao Admin.
 APPROVAL_ROLES = {"admin"}
+# Visão consultiva SST (/safety/sst-view): exclusiva de TST/Engenheiro de
+# Segurança. Analista NÃO acessa (ele tem a tela Check-list operacional).
+SST_VIEW_ROLES = {
+    "admin",
+    "tecnico_seguranca",
+    "engenheiro_seguranca",
+}
 
 
 def _today_brasilia() -> date_type:
@@ -66,6 +73,16 @@ def _require_safety_user(user: User) -> None:
     if getattr(user, "has_full_access", False):
         return
     if user.role.value not in SAFETY_ROLES:
+        raise HTTPException(
+            status_code=403, detail="Acesso restrito a seguranca do trabalho"
+        )
+
+
+def _require_sst_view_user(user: User) -> None:
+    """Visão consultiva SST: apenas TST/Engenheiro de Segurança (+ super_admin)."""
+    if getattr(user, "has_full_access", False):
+        return
+    if user.role.value not in SST_VIEW_ROLES:
         raise HTTPException(
             status_code=403, detail="Acesso restrito a seguranca do trabalho"
         )
@@ -525,7 +542,7 @@ async def sst_view(
     current_user: User = Depends(get_current_user),
 ):
     """Visão consultiva para Técnico/Engenheiro: submissões + tickets aprovados pela gerência."""
-    _require_safety_user(current_user)
+    _require_sst_view_user(current_user)
 
     submissions_q = (
         db.query(DriverChecklistSubmission, SafetyVehicle)
