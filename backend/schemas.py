@@ -181,6 +181,10 @@ class IncidentCreate(BaseModel):
     direction: Optional[str] = None
     victim_status: Optional[str] = None
     replacement_prefix: Optional[str] = Field(None, max_length=20)
+    local: Optional[str] = Field(None, max_length=255)
+    motorista: Optional[str] = Field(None, max_length=255)
+    passageiros: Optional[int] = Field(None, ge=0, le=99)
+    horario: Optional[str] = Field(None, max_length=5)
     unit: Optional[str] = Field(None, max_length=80)
     status: IncidentStatus = IncidentStatus.ABERTO
 
@@ -193,6 +197,10 @@ class IncidentUpdate(BaseModel):
     direction: Optional[str] = None
     victim_status: Optional[str] = None
     replacement_prefix: Optional[str] = Field(None, max_length=20)
+    local: Optional[str] = Field(None, max_length=255)
+    motorista: Optional[str] = Field(None, max_length=255)
+    passageiros: Optional[int] = Field(None, ge=0, le=99)
+    horario: Optional[str] = Field(None, max_length=5)
     status: Optional[IncidentStatus] = None
 
 
@@ -207,6 +215,10 @@ class IncidentResponse(BaseModel):
     direction: Optional[str] = None
     victim_status: Optional[str] = None
     replacement_prefix: Optional[str] = None
+    local: Optional[str] = None
+    motorista: Optional[str] = None
+    passageiros: Optional[int] = None
+    horario: Optional[str] = None
     unit: Optional[str] = None
     status: IncidentStatus = IncidentStatus.ABERTO
     sst_forwarded: bool = False

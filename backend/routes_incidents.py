@@ -1,6 +1,8 @@
+import re
 from datetime import date as date_type, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -30,6 +32,14 @@ def format_incident_whatsapp_text(incident: Incident) -> str:
         parts.append(f"Sentido: {incident.direction}")
     if incident.replacement_prefix:
         parts.append(f"Substituto: {incident.replacement_prefix}")
+    if incident.horario:
+        parts.append(f"Horario: {incident.horario}")
+    if incident.local:
+        parts.append(f"Local: {incident.local}")
+    if incident.passageiros is not None:
+        parts.append(f"Passageiros a bordo: {incident.passageiros}")
+    if incident.motorista:
+        parts.append(f"Motorista: {incident.motorista}")
     if incident.victim_status == "com_vitimas":
         parts.append("Vitimas: com vitimas")
     elif incident.victim_status == "sem_vitimas":
@@ -104,6 +114,39 @@ async def create_incident(
     db.commit()
     db.refresh(incident)
     return incident
+
+
+@router.get("/cep/{cep}")
+async def lookup_cep(
+    cep: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Consulta endereço por CEP (proxy ViaCEP). Usado para autopreencher o
+    campo Local no registro de ocorrência. O usuário pode editar o resultado."""
+    digits = re.sub(r"\D", "", cep)
+    if len(digits) != 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="CEP deve ter 8 dígitos",
+        )
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(f"https://viacep.com.br/ws/{digits}/json/")
+        info = resp.json()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Falha ao consultar o CEP. Preencha o local manualmente.",
+        )
+    if not isinstance(info, dict) or info.get("erro"):
+        raise HTTPException(status_code=404, detail="CEP não encontrado")
+    return {
+        "cep": info.get("cep"),
+        "logradouro": info.get("logradouro"),
+        "bairro": info.get("bairro"),
+        "cidade": info.get("localidade"),
+        "uf": info.get("uf"),
+    }
 
 
 @router.get("/", response_model=List[IncidentResponse])

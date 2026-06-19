@@ -138,6 +138,10 @@ def migrate_existing_sqlite() -> None:
         ensure_column(
             "incidents", "replacement_prefix", "replacement_prefix VARCHAR(20)"
         )
+        ensure_column("incidents", "local", "local VARCHAR(255)")
+        ensure_column("incidents", "motorista", "motorista VARCHAR(255)")
+        ensure_column("incidents", "passageiros", "passageiros INTEGER")
+        ensure_column("incidents", "horario", "horario VARCHAR(5)")
         ensure_column(
             "incidents", "sst_forward_reason", "sst_forward_reason VARCHAR(500)"
         )

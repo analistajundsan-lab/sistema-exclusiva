@@ -153,6 +153,10 @@ class Incident(Base):
     direction = Column(String(50))
     victim_status = Column(String(20))
     replacement_prefix = Column(String(20), index=True)
+    local = Column(String(255))
+    motorista = Column(String(255))
+    passageiros = Column(Integer)
+    horario = Column(String(5))
     unit = Column(String(80), index=True)
     status = Column(
         Enum(IncidentStatus), default=IncidentStatus.ABERTO, nullable=False, index=True

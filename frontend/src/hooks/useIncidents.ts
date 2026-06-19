@@ -12,6 +12,10 @@ export interface Incident {
   direction?: string
   victim_status?: string
   replacement_prefix?: string
+  local?: string
+  motorista?: string
+  passageiros?: number
+  horario?: string
   unit?: string
   status: IncidentStatus
   created_by: number

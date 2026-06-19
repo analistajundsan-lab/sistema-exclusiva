@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { Incident, useIncidents } from '../hooks/useIncidents'
 import { useAuthStore } from '../store/auth'
-import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, MessageCircle, Pencil, Trash2 } from 'lucide-react'
+import api from '../api/client'
+import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, MessageCircle, Pencil, Trash2, Check, MapPin, User as UserIcon } from 'lucide-react'
 
 const emptyForm = {
   prefix_code: '',
@@ -12,7 +13,16 @@ const emptyForm = {
   description: '',
   victim_status: '',
   replacement_prefix: '',
+  horario: '',
+  cep: '',
+  local: '',
+  passageiros: '',
+  motorista: '',
 }
+
+// Hora atual "HH:MM" no fuso de Brasília (default do campo Horário).
+const nowHHMM = () =>
+  new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 
 export function Incidents() {
   const { incidents, loading, error, total, page, totalPages, setPage, createIncident, updateIncident, deleteIncident, fetchIncidents, filters } = useIncidents()
@@ -26,19 +36,36 @@ export function Incidents() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [whatsAppMenu, setWhatsAppMenu] = useState<number | 'new' | null>(null)
+  // Ocorrência já salva no banco neste fluxo (habilita o envio por WhatsApp).
+  const [savedIncident, setSavedIncident] = useState<Incident | null>(null)
+  const [cepLoading, setCepLoading] = useState(false)
 
   const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const incidentText = (incident: {
-    prefix_code: string
-    incident_type: string
-    line?: string
-    direction?: string
-    victim_status?: string
-    replacement_prefix?: string
-    description?: string
-  }) => {
+  // Mantém só dígitos, limitado a `max` caracteres (prefixo substituto, passageiros).
+  const handleDigits = (name: string, max: number) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(f => ({ ...f, [name]: e.target.value.replace(/\D/g, '').slice(0, max) }))
+
+  // Consulta o CEP (proxy backend -> ViaCEP) e autopreenche o Local (editável).
+  const lookupCep = async (rawCep: string) => {
+    const digits = rawCep.replace(/\D/g, '')
+    if (digits.length !== 8) return
+    setCepLoading(true)
+    try {
+      const res = await api.get(`/incidents/cep/${digits}`)
+      const d = res.data
+      const cidadeUf = d.cidade && d.uf ? `${d.cidade}-${d.uf}` : (d.cidade || '')
+      const endereco = [d.logradouro, d.bairro, cidadeUf].filter(Boolean).join(', ')
+      if (endereco) setForm(f => ({ ...f, local: endereco }))
+    } catch {
+      // Silencioso: se o CEP falhar, o usuário preenche o Local manualmente.
+    } finally {
+      setCepLoading(false)
+    }
+  }
+
+  const incidentText = (incident: Partial<Incident>) => {
     const parts = [
       'OCORRENCIA OPERACIONAL',
       `Tipo: ${incident.incident_type}`,
@@ -47,6 +74,10 @@ export function Incidents() {
     if (incident.line) parts.push(`Linha: ${incident.line}`)
     if (incident.direction) parts.push(`Sentido: ${incident.direction}`)
     if (incident.replacement_prefix) parts.push(`Substituto: ${incident.replacement_prefix}`)
+    if (incident.horario) parts.push(`Horario: ${incident.horario}`)
+    if (incident.local) parts.push(`Local: ${incident.local}`)
+    if (incident.passageiros !== undefined && incident.passageiros !== null) parts.push(`Passageiros a bordo: ${incident.passageiros}`)
+    if (incident.motorista) parts.push(`Motorista: ${incident.motorista}`)
     if (incident.victim_status === 'com_vitimas') parts.push('Vitimas: com vitimas')
     if (incident.victim_status === 'sem_vitimas') parts.push('Vitimas: sem vitimas')
     if (incident.description) parts.push('', incident.description)
@@ -75,9 +106,18 @@ export function Incidents() {
     return Date.now() - new Date(incident.created_at).getTime() <= 2 * 60 * 60 * 1000
   }
 
+  const closeModal = () => {
+    setModal(false)
+    setEditing(null)
+    setSavedIncident(null)
+    setForm(emptyForm)
+    setFormError(null)
+  }
+
   const openCreate = () => {
     setEditing(null)
-    setForm(emptyForm)
+    setForm({ ...emptyForm, horario: nowHHMM() })
+    setSavedIncident(null)
     setFormError(null)
     setModal(true)
   }
@@ -92,38 +132,60 @@ export function Incidents() {
       description: incident.description || '',
       victim_status: incident.victim_status || '',
       replacement_prefix: incident.replacement_prefix || '',
+      horario: incident.horario || '',
+      cep: '',
+      local: incident.local || '',
+      passageiros: incident.passageiros != null ? String(incident.passageiros) : '',
+      motorista: incident.motorista || '',
     })
+    setSavedIncident(null)
     setFormError(null)
     setModal(true)
   }
 
-  const handleSubmit = async (sendAfterSave = false) => {
+  // Passo 1: salva no banco (cria/atualiza). Em sucesso, guarda a ocorrência
+  // salva — só então o botão de WhatsApp é habilitado, garantindo que nada é
+  // enviado antes de estar persistido.
+  const handleSave = async () => {
     if (!form.prefix_code || !form.incident_type) {
-      setFormError('Preencha prefixo e tipo.')
+      setFormError('Preencha prefixo e tipo de evento.')
       return
     }
     setSaving(true)
     setFormError(null)
     try {
       const payload = {
-        ...form,
-        unit: userUnit || undefined,
+        prefix_code: form.prefix_code,
+        incident_type: form.incident_type,
+        line: form.line || undefined,
+        direction: form.direction || undefined,
+        description: form.description || undefined,
+        victim_status: form.victim_status || undefined,
         replacement_prefix: form.replacement_prefix.trim() || undefined,
+        local: form.local.trim() || undefined,
+        motorista: form.motorista.trim() || undefined,
+        passageiros: form.passageiros !== '' ? Number(form.passageiros) : undefined,
+        horario: form.horario || undefined,
+        unit: userUnit || undefined,
         status: 'aberto',
       } as any
       const saved = editing
         ? await updateIncident(editing.id, payload)
         : await createIncident(payload)
-      setModal(false)
-      setEditing(null)
-      setForm(emptyForm)
+      setSavedIncident(saved)
       await fetchIncidents(filters, page * 20)
-      if (sendAfterSave) sendWhatsApp(incidentText(saved))
     } catch (e: any) {
       setFormError(e?.response?.data?.detail || 'Erro ao registrar ocorrência.')
     } finally {
       setSaving(false)
     }
+  }
+
+  // Passo 2: envia via WhatsApp a ocorrência JÁ salva e fecha o modal.
+  const handleSendWhatsApp = () => {
+    if (!savedIncident) return
+    sendWhatsApp(incidentText(savedIncident))
+    closeModal()
   }
 
   const handleDelete = async (incident: Incident) => {
@@ -342,7 +404,7 @@ export function Incidents() {
                 <h2 className="text-base font-bold">{editing ? 'Editar Ocorrencia' : 'Registrar Ocorrência'}</h2>
               </div>
               <button
-                onClick={() => { setModal(false); setEditing(null); setFormError(null) }}
+                onClick={closeModal}
                 className="text-red-200 hover:text-white transition-colors"
               >
                 <X size={18} />
@@ -373,7 +435,7 @@ export function Incidents() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-                      Tipo de Ocorrência *
+                      Tipo de Evento *
                     </label>
                     <select
                       name="incident_type"
@@ -417,16 +479,83 @@ export function Incidents() {
                       <option value="EM DESLOCAMENTO">EM DESLOCAMENTO</option>
                     </select>
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
                       Prefixo substituto
                     </label>
                     <input
                       name="replacement_prefix"
                       value={form.replacement_prefix}
+                      onChange={handleDigits('replacement_prefix', 4)}
+                      inputMode="numeric"
+                      maxLength={4}
+                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-mono"
+                      placeholder="0000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                      Horário
+                    </label>
+                    <input
+                      type="time"
+                      name="horario"
+                      value={form.horario}
                       onChange={handle}
                       className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
-                      placeholder="Opcional"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                      CEP <span className="normal-case font-normal text-gray-400">(autopreenche o local)</span>
+                    </label>
+                    <input
+                      name="cep"
+                      value={form.cep}
+                      onChange={handleDigits('cep', 8)}
+                      onBlur={() => lookupCep(form.cep)}
+                      inputMode="numeric"
+                      maxLength={8}
+                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-mono"
+                      placeholder="00000000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                      Passageiros a bordo
+                    </label>
+                    <input
+                      name="passageiros"
+                      value={form.passageiros}
+                      onChange={handleDigits('passageiros', 2)}
+                      inputMode="numeric"
+                      maxLength={2}
+                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                      <MapPin size={12} /> Local {cepLoading && <span className="normal-case font-normal text-brand-500">buscando…</span>}
+                    </label>
+                    <input
+                      name="local"
+                      value={form.local}
+                      onChange={handle}
+                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      placeholder="Rua, bairro, cidade — ou digite o CEP acima"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                      <UserIcon size={12} /> Motorista
+                    </label>
+                    <input
+                      name="motorista"
+                      value={form.motorista}
+                      onChange={handle}
+                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      placeholder="Nome do motorista"
                     />
                   </div>
                 </div>
@@ -451,41 +580,49 @@ export function Incidents() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-                    Descrição
+                    Descrição resumida
                   </label>
                   <textarea
                     name="description"
                     value={form.description}
                     onChange={handle}
-                    className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full resize-none"
+                    className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full resize-y"
                     rows={3}
-                    placeholder="Descreva o ocorrido..."
+                    placeholder="Explicação mais detalhada do evento..."
                   />
                 </div>
 
+                {savedIncident && (
+                  <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 rounded-xl px-3 py-2.5 text-sm">
+                    <Check size={16} className="shrink-0" />
+                    Ocorrência registrada no sistema. Agora você pode enviar via WhatsApp.
+                  </div>
+                )}
                 <div className="flex gap-2 justify-end pt-1">
                   <button
-                    onClick={() => { setModal(false); setEditing(null); setFormError(null) }}
+                    onClick={closeModal}
                     className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-all"
                   >
-                    Cancelar
+                    {savedIncident ? 'Fechar' : 'Cancelar'}
                   </button>
-                  <button
-                    onClick={() => handleSubmit(false)}
-                    disabled={saving}
-                    className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all disabled:opacity-50"
-                  >
-                    <Plus size={15} />
-                    {saving ? 'Salvando...' : editing ? 'Salvar' : 'Registrar'}
-                  </button>
-                  <button
-                    onClick={() => handleSubmit(true)}
-                    disabled={saving || !form.prefix_code || !form.incident_type}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all disabled:opacity-50"
-                  >
-                    <MessageCircle size={15} />
-                    WhatsApp
-                  </button>
+                  {!savedIncident ? (
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || !form.prefix_code || !form.incident_type}
+                      className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all disabled:opacity-50"
+                    >
+                      <Plus size={15} />
+                      {saving ? 'Registrando...' : editing ? 'Salvar' : 'Registro'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSendWhatsApp}
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all"
+                    >
+                      <MessageCircle size={15} />
+                      Enviar via WhatsApp
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
