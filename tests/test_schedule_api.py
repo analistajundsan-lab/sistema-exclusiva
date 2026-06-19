@@ -595,6 +595,34 @@ def test_supervisor_can_cancel_line_and_operator_cannot(admin_token, operator_to
     assert "Cliente cancelou" in cancelled.json()["notes"]
 
 
+def test_trafego_pode_desativar_linha(admin_token):
+    """Trafego (plantonista) desativa uma linha que nao vai rodar -> cancelada."""
+    trafego_token = create_token("555.666.777-88", UserRole.PLANTONISTA)
+    client.post(
+        "/schedule/import?schedule_date=2026-04-13&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {trafego_token}"},
+    ).json()[0]["id"]
+
+    cancelled = client.post(
+        f"/schedule/lines/{line_id}/cancel",
+        headers={"Authorization": f"Bearer {trafego_token}"},
+        json={"reason": "Linha nao vai rodar"},
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelada"
+
+
 def test_admin_can_undo_confirmation(admin_token, operator_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",

@@ -125,6 +125,9 @@ export function OnCall() {
   const pending = useSchedule(pendingFilters)
   const swapsList = useSwaps({ unit: filters.unit, schedule_date: filters.schedule_date })
   const canManageLines = hasFullAccess || role === 'admin' || role === 'gerente' || role === 'supervisao' || role === 'supervisor'
+  // Desativar linha que não vai rodar: operadores da Confirmação (Tráfego/Analista)
+  // além de quem já gerencia. O backend grava status "cancelada" no banco.
+  const canCancelLine = canManageLines || role === 'plantonista' || role === 'analista'
   // Apenas admin/acesso total escolhe a unidade. Plantonista fica travado na
   // garagem cadastrada (a unica do seu perfil).
   const canChooseUnit = hasFullAccess || role === 'admin'
@@ -311,7 +314,7 @@ export function OnCall() {
     try {
       await pending.cancelLine(statusLine.line.id, statusReason)
       await pending.refetch(pendingFilters, 0)
-      setActionMessage('Linha cancelada.')
+      setActionMessage('Linha desativada (não vai rodar).')
       setStatusLine(null)
       setStatusReason('')
     } catch (e: any) {
@@ -641,11 +644,11 @@ export function OnCall() {
                         <ArrowLeftRight size={15} />
                         {line.status === 'confirmada' ? 'Trocar novamente' : 'Trocar'}
                       </button>
-                      {canManageLines && (
+                      {canCancelLine && (
                         <button
                           onClick={() => setStatusLine({ line, action: 'cancel' })}
                           className="flex items-center justify-center border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 px-3 py-2.5 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-                          title="Cancelar linha"
+                          title="Desativar linha (não vai rodar)"
                         >
                           <X size={15} />
                         </button>
@@ -836,7 +839,7 @@ export function OnCall() {
               <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-white">
                   <X size={18} />
-                  <h2 className="text-base font-bold">Cancelar linha</h2>
+                  <h2 className="text-base font-bold">Desativar linha</h2>
                 </div>
                 <button
                   type="button"
@@ -849,18 +852,21 @@ export function OnCall() {
 
               {/* Modal body */}
               <div className="p-6">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 flex items-center gap-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-2">
                   <Bus size={14} className="shrink-0 text-brand-500" />
                   Linha {statusLine.line.line_code} · Prefixo {statusLine.line.prefix_code}
                 </p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
+                  A linha será marcada como <strong>não vai rodar</strong> e sairá da lista de pendentes. O registro fica salvo no sistema.
+                </p>
                 <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1.5">
-                  Motivo
+                  Motivo (opcional)
                 </label>
                 <input
                   value={statusReason}
                   onChange={e => setStatusReason(e.target.value)}
                   className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full mb-5"
-                  placeholder="Informe o motivo"
+                  placeholder="Ex: linha não vai rodar hoje"
                 />
                 <div className="flex gap-2 justify-end">
                   <button
@@ -874,7 +880,7 @@ export function OnCall() {
                     type="submit"
                     className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all"
                   >
-                    Cancelar linha
+                    Desativar linha
                   </button>
                 </div>
               </div>

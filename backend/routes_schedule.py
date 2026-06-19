@@ -685,7 +685,17 @@ async def cancel_schedule_line(
     line_id: int,
     body: ScheduleLineStatusChange | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ADMIN)),
+    # Operadores da Confirmação de Escala (Tráfego/Analista) podem desativar uma
+    # linha que não vai rodar, além de Admin/Supervisor. Escopo de garagem
+    # garantido por ensure_unit_access abaixo.
+    current_user: User = Depends(
+        require_role(
+            UserRole.ADMIN,
+            UserRole.SUPERVISOR,
+            UserRole.ANALISTA,
+            UserRole.PLANTONISTA,
+        )
+    ),
 ):
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
