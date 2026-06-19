@@ -44,14 +44,18 @@ from schemas import (
 
 router = APIRouter(tags=["safety"])
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
+# Cargos que acessam o módulo de segurança/manutenção (Check-list operacional +
+# visão consultiva SST). Analista é o dono operacional da tela Check-list;
+# TST/Engenheiro usam a visão consultiva. Gerência/Supervisão foram
+# descontinuados. Operador/Tráfego (plantonista) NÃO têm acesso.
 SAFETY_ROLES = {
     "admin",
-    "gerente",
-    "supervisao",
+    "analista",
     "tecnico_seguranca",
     "engenheiro_seguranca",
 }
-APPROVAL_ROLES = {"admin", "gerente"}
+# Aprovação de ticket para SST é ação de gestão — restrita ao Admin.
+APPROVAL_ROLES = {"admin"}
 
 
 def _today_brasilia() -> date_type:
@@ -59,6 +63,8 @@ def _today_brasilia() -> date_type:
 
 
 def _require_safety_user(user: User) -> None:
+    if getattr(user, "has_full_access", False):
+        return
     if user.role.value not in SAFETY_ROLES:
         raise HTTPException(
             status_code=403, detail="Acesso restrito a seguranca do trabalho"

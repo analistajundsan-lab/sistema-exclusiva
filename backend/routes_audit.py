@@ -4,8 +4,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
-from models import AuditLog, User, get_db
+from auth import require_role
+from models import AuditLog, User, UserRole, get_db
 from schemas import AuditLogResponse, CountResponse
 
 router = APIRouter(prefix="/audit", tags=["audit"])
@@ -36,7 +36,7 @@ async def count_audit_logs(
     action: Optional[str] = None,
     include_deleted: bool = False,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     if include_deleted and not current_user.can_delete_history:
         raise HTTPException(
@@ -57,7 +57,7 @@ async def list_audit_logs(
     action: Optional[str] = None,
     include_deleted: bool = False,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     if include_deleted and not current_user.can_delete_history:
         raise HTTPException(
@@ -73,7 +73,7 @@ async def list_audit_logs(
 async def delete_audit_log(
     log_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     if not current_user.can_delete_history:
         raise HTTPException(
@@ -100,7 +100,7 @@ async def delete_audit_log(
 async def restore_audit_log(
     log_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     if not current_user.can_delete_history:
         raise HTTPException(
