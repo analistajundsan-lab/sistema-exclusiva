@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { Layout } from '../components/Layout'
 import { Incident, useIncidents } from '../hooks/useIncidents'
 import { useAuthStore } from '../store/auth'
 import api from '../api/client'
-import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, MessageCircle, Pencil, Trash2, Check, MapPin, User as UserIcon } from 'lucide-react'
+import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, ChevronDown, MessageCircle, Pencil, Trash2, Check, MapPin, User as UserIcon, Users as UsersIcon } from 'lucide-react'
 
 const emptyForm = {
   prefix_code: '',
@@ -24,6 +24,25 @@ const emptyForm = {
 const nowHHMM = () =>
   new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 
+// Item de detalhe (linha expandida da tabela).
+function Detail({ label, value, mono, icon }: {
+  label: string
+  value?: string | null
+  mono?: boolean
+  icon?: React.ReactNode
+}) {
+  return (
+    <div>
+      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+        {icon}{label}
+      </p>
+      <p className={`text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words ${mono ? 'font-mono' : ''}`}>
+        {value || <span className="text-gray-300 dark:text-gray-600">—</span>}
+      </p>
+    </div>
+  )
+}
+
 export function Incidents() {
   const { incidents, loading, error, total, page, totalPages, setPage, createIncident, updateIncident, deleteIncident, fetchIncidents, filters } = useIncidents()
   const role = useAuthStore(s => s.role)
@@ -36,6 +55,8 @@ export function Incidents() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [whatsAppMenu, setWhatsAppMenu] = useState<number | 'new' | null>(null)
+  // Linha de detalhes expandida na tabela.
+  const [expandedId, setExpandedId] = useState<number | null>(null)
   // Ocorrência já salva no banco neste fluxo (habilita o envio por WhatsApp).
   const [savedIncident, setSavedIncident] = useState<Incident | null>(null)
   const [cepLoading, setCepLoading] = useState(false)
@@ -251,7 +272,7 @@ export function Incidents() {
                     <div className="flex items-center gap-1.5"><Hash size={12} /> Prefixo</div>
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Tipo de Ocorrência
+                    Tipo de Evento
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     <div className="flex items-center gap-1.5"><Bus size={12} /> Linha</div>
@@ -283,11 +304,18 @@ export function Incidents() {
                   </tr>
                 )}
                 {incidents.map(i => (
-                  <tr key={i.id} className="hover:bg-gray-50/70 dark:hover:bg-gray-700/30 transition-colors">
+                  <Fragment key={i.id}>
+                  <tr
+                    onClick={() => setExpandedId(expandedId === i.id ? null : i.id)}
+                    className="hover:bg-gray-50/70 dark:hover:bg-gray-700/30 transition-colors cursor-pointer"
+                  >
                     <td className="px-5 py-3.5">
-                      <span className="font-mono font-bold text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-lg text-xs">
-                        {i.prefix_code}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <ChevronDown size={14} className={`text-gray-400 shrink-0 transition-transform ${expandedId === i.id ? 'rotate-180' : ''}`} />
+                        <span className="font-mono font-bold text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-lg text-xs">
+                          {i.prefix_code}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${incidentTypeColor[i.incident_type] || incidentTypeColor['Outro']}`}>
@@ -313,12 +341,12 @@ export function Incidents() {
                       )}
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
-                        {new Date(i.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                      <span className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
+                        {i.horario || new Date(i.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="relative flex flex-wrap gap-1.5">
+                      <div className="relative flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => setWhatsAppMenu(whatsAppMenu === i.id ? null : i.id)}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-xs font-semibold"
@@ -363,6 +391,31 @@ export function Incidents() {
                       </div>
                     </td>
                   </tr>
+                  {expandedId === i.id && (
+                    <tr className="bg-gray-50/60 dark:bg-gray-900/40">
+                      <td colSpan={8} className="px-5 pb-4 pt-1">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+                          <Detail label="Horário do evento" value={i.horario} icon={<Clock size={12} />} />
+                          <Detail label="Linha" value={i.line} />
+                          <Detail label="Sentido" value={i.direction} />
+                          <Detail label="Prefixo substituto" value={i.replacement_prefix} mono />
+                          <Detail label="Passageiros a bordo" value={i.passageiros != null ? String(i.passageiros) : ''} icon={<UsersIcon size={12} />} />
+                          <Detail label="Vítimas" value={i.victim_status === 'com_vitimas' ? 'Com vítimas' : i.victim_status === 'sem_vitimas' ? 'Sem vítimas' : ''} />
+                          <div className="col-span-2 sm:col-span-3">
+                            <Detail label="Local" value={i.local} icon={<MapPin size={12} />} />
+                          </div>
+                          <div className="col-span-2 sm:col-span-3">
+                            <Detail label="Motorista" value={i.motorista} icon={<UserIcon size={12} />} />
+                          </div>
+                          <div className="col-span-2 sm:col-span-3">
+                            <Detail label="Descrição resumida" value={i.description} />
+                          </div>
+                          <Detail label="Registrado às" value={new Date(i.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
