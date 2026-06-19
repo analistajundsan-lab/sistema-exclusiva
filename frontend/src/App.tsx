@@ -24,6 +24,7 @@ import { SSTOcorrencias } from "./pages/SSTOcorrencias";
 import { SSTLiberacao } from "./pages/SSTLiberacao";
 import { SSTSaude } from "./pages/SSTSaude";
 import { SSTChecklistView } from "./pages/SSTChecklistView";
+import { SSTMobile } from "./pages/SSTMobile";
 
 function InactivityGuard({ children }: { children: React.ReactNode }) {
   useInactivityTimer()
@@ -114,6 +115,7 @@ export default function App() {
         <Route path="/checklist/novo" element={<Navigate to="/vistoria/novo" replace />} />
         {/* ── SST ── */}
         <Route path="/sst" element={<RoleRoute allow={['admin', 'engenheiro_seguranca']}><SSTDashboard /></RoleRoute>} />
+        <Route path="/sst/mobile" element={<RoleRoute allow={SST_ROLES}><SSTMobile /></RoleRoute>} />
         <Route path="/sst/sinistros" element={<RoleRoute allow={SST_ROLES}><SSTSinistros /></RoleRoute>} />
         <Route path="/sst/ocorrencias" element={<RoleRoute allow={SST_ROLES}><SSTOcorrencias /></RoleRoute>} />
         <Route path="/sst/liberacao" element={<RoleRoute allow={SST_ROLES}><SSTLiberacao /></RoleRoute>} />

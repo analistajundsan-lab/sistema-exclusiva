@@ -14,6 +14,7 @@ from routes_audit import router as audit_router
 from routes_checklist import router as checklist_router
 from routes_safety import router as safety_router
 from routes_sst import router as sst_router
+from routes_sst_fase3 import router as sst_fase3_router
 from routes_push import router as push_router
 from rate_limit import init_redis
 from metrics_middleware import metrics_middleware
@@ -180,6 +181,7 @@ app.include_router(audit_router)
 app.include_router(checklist_router)
 app.include_router(safety_router)
 app.include_router(sst_router)
+app.include_router(sst_fase3_router)
 app.include_router(push_router)
 
 

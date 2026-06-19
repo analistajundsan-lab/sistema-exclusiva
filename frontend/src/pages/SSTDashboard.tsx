@@ -4,11 +4,14 @@ import {
   AlertTriangle,
   ClipboardList,
   DollarSign,
+  Download,
+  FileText,
   Gauge,
   Heart,
   HeartPulse,
   Shield,
   ShieldAlert,
+  Smartphone,
   UserCheck,
   UserX,
 } from 'lucide-react'
@@ -27,7 +30,17 @@ import {
 import { Layout } from '../components/Layout'
 import { KpiCard } from '../components/dashboard/KpiCard'
 import { ChartPanel } from '../components/dashboard/ChartPanel'
-import { getSSTDashboardV2, SSTDashboardV2 } from '../hooks/useSST'
+import {
+  downloadSSTExport,
+  getSSTAlertas,
+  getSSTComparativo,
+  getSSTDashboardV2,
+  getSSTScorePreditivo,
+  SSTAlertas,
+  SSTComparativo,
+  SSTDashboardV2,
+  SSTScorePreditivo,
+} from '../hooks/useSST'
 import { useAuthStore } from '../store/auth'
 
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
@@ -159,6 +172,128 @@ const ActionTable = ({ actions }: { actions: SSTDashboardV2['actions'] }) => (
   </ChartPanel>
 )
 
+const nivelBadge = (nivel: string) => {
+  const map: Record<string, string> = {
+    critico: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    alto: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    medio: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    baixo: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  }
+  return map[nivel] || map.baixo
+}
+
+const UNIT_COLORS = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2']
+
+const AlertasPanel = ({ data }: { data: SSTAlertas }) => {
+  const linhas = [
+    ...data.condutores.map(c => ({ tipo: 'Condutor', nome: c.condutor, total: c.total, nivel: c.nivel })),
+    ...data.veiculos.map(v => ({ tipo: 'Veículo', nome: v.prefixo, total: v.total, nivel: v.nivel })),
+    ...data.bloqueios_recorrentes.map(b => ({ tipo: 'Bloqueio', nome: b.condutor, total: b.total, nivel: b.nivel })),
+  ]
+  return (
+    <ChartPanel
+      title="Alertas de reincidência"
+      subtitle={`Últimos ${data.window_days} dias — 2+ ocorrências`}
+      empty={linhas.length === 0}
+    >
+      <ul className="space-y-2">
+        {linhas.map((l, i) => (
+          <li key={i} className="flex items-center justify-between gap-2 text-sm">
+            <span className="flex items-center gap-2 truncate">
+              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300">{l.tipo}</span>
+              <span className="truncate text-gray-700 dark:text-gray-300">{l.nome}</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">{l.total}×</span>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${nivelBadge(l.nivel)}`}>{l.nivel}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </ChartPanel>
+  )
+}
+
+const ScorePanel = ({ data }: { data: SSTScorePreditivo }) => (
+  <ChartPanel
+    title="Score preditivo de risco"
+    subtitle={`Heurístico (0-100) — janela de ${data.window_days} dias`}
+    empty={data.condutores.length === 0 && data.veiculos.length === 0}
+  >
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {[
+        { titulo: 'Condutores', itens: data.condutores.slice(0, 6).map(c => ({ nome: c.condutor, score: c.score, nivel: c.nivel })) },
+        { titulo: 'Veículos', itens: data.veiculos.slice(0, 6).map(v => ({ nome: v.prefixo, score: v.score, nivel: v.nivel })) },
+      ].map(col => (
+        <div key={col.titulo}>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{col.titulo}</h4>
+          <ul className="space-y-2">
+            {col.itens.length === 0 && <li className="text-sm text-gray-400">Sem dados</li>}
+            {col.itens.map((it, i) => (
+              <li key={i} className="flex items-center gap-2 text-sm">
+                <span className="w-24 truncate text-gray-700 dark:text-gray-300">{it.nome}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+                  <div
+                    className={`h-full ${it.score >= 70 ? 'bg-red-500' : it.score >= 40 ? 'bg-orange-400' : it.score >= 20 ? 'bg-yellow-400' : 'bg-green-400'}`}
+                    style={{ width: `${it.score}%` }}
+                  />
+                </div>
+                <span className={`w-10 rounded-full px-1.5 py-0.5 text-center text-xs font-semibold ${nivelBadge(it.nivel)}`}>{it.score}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  </ChartPanel>
+)
+
+const ComparativoPanel = ({ data }: { data: SSTComparativo }) => {
+  const rows = data.meses.map(mes => {
+    const row: Record<string, any> = { mes }
+    data.unidades.forEach(u => {
+      row[u.unidade] = u.por_mes.find(p => p.mes === mes)?.total ?? 0
+    })
+    return row
+  })
+  return (
+    <ChartPanel title="Comparativo mensal por unidade" subtitle="Sinistros por unidade + ranking corporativo" empty={data.unidades.length === 0}>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb33" />
+              <XAxis dataKey="mes" tickFormatter={fmtMes} fontSize={11} stroke="#9ca3af" />
+              <YAxis allowDecimals={false} fontSize={11} stroke="#9ca3af" />
+              <Tooltip labelFormatter={(v) => fmtMes(String(v))} />
+              {data.unidades.map((u, i) => (
+                <Line key={u.unidade} type="monotone" dataKey={u.unidade} stroke={UNIT_COLORS[i % UNIT_COLORS.length]} strokeWidth={2} dot={{ r: 2 }} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Ranking corporativo</h4>
+          <ol className="space-y-2">
+            {data.ranking.map((r, i) => (
+              <li key={r.unidade} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 truncate">
+                  <span className="w-4 text-xs font-bold text-gray-400">{i + 1}.</span>
+                  <span className="truncate text-gray-700 dark:text-gray-300">{r.unidade}</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">{r.total}</span>
+                  <span className="text-xs text-gray-400" title="Sinistros por veículo ativo">{r.taxa_por_veiculo}/v</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </ChartPanel>
+  )
+}
+
 export function SSTDashboard() {
   const role = useAuthStore(s => s.role)
   const hasFullAccess = useAuthStore(s => s.hasFullAccess)
@@ -179,6 +314,10 @@ export function SSTDashboard() {
   const [data, setData] = useState<SSTDashboardV2 | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [alertas, setAlertas] = useState<SSTAlertas | null>(null)
+  const [score, setScore] = useState<SSTScorePreditivo | null>(null)
+  const [comparativo, setComparativo] = useState<SSTComparativo | null>(null)
+  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null)
 
   useEffect(() => {
     let active = true
@@ -192,6 +331,27 @@ export function SSTDashboard() {
       active = false
     }
   }, [unit, dateStart, dateEnd])
+
+  useEffect(() => {
+    let active = true
+    getSSTAlertas(unit || undefined).then(d => active && setAlertas(d)).catch(() => {})
+    getSSTScorePreditivo(unit || undefined).then(d => active && setScore(d)).catch(() => {})
+    getSSTComparativo(6).then(d => active && setComparativo(d)).catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [unit])
+
+  const handleExport = async (format: 'xlsx' | 'pdf') => {
+    setExporting(format)
+    try {
+      await downloadSSTExport(format, { unit: unit || undefined, date_start: dateStart, date_end: dateEnd })
+    } catch {
+      /* erro de download é silencioso; o usuário pode tentar de novo */
+    } finally {
+      setExporting(null)
+    }
+  }
 
   const s = data?.summary
   const riskColor = (s?.risk_score ?? 0) >= 60 ? 'red' : (s?.risk_score ?? 0) >= 30 ? 'yellow' : 'green'
@@ -252,6 +412,33 @@ export function SSTDashboard() {
               className="mt-1 block rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
             />
           </label>
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={() => handleExport('xlsx')}
+              disabled={exporting !== null}
+              title="Exportar Excel"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <Download size={15} /> {exporting === 'xlsx' ? '...' : 'XLSX'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport('pdf')}
+              disabled={exporting !== null}
+              title="Exportar PDF"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <FileText size={15} /> {exporting === 'pdf' ? '...' : 'PDF'}
+            </button>
+            <Link
+              to="/sst/mobile"
+              title="Painel mobile (campo)"
+              className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:border-brand-600 dark:bg-brand-900/20 dark:text-brand-300"
+            >
+              <Smartphone size={15} /> Mobile
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -387,6 +574,15 @@ export function SSTDashboard() {
               </ResponsiveContainer>
             </ChartPanel>
           )}
+
+          {/* Faixa 6 — Fase 3: alertas + score preditivo */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {alertas && <AlertasPanel data={alertas} />}
+            {score && <ScorePanel data={score} />}
+          </div>
+
+          {/* Faixa 7 — Comparativo corporativo (quando há mais de uma unidade) */}
+          {comparativo && comparativo.unidades.length > 1 && <ComparativoPanel data={comparativo} />}
 
           {/* Navegação */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

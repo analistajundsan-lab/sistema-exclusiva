@@ -247,6 +247,88 @@ export async function getSSTDashboardV2(
   return res.data
 }
 
+// ── Fase 3: alertas, score preditivo, comparativo, export ─────────────────────
+export interface SSTAlertas {
+  window_days: number
+  condutores: { condutor: string; total: number; ultima_data: string | null; nivel: string }[]
+  veiculos: { prefixo: string; total: number; ultima_data: string | null; nivel: string }[]
+  bloqueios_recorrentes: { condutor: string; total: number; categorias: string[]; nivel: string }[]
+  total_alertas: number
+}
+
+export interface SSTScorePreditivo {
+  window_days: number
+  condutores: {
+    condutor: string
+    score: number
+    nivel: string
+    sinistros: number
+    gravidade_media: number
+    com_vitima: number
+    com_afastamento: number
+  }[]
+  veiculos: {
+    prefixo: string
+    score: number
+    nivel: string
+    sinistros: number
+    gravidade_media: number
+    com_vitima: number
+    com_afastamento: number
+  }[]
+  unidades: { unidade: string; score: number; nivel: string; sinistros: number }[]
+}
+
+export interface SSTComparativo {
+  meses: string[]
+  unidades: {
+    unidade: string
+    por_mes: { mes: string; total: number }[]
+    total: number
+    media_mensal: number
+  }[]
+  ranking: { unidade: string; total: number; frota_ativa: number; taxa_por_veiculo: number }[]
+}
+
+export async function getSSTAlertas(unit?: string, dias = 90): Promise<SSTAlertas> {
+  const params: Record<string, string | number> = { dias }
+  if (unit) params.unit = unit
+  const res = await api.get('/sst/alertas', { params })
+  return res.data
+}
+
+export async function getSSTScorePreditivo(unit?: string, dias = 180): Promise<SSTScorePreditivo> {
+  const params: Record<string, string | number> = { dias }
+  if (unit) params.unit = unit
+  const res = await api.get('/sst/score-preditivo', { params })
+  return res.data
+}
+
+export async function getSSTComparativo(meses = 6): Promise<SSTComparativo> {
+  const res = await api.get('/sst/comparativo', { params: { meses } })
+  return res.data
+}
+
+// Baixa o relatorio executivo (xlsx/pdf) e dispara o download no navegador.
+export async function downloadSSTExport(
+  format: 'xlsx' | 'pdf',
+  filters: SSTDashboardV2Filters = {},
+): Promise<void> {
+  const params: Record<string, string> = {}
+  if (filters.unit) params.unit = filters.unit
+  if (filters.date_start) params.date_start = filters.date_start
+  if (filters.date_end) params.date_end = filters.date_end
+  const res = await api.get(`/sst/export.${format}`, { params, responseType: 'blob' })
+  const url = window.URL.createObjectURL(new Blob([res.data]))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `cockpit-sst.${format}`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 // ── Sinistros ─────────────────────────────────────────────────────────────────
 export async function listSinistros(params: Record<string, unknown> = {}): Promise<Sinistro[]> {
   const res = await api.get('/sst/sinistros', { params })
