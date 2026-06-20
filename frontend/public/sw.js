@@ -1,5 +1,5 @@
-const CACHE_NAME = "sistema-exclusiva-v7";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+const CACHE_NAME = "sistema-exclusiva-v8";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/logo-bus.svg"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
