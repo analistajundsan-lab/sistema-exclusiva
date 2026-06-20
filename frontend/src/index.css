@@ -44,9 +44,16 @@
   .card-md {
     @apply bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-card-md;
   }
-  /* Hover-elevating card — lifts to card-md on hover (transform/shadow only). */
+  /* Hover-elevating card — lifts to card-md on hover (transform/shadow only).
+     The lift is gated to hover-capable devices so it never "gruda" (sticks)
+     on touchscreens after a tap/scroll, which would leave cards out of square. */
   .card-hover {
-    @apply transition-[transform,box-shadow] duration-base ease-standard hover:-translate-y-0.5 hover:shadow-card-md;
+    @apply transition-[transform,box-shadow] duration-base ease-standard;
+  }
+  @media (hover: hover) {
+    .card-hover:hover {
+      @apply -translate-y-0.5 shadow-card-md;
+    }
   }
 
   /* Input */
@@ -68,14 +75,20 @@
     padding-right: 2.5rem;
   }
 
-  /* Buttons — hover lifts 1px, press settles to scale(.98). transform+opacity only. */
+  /* Buttons — press settles to scale(.98) on every device; the 1px hover-lift
+     is gated to hover-capable devices so it never sticks on touch (tap feedback
+     stays via active:scale). transform+opacity only. */
   .btn {
     @apply inline-flex items-center justify-center gap-2
            px-4 py-2.5 rounded-xl text-sm font-semibold
            transition-all duration-micro ease-standard
-           hover:-translate-y-px active:translate-y-0 active:scale-[0.98]
-           disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0 disabled:active:scale-100
+           active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
            focus-visible:ring-2 focus-visible:ring-offset-2;
+  }
+  @media (hover: hover) {
+    .btn:hover:not(:disabled) { @apply -translate-y-px; }
+    .btn:active:not(:disabled) { @apply translate-y-0; }
   }
   .btn-primary {
     @apply btn bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 dark:hover:bg-brand-700

@@ -4,6 +4,12 @@ module.exports = {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   darkMode: 'class',
+  // Em telas de toque o estado :hover "gruda" após o tap (o card/botão fica
+  // levantado e desalinhado dos vizinhos). Isto envolve todo utilitário hover:
+  // em @media (hover: hover), então o hover-lift só vale onde há mouse real.
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
       colors: {

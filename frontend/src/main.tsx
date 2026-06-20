@@ -17,7 +17,9 @@ function notifyAppUpdate() {
   if (shouldReload) window.location.reload();
 }
 
-if ("serviceWorker" in navigator) {
+// Só registra o service worker em produção. Em dev o SW causa cache velho e
+// dispara o confirm de "nova versão" a cada troca de bundle do Vite.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").then(registration => {
       navigator.serviceWorker.addEventListener("message", event => {
