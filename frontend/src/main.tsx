@@ -12,7 +12,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   </React.StrictMode>
 );
 
+let updatePrompted = false;
 function notifyAppUpdate() {
+  // Evita o confirm duplicado (a mensagem SW_UPDATED e o updatefound disparam juntos).
+  if (updatePrompted) return;
+  updatePrompted = true;
   const shouldReload = window.confirm("Nova versao disponivel. Atualizar agora?");
   if (shouldReload) window.location.reload();
 }
@@ -37,6 +41,15 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
           }
         });
       });
+
+      // Mesmo abas abertas ha horas precisam pegar a nova versao: o navegador so
+      // checa o sw.js esporadicamente, entao forcamos um update() ao voltar o foco
+      // para a aba e periodicamente. Assim a mensagem cai para todos os conectados.
+      const checkForUpdate = () => { registration.update().catch(() => undefined); };
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkForUpdate();
+      });
+      window.setInterval(checkForUpdate, 15 * 60 * 1000);
     }).catch(() => undefined);
   });
 }
