@@ -66,7 +66,7 @@ const SelectField = ({
           key={o}
           type="button"
           onClick={() => onChange(o)}
-          className={`rounded px-3 py-1 text-xs font-medium capitalize transition-colors ${
+          className={`rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
             value === o
               ? o === 'bom'
                 ? 'bg-green-600 text-white'
@@ -154,7 +154,7 @@ export function SSTSaude() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800"
+          className="btn-primary"
         >
           <Plus size={16} />
           Nova Avaliação
@@ -165,7 +165,7 @@ export function SSTSaude() {
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+          className="select w-auto"
         >
           <option value="">Todos os status</option>
           {Object.entries(STATUS_LABEL).map(([v, l]) => (
@@ -179,28 +179,28 @@ export function SSTSaude() {
       ) : rows.length === 0 ? (
         <div className="py-20 text-center text-gray-400">Nenhuma avaliação encontrada</div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="table-wrapper">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
+            <thead>
               <tr>
                 {['Condutor', 'Matrícula', 'Unidade', 'Data', 'Técnico', 'Encaminhamentos', 'Status', 'Ações'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                  <th key={h}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="bg-white hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800/50">
-                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{r.condutor_nome}</td>
-                  <td className="px-4 py-3 text-gray-500">{r.condutor_matricula || '—'}</td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{r.unit}</td>
-                  <td className="px-4 py-3 text-gray-500">
+                <tr key={r.id}>
+                  <td className="font-medium text-gray-800 dark:text-gray-200">{r.condutor_nome}</td>
+                  <td className="text-gray-500">{r.condutor_matricula || '—'}</td>
+                  <td className="text-gray-700 dark:text-gray-300">{r.unit}</td>
+                  <td className="text-gray-500">
                     {new Date(r.data_avaliacao + 'T00:00').toLocaleDateString('pt-BR')}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{r.tecnico_responsavel || '—'}</td>
-                  <td className="px-4 py-3">
+                  <td className="text-gray-700 dark:text-gray-300">{r.tecnico_responsavel || '—'}</td>
+                  <td>
                     {(r.encaminhamentos || []).length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {(r.encaminhamentos || []).map((e) => (
@@ -211,12 +211,12 @@ export function SSTSaude() {
                       </div>
                     ) : '—'}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_COLOR[r.status]}`}>
                       {STATUS_LABEL[r.status]}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <button onClick={() => openEdit(r)} className="text-xs text-brand-600 hover:underline dark:text-brand-400">
                       Editar
                     </button>
@@ -230,8 +230,8 @@ export function SSTSaude() {
 
       {/* Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-10 overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 dark:bg-gray-900">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm p-4 pt-10 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 shadow-modal dark:border-gray-700 dark:bg-gray-800">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                 {editing ? 'Editar Avaliação' : 'Nova Avaliação — Saúde e Bem-Estar'}
@@ -270,8 +270,8 @@ export function SSTSaude() {
                 </label>
               </div>
 
-              <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
-                <p className="mb-3 text-xs font-semibold uppercase text-gray-500">Avaliação Física</p>
+              <div className="border-t border-gray-100 pt-3 dark:border-gray-700">
+                <p className="section-title mb-3">Avaliação Física</p>
                 <div className="grid grid-cols-2 gap-4">
                   <SelectField label="Qualidade do Sono" value={form.qualidade_sono || null}
                     onChange={(v) => setForm((f) => ({ ...f, qualidade_sono: v }))} />
@@ -289,8 +289,8 @@ export function SSTSaude() {
                 </label>
               </div>
 
-              <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
-                <p className="mb-3 text-xs font-semibold uppercase text-gray-500">Avaliação Emocional</p>
+              <div className="border-t border-gray-100 pt-3 dark:border-gray-700">
+                <p className="section-title mb-3">Avaliação Emocional</p>
                 <div className="grid grid-cols-2 gap-4">
                   <SelectField label="Estresse" value={form.estresse || null}
                     onChange={(v) => setForm((f) => ({ ...f, estresse: v }))} />
@@ -309,8 +309,8 @@ export function SSTSaude() {
                 </label>
               </div>
 
-              <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
-                <p className="mb-3 text-xs font-semibold uppercase text-gray-500">Avaliação Operacional</p>
+              <div className="border-t border-gray-100 pt-3 dark:border-gray-700">
+                <p className="section-title mb-3">Avaliação Operacional</p>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <input type="checkbox" checked={!!form.jornada_excessiva}
@@ -339,7 +339,7 @@ export function SSTSaude() {
               </label>
 
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Encaminhamentos</p>
+                <p className="section-title mb-2">Encaminhamentos</p>
                 <div className="flex flex-wrap gap-2">
                   {ENCAMINHAMENTOS_OPTIONS.map((enc) => {
                     const selected = (form.encaminhamentos || []).includes(enc)
@@ -360,7 +360,7 @@ export function SSTSaude() {
               <label className="block">
                 <span className="text-xs font-medium text-gray-500">Status</span>
                 <select value={form.status || 'em_acompanhamento'} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as SaudeStatus }))}
-                  className="input w-full mt-1">
+                  className="select w-full mt-1">
                   {Object.entries(STATUS_LABEL).map(([v, l]) => (
                     <option key={v} value={v}>{l}</option>
                   ))}
@@ -369,11 +369,11 @@ export function SSTSaude() {
             </div>
 
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => setShowForm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400">
+              <button onClick={() => setShowForm(false)} className="btn-secondary">
                 Cancelar
               </button>
               <button onClick={handleSave} disabled={saving}
-                className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50">
+                className="btn-primary">
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>

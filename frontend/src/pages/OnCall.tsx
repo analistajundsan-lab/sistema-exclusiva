@@ -395,7 +395,7 @@ export function OnCall() {
         {/* Filtros */}
         <form
           onSubmit={handleFilter}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 grid grid-cols-1 md:grid-cols-[160px_220px_170px_auto_auto] gap-3 items-end"
+          className="card p-4 grid grid-cols-1 md:grid-cols-[160px_220px_170px_auto_auto] gap-3 items-end"
         >
           <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Data
@@ -451,15 +451,12 @@ export function OnCall() {
               }}
               className={`relative inline-flex h-10 w-16 items-center rounded-xl text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 ${autoMode ? 'bg-brand-700 dark:bg-brand-600 border-brand-700' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'} border`}
             >
-              <span className={`absolute left-1 transition-all duration-200 ${autoMode ? 'translate-x-7' : 'translate-x-0'} inline-block w-6 h-6 rounded-lg bg-white shadow`} />
+              <span className={`absolute left-1 transition-all duration-200 ${autoMode ? 'translate-x-7' : 'translate-x-0'} inline-block w-6 h-6 rounded-lg bg-white shadow-xs`} />
               <span className={`pl-2 transition-opacity text-gray-600 ${autoMode ? 'opacity-0' : 'opacity-100'}`}>Não</span>
               <span className={`pl-1 transition-opacity text-white ${autoMode ? 'opacity-100' : 'opacity-0'}`}>Sim</span>
             </button>
           </label>
-          <button
-            type="submit"
-            className="flex items-center justify-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all self-end"
-          >
+          <button type="submit" className="btn-primary self-end">
             <Filter size={14} />
             Atualizar
           </button>
@@ -530,7 +527,7 @@ export function OnCall() {
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
           {/* Linhas pendentes */}
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <section className="card">
             <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
               <div>
                 <h2 className="font-bold text-gray-900 dark:text-gray-100">{lineSearch ? 'Resultado da linha' : 'Linhas pendentes'}</h2>
@@ -578,7 +575,7 @@ export function OnCall() {
                 return (
                 <article
                   key={line.id}
-                  className={`border ${urgency.card} rounded-2xl p-4 hover:shadow-sm transition-shadow bg-gray-50/50 dark:bg-gray-700/30`}
+                  className={`border ${urgency.card} rounded-2xl p-4 hover:shadow-card-md transition-shadow bg-gray-50/50 dark:bg-gray-700/30`}
                 >
                   {/* Topo do card — badges */}
                   <div className="flex flex-wrap items-center gap-2.5 mb-3">
@@ -747,7 +744,7 @@ export function OnCall() {
           </section>
 
           {/* Painel lateral de trocas */}
-          <aside className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <aside className="card">
             <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <ArrowLeftRight size={16} className="text-brand-600 dark:text-brand-400" />
@@ -830,7 +827,7 @@ export function OnCall() {
 
         {/* Modal cancelar linha */}
         {statusLine && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="modal-overlay">
             <form
               onSubmit={handleStatusChange}
               className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal w-full max-w-md overflow-hidden"

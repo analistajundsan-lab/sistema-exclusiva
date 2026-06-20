@@ -111,7 +111,7 @@ const RiskMatrix = ({ cells }: { cells: SSTDashboardV2['risk_matrix'] }) => {
                 return (
                   <div
                     key={g}
-                    className={`rounded py-2.5 font-bold ${riskBand(p * g)} ${tot === 0 ? 'opacity-25' : ''}`}
+                    className={`rounded-md py-2.5 font-bold ${riskBand(p * g)} ${tot === 0 ? 'opacity-25' : ''}`}
                     title={`Prob ${p} × Grav ${g} = índice ${p * g}`}
                   >
                     {tot}
@@ -151,7 +151,7 @@ const ActionTable = ({ actions }: { actions: SSTDashboardV2['actions'] }) => (
         </thead>
         <tbody>
           {actions.map(a => (
-            <tr key={a.sinistro_id} className="border-t border-gray-100 dark:border-gray-800">
+            <tr key={a.sinistro_id} className="border-t border-gray-100 dark:border-gray-700/50">
               <td className="py-1.5 text-gray-700 dark:text-gray-300">{a.numero || `#${a.sinistro_id}`} · {a.tipo}</td>
               <td className="text-gray-600 dark:text-gray-400">{a.unit}</td>
               <td className="text-gray-600 dark:text-gray-400">{a.responsavel || '—'}</td>
@@ -200,7 +200,7 @@ const AlertasPanel = ({ data }: { data: SSTAlertas }) => {
         {linhas.map((l, i) => (
           <li key={i} className="flex items-center justify-between gap-2 text-sm">
             <span className="flex items-center gap-2 truncate">
-              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300">{l.tipo}</span>
+              <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300">{l.tipo}</span>
               <span className="truncate text-gray-700 dark:text-gray-300">{l.nome}</span>
             </span>
             <span className="flex items-center gap-2">
@@ -376,7 +376,7 @@ export function SSTDashboard() {
               <select
                 value={unit}
                 onChange={e => setUnit(e.target.value)}
-                className="mt-1 block rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                className="select mt-1 w-auto py-1.5 text-sm font-normal"
               >
                 <option value="">Todas</option>
                 {ALL_UNITS.map(u => (
@@ -387,7 +387,7 @@ export function SSTDashboard() {
           ) : (
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Unidade
-              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-100 px-2.5 py-1.5 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:bg-gray-700/60 dark:text-gray-200">
+              <div className="mt-1 rounded-xl border border-gray-200 bg-gray-100 px-2.5 py-1.5 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:bg-gray-700/60 dark:text-gray-200">
                 {unit}
               </div>
             </div>
@@ -399,7 +399,7 @@ export function SSTDashboard() {
               value={dateStart}
               max={dateEnd}
               onChange={e => setDateStart(e.target.value)}
-              className="mt-1 block rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              className="input mt-1 w-auto py-1.5 text-sm font-normal"
             />
           </label>
           <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -409,7 +409,7 @@ export function SSTDashboard() {
               value={dateEnd}
               min={dateStart}
               onChange={e => setDateEnd(e.target.value)}
-              className="mt-1 block rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              className="input mt-1 w-auto py-1.5 text-sm font-normal"
             />
           </label>
           <div className="flex items-end gap-2">
@@ -418,7 +418,7 @@ export function SSTDashboard() {
               onClick={() => handleExport('xlsx')}
               disabled={exporting !== null}
               title="Exportar Excel"
-              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              className="btn-secondary gap-1.5 px-2.5 py-1.5 text-sm font-medium"
             >
               <Download size={15} /> {exporting === 'xlsx' ? '...' : 'XLSX'}
             </button>
@@ -427,14 +427,14 @@ export function SSTDashboard() {
               onClick={() => handleExport('pdf')}
               disabled={exporting !== null}
               title="Exportar PDF"
-              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              className="btn-secondary gap-1.5 px-2.5 py-1.5 text-sm font-medium"
             >
               <FileText size={15} /> {exporting === 'pdf' ? '...' : 'PDF'}
             </button>
             <Link
               to="/sst/mobile"
               title="Painel mobile (campo)"
-              className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:border-brand-600 dark:bg-brand-900/20 dark:text-brand-300"
+              className="flex items-center gap-1.5 rounded-xl border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:border-brand-600 dark:bg-brand-900/20 dark:text-brand-300"
             >
               <Smartphone size={15} /> Mobile
             </Link>
@@ -595,7 +595,7 @@ export function SSTDashboard() {
               <Link
                 key={to}
                 to={to}
-                className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white p-4 text-center text-sm font-medium text-gray-700 transition-colors hover:border-brand-300 hover:bg-brand-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-brand-600 dark:hover:bg-brand-900/20"
+                className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white p-4 text-center text-sm font-medium text-gray-700 shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-brand-600 dark:hover:bg-brand-900/20"
               >
                 <Icon size={20} className="text-brand-600 dark:text-brand-400" />
                 {label}

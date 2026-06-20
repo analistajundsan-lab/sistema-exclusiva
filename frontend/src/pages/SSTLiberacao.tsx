@@ -18,10 +18,10 @@ const RESULTADO_LABEL: Record<LiberacaoStatus, string> = {
 }
 
 const RESULTADO_COLOR: Record<LiberacaoStatus, string> = {
-  pendente: 'bg-gray-100 text-gray-600 dark:bg-gray-800',
-  liberado: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  liberado_com_restricao: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-  nao_liberado: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  pendente: 'badge-gray',
+  liberado: 'badge-green',
+  liberado_com_restricao: 'badge-yellow',
+  nao_liberado: 'badge-red',
 }
 
 const MOTIVOS = [
@@ -58,7 +58,7 @@ const CheckField = ({
   value: boolean | null
   onChange: (v: boolean | null) => void
 }) => (
-  <div className="flex items-center justify-between rounded-lg border border-gray-100 p-2 dark:border-gray-800">
+  <div className="flex items-center justify-between rounded-md border border-gray-100 p-2 dark:border-gray-700">
     <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
     <div className="flex gap-1">
       {([true, false, null] as const).map((v) => (
@@ -146,7 +146,7 @@ export function SSTLiberacao() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800"
+          className="btn-primary flex items-center gap-2"
         >
           <Plus size={16} />
           Nova Avaliação
@@ -157,7 +157,7 @@ export function SSTLiberacao() {
         <select
           value={filterResultado}
           onChange={(e) => setFilterResultado(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+          className="select w-full sm:w-64"
         >
           <option value="">Todos os resultados</option>
           {Object.entries(RESULTADO_LABEL).map(([v, l]) => (
@@ -171,26 +171,26 @@ export function SSTLiberacao() {
       ) : rows.length === 0 ? (
         <div className="py-20 text-center text-gray-400">Nenhuma avaliação encontrada</div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="table-wrapper">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
+            <thead>
               <tr>
                 {['Condutor', 'Matrícula', 'Unidade', 'Motivo', 'Resultado', 'Data', 'Ações'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                  <th key={h}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="bg-white hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800/50">
+                <tr key={r.id}>
                   <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{r.condutor_nome}</td>
                   <td className="px-4 py-3 text-gray-500">{r.condutor_matricula || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{r.unit}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{r.motivo_avaliacao}</td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${RESULTADO_COLOR[r.resultado]}`}>
+                    <span className={RESULTADO_COLOR[r.resultado]}>
                       {RESULTADO_LABEL[r.resultado]}
                     </span>
                   </td>
@@ -211,8 +211,8 @@ export function SSTLiberacao() {
 
       {/* Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-10 overflow-y-auto">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 dark:bg-gray-900">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm p-4 pt-10 overflow-y-auto">
+          <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-modal dark:border-gray-700 dark:bg-gray-800">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                 {editing ? 'Editar Avaliação' : 'Nova Avaliação de Liberação'}
@@ -250,7 +250,7 @@ export function SSTLiberacao() {
               </div>
 
               <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Validações</p>
+                <p className="section-title mb-2">Validações</p>
                 <div className="space-y-2">
                   {[
                     ['Documentação', 'documentacao_ok'],
@@ -324,11 +324,10 @@ export function SSTLiberacao() {
             </div>
 
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => setShowForm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400">
+              <button onClick={() => setShowForm(false)} className="btn-secondary">
                 Cancelar
               </button>
-              <button onClick={handleSave} disabled={saving}
-                className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50">
+              <button onClick={handleSave} disabled={saving} className="btn-primary">
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>

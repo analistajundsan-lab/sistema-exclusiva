@@ -86,7 +86,7 @@ function SectionRow({ title, value, highlight }: { title: string; value: string 
     ? 'text-green-600 dark:text-green-500'
     : 'text-gray-800 dark:text-gray-200'
   return (
-    <div className="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
+    <div className="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-700/60 last:border-0">
       <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{title}</span>
       <span className={`text-xs font-semibold text-right ${colorClass}`}>{value}</span>
     </div>
@@ -97,7 +97,7 @@ function CameraRow({ label: lbl2, value }: { label: string; value?: string | nul
   if (!value) return null
   const isIssue = value === 'VISITA_TECNICA'
   return (
-    <div className="flex justify-between items-center py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
+    <div className="flex justify-between items-center py-1.5 border-b border-gray-100 dark:border-gray-700/60 last:border-0">
       <span className="text-xs text-gray-500 dark:text-gray-400">{lbl2}</span>
       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
         isIssue
@@ -126,7 +126,7 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
   const statusConfig = {
     red: { bg: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800', badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400', label: 'Pendências', icon: AlertTriangle },
     amber: { bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800', badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400', label: 'Atenção', icon: AlertTriangle },
-    ok: { bg: 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800', badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400', label: 'OK', icon: CheckCircle2 },
+    ok: { bg: 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700', badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400', label: 'OK', icon: CheckCircle2 },
   }[status]
 
   const StatusIcon = statusConfig.icon
@@ -153,7 +153,7 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-bold text-gray-900 dark:text-gray-100">{c.prefixo}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium">{c.tipo}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-medium">{c.tipo}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex items-center gap-1 ${statusConfig.badge}`}>
               <StatusIcon size={10} />
               {statusConfig.label}
@@ -168,7 +168,7 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100 dark:border-gray-800 pt-3">
+        <div className="px-4 pb-4 space-y-4 border-t border-gray-100 dark:border-gray-700 pt-3">
 
           {isAdmin && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -260,7 +260,7 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
           {c.observacoes && (
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Observações</p>
-              <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 rounded-xl p-3">{c.observacoes}</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 rounded-xl p-3">{c.observacoes}</p>
             </div>
           )}
 
@@ -384,7 +384,7 @@ export function ChecklistConsulta() {
           {(hasFullAccess || role === 'admin' || role === 'analista') && (
             <button
               onClick={() => navigate('/vistoria/novo')}
-              className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all"
+              className="btn-primary"
             >
               <Plus size={16} /> Novo
             </button>
@@ -393,7 +393,7 @@ export function ChecklistConsulta() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-4 mb-4 space-y-3">
+      <div className="card p-4 mb-4 space-y-3">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -408,7 +408,7 @@ export function ChecklistConsulta() {
           <select
             value={tipo}
             onChange={e => setTipo(e.target.value)}
-            className="px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300"
+            className="px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300"
           >
             <option value="">Todos</option>
             <option value="AVULSO">Avulso</option>
@@ -419,7 +419,7 @@ export function ChecklistConsulta() {
         <select
           value={situacao}
           onChange={e => setSituacao(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300"
+          className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300"
         >
           <option value="">Filtrar por situação específica</option>
           {SITUATION_FILTER_OPTIONS.map(opt => (
@@ -431,13 +431,13 @@ export function ChecklistConsulta() {
             type="date"
             value={dataInicio}
             onChange={e => setDataInicio(e.target.value)}
-            className="flex-1 px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300"
+            className="flex-1 px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300"
           />
           <input
             type="date"
             value={dataFim}
             onChange={e => setDataFim(e.target.value)}
-            className="flex-1 px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300"
+            className="flex-1 px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300"
           />
           {hasFilters && (
             <button onClick={clearFilters} className="p-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500">

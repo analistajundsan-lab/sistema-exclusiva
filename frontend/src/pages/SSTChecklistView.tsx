@@ -79,27 +79,27 @@ export function SSTChecklistView() {
         <div className="space-y-6">
           {/* KPIs */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+            <div className="card p-4">
               <p className="text-sm text-gray-500">Total Submissões</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{submissions.length}</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{submissions.length}</p>
             </div>
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-card dark:border-red-800 dark:bg-red-900/20">
               <p className="flex items-center gap-1 text-sm text-red-600 dark:text-red-400">
                 <AlertTriangle size={14} /> Bloqueios
               </p>
-              <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400">{blocking}</p>
+              <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400 tabular-nums">{blocking}</p>
             </div>
-            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20">
+            <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 shadow-card dark:border-yellow-800 dark:bg-yellow-900/20">
               <p className="flex items-center gap-1 text-sm text-yellow-600 dark:text-yellow-400">
                 <AlertTriangle size={14} /> Atenções
               </p>
-              <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">{attention}</p>
+              <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400 tabular-nums">{attention}</p>
             </div>
-            <div className="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 shadow-card dark:border-green-800 dark:bg-green-900/20">
               <p className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
                 <UserCheck size={14} /> Aprovados SST
               </p>
-              <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
+              <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400 tabular-nums">
                 {tickets.filter(t => t.sst_approved).length}
               </p>
             </div>
@@ -107,14 +107,14 @@ export function SSTChecklistView() {
 
           {/* Tabs + busca */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
               {(['tickets', 'historico'] as const).map(t => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
                   className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
                     tab === t
-                      ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100'
+                      ? 'bg-white text-gray-900 shadow-card dark:bg-gray-700 dark:text-gray-100'
                       : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
                   }`}
                 >
@@ -136,7 +136,7 @@ export function SSTChecklistView() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar prefixo, motorista..."
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 sm:w-64"
+              className="input sm:w-64"
             />
           </div>
 
@@ -151,7 +151,7 @@ export function SSTChecklistView() {
                 {filteredTickets.map(ticket => (
                   <div
                     key={ticket.id}
-                    className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+                    className="card card-hover p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -181,7 +181,7 @@ export function SSTChecklistView() {
                       </div>
                     </div>
 
-                    <div className="mt-3 rounded-lg bg-red-50 p-3 dark:bg-red-900/10">
+                    <div className="mt-3 rounded-md bg-red-50 p-3 dark:bg-red-900/10">
                       <p className="mb-1 text-xs font-semibold uppercase text-red-600 dark:text-red-400">
                         Itens Impeditivos
                       </p>
@@ -196,7 +196,7 @@ export function SSTChecklistView() {
                     </div>
 
                     {ticket.sst_approved_notes && (
-                      <div className="mt-2 rounded-lg bg-green-50 p-3 dark:bg-green-900/10">
+                      <div className="mt-2 rounded-md bg-green-50 p-3 dark:bg-green-900/10">
                         <p className="text-xs text-green-700 dark:text-green-400">
                           <span className="font-semibold">Obs. gerência:</span> {ticket.sst_approved_notes}
                         </p>
@@ -213,30 +213,30 @@ export function SSTChecklistView() {
             filteredSubmissions.length === 0 ? (
               <div className="py-20 text-center text-gray-400">Nenhum registro encontrado</div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="table-wrapper">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
+                  <thead>
                     <tr>
                       {['Prefixo', 'Unidade', 'Motorista', 'Matrícula', 'Status', 'Data/Hora'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                        <th key={h}>
                           {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  <tbody>
                     {filteredSubmissions.map(s => (
-                      <tr key={s.id} className="bg-white hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800/50">
-                        <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{s.prefix}</td>
-                        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{s.unit}</td>
-                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{s.driver_name}</td>
-                        <td className="px-4 py-3 text-gray-500">{s.driver_registration}</td>
-                        <td className="px-4 py-3">
+                      <tr key={s.id}>
+                        <td className="font-semibold text-gray-800 dark:text-gray-200">{s.prefix}</td>
+                        <td className="text-gray-600 dark:text-gray-400">{s.unit}</td>
+                        <td className="text-gray-700 dark:text-gray-300">{s.driver_name}</td>
+                        <td className="text-gray-500">{s.driver_registration}</td>
+                        <td>
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[s.overall_status] || 'bg-gray-100'}`}>
                             {STATUS_LABEL[s.overall_status] || s.overall_status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-500">
+                        <td className="text-gray-500">
                           {s.submitted_at ? new Date(s.submitted_at).toLocaleString('pt-BR') : '—'}
                         </td>
                       </tr>

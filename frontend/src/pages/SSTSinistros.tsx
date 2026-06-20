@@ -21,11 +21,11 @@ const STATUS_LABEL: Record<SinistroStatus, string> = {
 }
 
 const STATUS_COLOR: Record<SinistroStatus, string> = {
-  aberto: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  em_analise: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-  aguardando_documentos: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  em_investigacao: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  encerrado: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  aberto: 'badge-blue',
+  em_analise: 'badge-yellow',
+  aguardando_documentos: 'badge-gray',
+  em_investigacao: 'badge-yellow',
+  encerrado: 'badge-green',
 }
 
 const TIPOS_SINISTRO = [
@@ -152,7 +152,7 @@ export function SSTSinistros() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800"
+          className="btn-primary flex items-center gap-2"
         >
           <Plus size={16} />
           Novo Sinistro
@@ -167,13 +167,13 @@ export function SSTSinistros() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar condutor ou prefixo..."
-            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+            className="input w-full pl-9"
           />
         </div>
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+          className="select w-full sm:w-56"
         >
           <option value="">Todos os status</option>
           {Object.entries(STATUS_LABEL).map(([v, l]) => (
@@ -188,20 +188,20 @@ export function SSTSinistros() {
       ) : rows.length === 0 ? (
         <div className="py-20 text-center text-gray-400">Nenhum sinistro encontrado</div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="table-wrapper">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
+            <thead>
               <tr>
                 {['Número', 'Data', 'Unidade', 'Prefixo', 'Condutor', 'Tipo', 'Status', 'Ações'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                  <th key={h}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            <tbody>
               {rows.map((s) => (
-                <tr key={s.id} className="bg-white hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800/50">
+                <tr key={s.id}>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.numero || `#${s.id}`}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
                     {new Date(s.data_ocorrencia + 'T00:00').toLocaleDateString('pt-BR')}
@@ -211,7 +211,7 @@ export function SSTSinistros() {
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{s.condutor_nome || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{s.tipo_sinistro}</td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_COLOR[s.status]}`}>
+                    <span className={STATUS_COLOR[s.status]}>
                       {STATUS_LABEL[s.status]}
                     </span>
                   </td>
@@ -234,8 +234,8 @@ export function SSTSinistros() {
 
       {/* Modal de Formulário */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-10 overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 dark:bg-gray-900">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm p-4 pt-10 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 shadow-modal dark:border-gray-700 dark:bg-gray-800">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                 {editing ? `Editar Sinistro ${editing.numero || `#${editing.id}`}` : 'Novo Sinistro'}
@@ -275,7 +275,7 @@ export function SSTSinistros() {
               </div>
 
               <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Condutor</p>
+                <p className="section-title mb-2">Condutor</p>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="col-span-2 block">
                     <span className="text-xs font-medium text-gray-500">Nome</span>
@@ -296,7 +296,7 @@ export function SSTSinistros() {
               </div>
 
               <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Ocorrência</p>
+                <p className="section-title mb-2">Ocorrência</p>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block">
                     <span className="text-xs font-medium text-gray-500">Data *</span>
@@ -344,7 +344,7 @@ export function SSTSinistros() {
               </label>
 
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Danos Identificados</p>
+                <p className="section-title mb-2">Danos Identificados</p>
                 <div className="flex flex-wrap gap-2">
                   {DANOS_COMUNS.map((d) => {
                     const selected = (form.danos_identificados || []).includes(d)
@@ -364,7 +364,7 @@ export function SSTSinistros() {
 
               {/* Análise de risco (Fase 2) */}
               <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Análise de risco</p>
+                <p className="section-title mb-2">Análise de risco</p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <label className="block">
                     <span className="text-xs font-medium text-gray-500">Gravidade</span>
@@ -431,7 +431,7 @@ export function SSTSinistros() {
 
               {/* Plano de ação (Fase 2) */}
               <div className="border-t border-gray-100 pt-3 dark:border-gray-800">
-                <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Plano de ação</p>
+                <p className="section-title mb-2">Plano de ação</p>
                 <label className="block">
                   <span className="text-xs font-medium text-gray-500">Tratativa / ação corretiva</span>
                   <textarea value={form.tratativa_acao || ''} onChange={(e) => setForm((f) => ({ ...f, tratativa_acao: e.target.value }))} rows={2} className="input w-full mt-1 resize-none" />
@@ -469,11 +469,10 @@ export function SSTSinistros() {
             </div>
 
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => setShowForm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400">
+              <button onClick={() => setShowForm(false)} className="btn-secondary">
                 Cancelar
               </button>
-              <button onClick={handleSave} disabled={saving}
-                className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50">
+              <button onClick={handleSave} disabled={saving} className="btn-primary">
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
@@ -483,8 +482,8 @@ export function SSTSinistros() {
 
       {/* Modal de Histórico */}
       {showHistorico && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 dark:bg-gray-900">
+        <div className="modal-overlay">
+          <div className="modal-box max-w-lg p-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Histórico de Alterações</h2>
               <button onClick={() => setShowHistorico(false)} className="text-gray-400 hover:text-gray-600">

@@ -154,7 +154,7 @@ export function SSTMobile() {
                 {reincidencia.map((l, i) => (
                   <li key={i} className="flex items-center justify-between gap-2 text-sm">
                     <span className="flex items-center gap-2 truncate">
-                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                      <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300">
                         {l.tipo}
                       </span>
                       <span className="truncate text-gray-700 dark:text-gray-300">{l.nome}</span>
@@ -199,7 +199,7 @@ export function SSTMobile() {
                 <Link
                   key={to}
                   to={to}
-                  className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white p-4 text-center text-sm font-medium text-gray-700 transition-colors hover:border-brand-300 hover:bg-brand-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-brand-600 dark:hover:bg-brand-900/20"
+                  className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white p-4 text-center text-sm font-medium text-gray-700 shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-brand-600 dark:hover:bg-brand-900/20"
                 >
                   <Icon size={24} className="text-brand-600 dark:text-brand-400" />
                   {label}
@@ -210,7 +210,7 @@ export function SSTMobile() {
             {/* Voltar para o cockpit completo */}
             <Link
               to="/sst"
-              className="flex min-h-[52px] items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white p-4 text-center text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              className="flex min-h-[52px] items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white p-4 text-center text-sm font-semibold text-gray-700 shadow-card transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               <ArrowLeft size={18} />
               Voltar ao Cockpit SST

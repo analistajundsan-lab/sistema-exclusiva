@@ -16,10 +16,10 @@ const PRIORITY_LABEL: Record<string, string> = {
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
-  baixa: 'bg-gray-100 text-gray-600',
-  media: 'bg-yellow-100 text-yellow-700',
-  alta: 'bg-orange-100 text-orange-700',
-  urgente: 'bg-red-100 text-red-700',
+  baixa: 'badge-gray',
+  media: 'badge-yellow',
+  alta: 'badge-accent',
+  urgente: 'badge-red',
 }
 
 export function SSTOcorrencias() {
@@ -76,7 +76,7 @@ export function SSTOcorrencias() {
         <select
           value={filterPriority}
           onChange={(e) => setFilterPriority(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+          className="select w-full sm:w-64"
         >
           <option value="">Todas as prioridades</option>
           {Object.entries(PRIORITY_LABEL).map(([v, l]) => (
@@ -90,27 +90,27 @@ export function SSTOcorrencias() {
       ) : rows.length === 0 ? (
         <div className="py-20 text-center text-gray-400">Nenhuma ocorrência encaminhada para SST</div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="table-wrapper">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
+            <thead>
               <tr>
                 {['ID', 'Prefixo', 'Tipo', 'Descrição', 'Unidade', 'Prioridade', 'Encaminhado em', 'Motivo'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                  <th key={h}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="bg-white hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800/50">
+                <tr key={r.id}>
                   <td className="px-4 py-3 text-gray-500">#{r.id}</td>
                   <td className="px-4 py-3 font-mono text-gray-700 dark:text-gray-300">{r.prefix_code}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{r.incident_type}</td>
                   <td className="px-4 py-3 max-w-xs truncate text-gray-500">{r.description || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{r.unit || '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PRIORITY_COLOR[r.sst_forward_priority] || 'bg-gray-100 text-gray-600'}`}>
+                    <span className={PRIORITY_COLOR[r.sst_forward_priority] || 'badge-gray'}>
                       {PRIORITY_LABEL[r.sst_forward_priority] || r.sst_forward_priority}
                     </span>
                   </td>
@@ -127,8 +127,8 @@ export function SSTOcorrencias() {
 
       {/* Modal de encaminhar (Gerente/Coord pode encaminhar a partir das Ocorrências gerais) */}
       {showForward && canForward && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 dark:bg-gray-900">
+        <div className="modal-overlay">
+          <div className="modal-box p-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Encaminhar para SST</h2>
               <button onClick={() => setShowForward(null)} className="text-gray-400 hover:text-gray-600">
@@ -157,11 +157,10 @@ export function SSTOcorrencias() {
               </label>
             </div>
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => setShowForward(null)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400">
+              <button onClick={() => setShowForward(null)} className="btn-secondary">
                 Cancelar
               </button>
-              <button onClick={handleForward} disabled={saving || !forwardReason}
-                className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50">
+              <button onClick={handleForward} disabled={saving || !forwardReason} className="btn-primary">
                 {saving ? 'Encaminhando...' : 'Encaminhar'}
               </button>
             </div>

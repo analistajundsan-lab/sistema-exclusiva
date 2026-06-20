@@ -343,7 +343,7 @@ export function ChecklistNovo() {
     <Layout>
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => navigate('/vistoria')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
+        <button onClick={() => navigate('/vistoria')} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors">
           <ChevronLeft size={20} />
         </button>
         <div className="flex-1">
@@ -423,7 +423,7 @@ export function ChecklistNovo() {
                   value={form.prefixo}
                   onChange={e => set('prefixo', e.target.value.toUpperCase())}
                   placeholder="Ex: 1234"
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-lg font-bold tracking-widest placeholder:font-normal placeholder:text-sm placeholder:tracking-normal"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-lg font-bold tracking-widest placeholder:font-normal placeholder:text-sm placeholder:tracking-normal"
                   inputMode="text"
                   autoCapitalize="characters"
                 />
@@ -573,7 +573,7 @@ export function ChecklistNovo() {
               value={form.wifi_outro}
               onChange={e => set('wifi_outro', e.target.value)}
               placeholder="Outro (descreva o problema)"
-              className="mt-2 w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400"
+              className="mt-2 w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400"
             />
           </div>
         )}
@@ -590,7 +590,7 @@ export function ChecklistNovo() {
                 onChange={e => set('observacoes', e.target.value)}
                 placeholder="Descreva qualquer não-conformidade encontrada no veículo..."
                 rows={4}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400 resize-none"
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400 resize-none"
               />
             </div>
 

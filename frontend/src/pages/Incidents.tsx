@@ -237,7 +237,7 @@ export function Incidents() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all"
+          className="btn-primary"
         >
           <Plus size={16} />
           Registrar Ocorrência
@@ -255,9 +255,9 @@ export function Incidents() {
           Carregando...
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div className="card overflow-hidden">
           {/* Sub-header */}
-          <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+          <div className="px-5 py-3.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
             <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
               {total} ocorrência{total !== 1 ? 's' : ''} hoje
             </span>
@@ -267,7 +267,7 @@ export function Incidents() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
+                <tr className="bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     <div className="flex items-center gap-1.5"><Hash size={12} /> Prefixo</div>
                   </th>
@@ -349,7 +349,7 @@ export function Incidents() {
                       <div className="relative flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => setWhatsAppMenu(whatsAppMenu === i.id ? null : i.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-xs font-semibold"
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-xs font-semibold transition-colors"
                         >
                           <MessageCircle size={12} />
                           WhatsApp
@@ -357,7 +357,7 @@ export function Incidents() {
                         {canEdit(i) && (
                           <button
                             onClick={() => openEdit(i)}
-                            className="inline-flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 p-1.5"
+                            className="inline-flex items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60 p-1.5 transition-colors"
                             title="Editar ocorrencia"
                           >
                             <Pencil size={13} />
@@ -366,7 +366,7 @@ export function Incidents() {
                         {(hasFullAccess || role === 'admin') && (
                           <button
                             onClick={() => handleDelete(i)}
-                            className="inline-flex items-center justify-center rounded-lg bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 p-1.5"
+                            className="inline-flex items-center justify-center rounded-xl bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 p-1.5 transition-colors"
                             title="Apagar ocorrencia"
                           >
                             <Trash2 size={13} />
@@ -423,7 +423,7 @@ export function Incidents() {
 
           {/* Paginação */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+            <div className="flex items-center justify-between px-5 py-3.5 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
               <button
                 disabled={page === 0}
                 onClick={() => setPage(page - 1)}
@@ -448,8 +448,8 @@ export function Incidents() {
 
       {/* Modal de registro */}
       {modal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal w-full max-w-md overflow-hidden">
+        <div className="modal-overlay">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700">
             {/* Modal header */}
             <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-white">
@@ -482,7 +482,7 @@ export function Incidents() {
                       name="prefix_code"
                       value={form.prefix_code}
                       onChange={handle}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="input"
                       placeholder="Ex: 4521"
                     />
                   </div>
@@ -494,7 +494,7 @@ export function Incidents() {
                       name="incident_type"
                       value={form.incident_type}
                       onChange={handle}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="select"
                     >
                       <option value="">Selecione...</option>
                       <option>Avaria</option>
@@ -512,7 +512,7 @@ export function Incidents() {
                       name="line"
                       value={form.line}
                       onChange={handle}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="input"
                       placeholder="Ex: 803"
                     />
                   </div>
@@ -524,7 +524,7 @@ export function Incidents() {
                       name="direction"
                       value={form.direction}
                       onChange={handle}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="select"
                     >
                       <option value="">Selecione...</option>
                       <option value="ENTRADA">ENTRADA</option>
@@ -542,7 +542,7 @@ export function Incidents() {
                       onChange={handleDigits('replacement_prefix', 4)}
                       inputMode="numeric"
                       maxLength={4}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-mono"
+                      className="input font-mono"
                       placeholder="0000"
                     />
                   </div>
@@ -555,7 +555,7 @@ export function Incidents() {
                       name="horario"
                       value={form.horario}
                       onChange={handle}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="input"
                     />
                   </div>
                   <div>
@@ -569,7 +569,7 @@ export function Incidents() {
                       onBlur={() => lookupCep(form.cep)}
                       inputMode="numeric"
                       maxLength={8}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-mono"
+                      className="input font-mono"
                       placeholder="00000000"
                     />
                   </div>
@@ -583,7 +583,7 @@ export function Incidents() {
                       onChange={handleDigits('passageiros', 2)}
                       inputMode="numeric"
                       maxLength={2}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="input"
                       placeholder="0"
                     />
                   </div>
@@ -595,7 +595,7 @@ export function Incidents() {
                       name="local"
                       value={form.local}
                       onChange={handle}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="input"
                       placeholder="Rua, bairro, cidade — ou digite o CEP acima"
                     />
                   </div>
@@ -607,7 +607,7 @@ export function Incidents() {
                       name="motorista"
                       value={form.motorista}
                       onChange={handle}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="input"
                       placeholder="Nome do motorista"
                     />
                   </div>
@@ -622,7 +622,7 @@ export function Incidents() {
                       name="victim_status"
                       value={form.victim_status}
                       onChange={handle}
-                      className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                      className="select"
                     >
                       <option value="">Selecione...</option>
                       <option value="com_vitimas">Com vítimas</option>
@@ -639,7 +639,7 @@ export function Incidents() {
                     name="description"
                     value={form.description}
                     onChange={handle}
-                    className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full resize-y"
+                    className="input resize-y"
                     rows={3}
                     placeholder="Explicação mais detalhada do evento..."
                   />
@@ -654,7 +654,7 @@ export function Incidents() {
                 <div className="flex gap-2 justify-end pt-1">
                   <button
                     onClick={closeModal}
-                    className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-all"
+                    className="btn-secondary"
                   >
                     {savedIncident ? 'Fechar' : 'Cancelar'}
                   </button>
@@ -662,7 +662,7 @@ export function Incidents() {
                     <button
                       onClick={handleSave}
                       disabled={saving || !form.prefix_code || !form.incident_type}
-                      className="flex items-center gap-2 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all disabled:opacity-50"
+                      className="btn-primary"
                     >
                       <Plus size={15} />
                       {saving ? 'Registrando...' : editing ? 'Salvar' : 'Registro'}
@@ -670,7 +670,7 @@ export function Incidents() {
                   ) : (
                     <button
                       onClick={handleSendWhatsApp}
-                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-all"
+                      className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2.5 font-semibold text-sm transition-colors"
                     >
                       <MessageCircle size={15} />
                       Enviar via WhatsApp

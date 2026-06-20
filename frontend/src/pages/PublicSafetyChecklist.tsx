@@ -85,7 +85,7 @@ export function PublicSafetyChecklist() {
     const blocking = result.status === 'blocking'
     return (
       <PublicShell>
-        <div className={`rounded-lg border p-5 ${blocking ? 'border-red-200 bg-red-50 text-red-800' : 'border-green-200 bg-green-50 text-green-800'}`}>
+        <div className={`rounded-2xl border p-5 shadow-card ${blocking ? 'border-red-200 bg-red-50 text-red-800' : 'border-green-200 bg-green-50 text-green-800'}`}>
           {blocking ? <ShieldAlert size={28} /> : <CheckCircle2 size={28} />}
           <h1 className="mt-3 text-xl font-bold">{blocking ? 'Bloqueio registrado' : 'Check-list registrado'}</h1>
           <p className="mt-2 text-sm">{result.message}</p>
@@ -108,11 +108,11 @@ export function PublicSafetyChecklist() {
       <div className="space-y-3">
         <label className="block">
           <span className="text-sm font-medium text-gray-700">Nome do motorista</span>
-          <input value={driverName} onChange={e => setDriverName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-3 text-base" />
+          <input value={driverName} onChange={e => setDriverName(e.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
         </label>
         <label className="block">
           <span className="text-sm font-medium text-gray-700">Matricula</span>
-          <input value={registration} onChange={e => setRegistration(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-3 text-base" />
+          <input value={registration} onChange={e => setRegistration(e.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
         </label>
       </div>
 
@@ -120,7 +120,7 @@ export function PublicSafetyChecklist() {
         {data?.items.map(item => {
           const selected = answers[item.id]?.answer || 'ok'
           return (
-            <section key={item.id} className="rounded-lg border border-gray-200 bg-white p-4">
+            <section key={item.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-card">
               <div className="flex items-start gap-2">
                 {item.severity === 'blocking' && <AlertTriangle size={16} className="mt-0.5 text-red-600" />}
                 <h2 className="text-sm font-semibold text-gray-900">{item.position}. {item.item_text}</h2>
@@ -131,7 +131,7 @@ export function PublicSafetyChecklist() {
                     key={value}
                     type="button"
                     onClick={() => setAnswer(item.id, value)}
-                    className={`rounded-lg border px-2 py-2 text-sm font-semibold ${selected === value ? 'border-brand-700 bg-brand-700 text-white' : 'border-gray-200 bg-gray-50 text-gray-700'}`}
+                    className={`rounded-xl border px-2 py-2 text-sm font-semibold transition-colors ${selected === value ? 'border-brand-700 bg-brand-700 text-white' : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-brand-300'}`}
                   >
                     {value === 'ok' ? 'Sim' : value === 'not_ok' ? 'Nao' : 'N/A'}
                   </button>
@@ -142,7 +142,7 @@ export function PublicSafetyChecklist() {
                   value={answers[item.id]?.observation || ''}
                   onChange={e => setObservation(item.id, e.target.value)}
                   placeholder="Observacao"
-                  className="mt-3 w-full rounded-lg border px-3 py-2 text-sm"
+                  className="mt-3 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   rows={2}
                 />
               )}
@@ -151,13 +151,13 @@ export function PublicSafetyChecklist() {
         })}
       </div>
 
-      <label className="mt-5 flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4">
+      <label className="mt-5 flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-card">
         <input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)} className="mt-1 h-5 w-5" />
         <span className="text-sm text-gray-700">Declaro que as informacoes preenchidas sao verdadeiras e que estou ciente da responsabilidade antes do inicio da jornada.</span>
       </label>
 
       {blockingCount > 0 && (
-        <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">
+        <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-700">
           Ha {blockingCount} item(ns) bloqueante(s) marcado(s) como Nao.
         </p>
       )}
@@ -165,7 +165,7 @@ export function PublicSafetyChecklist() {
       <button
         onClick={handleSubmit}
         disabled={submitting}
-        className="mt-5 w-full rounded-lg bg-brand-700 px-4 py-3 text-base font-bold text-white disabled:opacity-60"
+        className="mt-5 w-full rounded-xl bg-brand-700 px-4 py-3 text-base font-bold text-white hover:bg-brand-800 disabled:opacity-60 transition-colors"
       >
         {submitting ? 'Enviando...' : 'Enviar check-list'}
       </button>
