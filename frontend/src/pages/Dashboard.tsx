@@ -94,25 +94,28 @@ export function Dashboard() {
 
   return (
     <Layout>
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <TrendingUp size={22} className="text-brand-600 dark:text-brand-400" />
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <TrendingUp size={24} className="text-brand-700 dark:text-brand-400" />
             Dashboard
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5">{todayLabel}</p>
+          <p className="mt-0.5 text-sm capitalize text-gray-500 dark:text-gray-400">{todayLabel}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            className="input w-auto"
-          />
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Data
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="input mt-1 w-auto py-1.5 text-sm font-normal"
+            />
+          </label>
           <button
             onClick={handleRefresh}
             disabled={refreshing || loading}
-            className="btn-secondary"
+            className="btn-secondary gap-1.5 px-2.5 py-1.5 text-sm font-medium"
             title="Atualizar dados"
           >
             <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
@@ -134,7 +137,7 @@ export function Dashboard() {
             <h2 className="section-title mb-3">
               Registros do dia
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+            <div className="grid grid-cols-2 gap-3 max-w-xl">
               <a href="/incidents" className="card card-hover block p-4">
                 <div className="flex items-center gap-2 mb-2 text-red-600 dark:text-red-400">
                   <AlertTriangle size={16} />
