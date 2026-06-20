@@ -107,12 +107,12 @@ export function Dashboard() {
             type="date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            className="border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            className="input w-auto"
           />
           <button
             onClick={handleRefresh}
             disabled={refreshing || loading}
-            className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2 text-sm font-medium transition-all disabled:opacity-50"
+            className="btn-secondary"
             title="Atualizar dados"
           >
             <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
@@ -131,29 +131,29 @@ export function Dashboard() {
       ) : dashboard ? (
         <div className="space-y-6">
           <section>
-            <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">
+            <h2 className="section-title mb-3">
               Registros do dia
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
-              <a href="/incidents" className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 hover:shadow-md transition-all">
+              <a href="/incidents" className="card card-hover block p-4">
                 <div className="flex items-center gap-2 mb-2 text-red-600 dark:text-red-400">
                   <AlertTriangle size={16} />
-                  <p className="text-sm font-medium">Ocorrencias registradas</p>
+                  <p className="text-sm font-medium">Ocorrências registradas</p>
                 </div>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{dayStats.ocorrencias_hoje}</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{dayStats.ocorrencias_hoje}</p>
               </a>
-              <a href="/on-call" className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 hover:shadow-md transition-all">
+              <a href="/on-call" className="card card-hover block p-4">
                 <div className="flex items-center gap-2 mb-2 text-brand-700 dark:text-brand-400">
                   <ArrowLeftRight size={16} />
                   <p className="text-sm font-medium">Trocas realizadas</p>
                 </div>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{dayStats.trocas_hoje}</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{dayStats.trocas_hoje}</p>
               </a>
             </div>
           </section>
 
           {dashboard.units.length === 0 && (
-            <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg p-6 text-center text-gray-500 dark:text-gray-400">
+            <div className="card p-6 text-center text-gray-500 dark:text-gray-400">
               Nenhuma escala encontrada para a data selecionada.
             </div>
           )}
@@ -163,14 +163,14 @@ export function Dashboard() {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Building2 size={18} className="text-brand-700 dark:text-brand-400" />
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 uppercase">{unit.unit}</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wide">{unit.unit}</h2>
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {unit.total.entrada} entradas | {unit.total.saida} saidas
+                <p className="text-sm text-gray-500 dark:text-gray-400 tabular-nums">
+                  {unit.total.entrada} entradas <span className="text-gray-300 dark:text-gray-600">|</span> {unit.total.saida} saídas
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
+              <div className="ex-stagger grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
                 {unit.turns.map(turn => (
                   <TurnCard key={turn.key} turn={turn} />
                 ))}
@@ -178,10 +178,10 @@ export function Dashboard() {
 
               {unit.client_cards.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">
+                  <h3 className="section-title mb-2">
                     Clientes avulsos
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="ex-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {unit.client_cards.map(card => (
                       <ClientCardView key={card.client} card={card} />
                     ))}
@@ -192,29 +192,27 @@ export function Dashboard() {
           ))}
 
           {dashboard.client_index.length > 0 && (
-            <section className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 overflow-hidden">
-              <div className="px-4 py-3 border-b dark:border-gray-700">
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100">Indice por cliente</h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+            <section className="space-y-3">
+              <h2 className="section-title">Índice por cliente</h2>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
                     <tr>
-                      <th className="text-left px-4 py-2">Cliente</th>
-                      <th className="text-right px-4 py-2">Linhas</th>
-                      <th className="text-right px-4 py-2">Entradas</th>
-                      <th className="text-right px-4 py-2">Saidas</th>
-                      <th className="text-right px-4 py-2">Total</th>
+                      <th>Cliente</th>
+                      <th className="!text-right">Linhas</th>
+                      <th className="!text-right">Entradas</th>
+                      <th className="!text-right">Saídas</th>
+                      <th className="!text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dashboard.client_index.map(row => (
-                      <tr key={row.client} className="border-t dark:border-gray-700">
-                        <td className="px-4 py-2 font-medium text-gray-900 dark:text-gray-100">{row.client}</td>
-                        <td className="px-4 py-2 text-right text-gray-700 dark:text-gray-300">{row.unique_lines}</td>
-                        <td className="px-4 py-2 text-right text-gray-700 dark:text-gray-300">{row.entrada}</td>
-                        <td className="px-4 py-2 text-right text-gray-700 dark:text-gray-300">{row.saida}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">{row.total}</td>
+                      <tr key={row.client}>
+                        <td className="font-medium text-gray-900 dark:text-gray-100">{row.client}</td>
+                        <td className="text-right tabular-nums">{row.unique_lines}</td>
+                        <td className="text-right tabular-nums">{row.entrada}</td>
+                        <td className="text-right tabular-nums">{row.saida}</td>
+                        <td className="text-right font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{row.total}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -224,8 +222,8 @@ export function Dashboard() {
           )}
         </div>
       ) : (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-red-600 dark:text-red-400 text-sm">Nao foi possivel carregar os dados.</p>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4">
+          <p className="text-red-600 dark:text-red-400 text-sm">Não foi possível carregar os dados.</p>
         </div>
       )}
     </Layout>
@@ -238,14 +236,14 @@ function TurnCard({ turn }: { turn: TurnStats }) {
   const isAprendiz = turn.key === 'APRENDIZ'
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 ${isAprendiz ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-brand-600'}`}>
+    <div className={`card card-hover p-4 border-l-4 ${isAprendiz ? 'border-l-amber-500' : 'border-l-brand-600'}`}>
       <div className="flex justify-between items-start mb-3">
         <div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">{isAprendiz ? 'Jovem aprendiz' : 'Turno'}</p>
+          <p className="section-title">{isAprendiz ? 'Jovem aprendiz' : 'Turno'}</p>
           <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">{turn.label}</h3>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{turn.total}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{turn.total}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">registros</p>
         </div>
       </div>
@@ -256,12 +254,12 @@ function TurnCard({ turn }: { turn: TurnStats }) {
       </div>
 
       <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
-        <div className="h-full bg-brand-600 dark:bg-brand-500 rounded-full" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-brand-600 dark:bg-brand-500 rounded-full transition-[width] duration-base ease-standard" style={{ width: `${pct}%` }} />
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
         <Metric label="Entradas" value={turn.entrada} />
-        <Metric label="Saidas" value={turn.saida} />
+        <Metric label="Saídas" value={turn.saida} />
       </div>
     </div>
   )
@@ -269,12 +267,12 @@ function TurnCard({ turn }: { turn: TurnStats }) {
 
 function ClientCardView({ card }: { card: ClientCard }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 border-l-4 border-l-blue-500 p-4">
-      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">Cliente avulso</p>
+    <div className="card card-hover p-4 border-l-4 border-l-blue-500">
+      <p className="section-title">Cliente avulso</p>
       <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">{card.client}</h3>
       <div className="grid grid-cols-2 gap-2 text-sm">
         <Metric label="Entradas" value={card.entrada} />
-        <Metric label="Saidas" value={card.saida} />
+        <Metric label="Saídas" value={card.saida} />
       </div>
     </div>
   )
@@ -282,9 +280,9 @@ function ClientCardView({ card }: { card: ClientCard }) {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-gray-50 dark:bg-gray-700 rounded p-2">
+    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-md p-2">
       <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{value}</p>
+      <p className="text-lg font-bold text-gray-900 dark:text-gray-100 tabular-nums">{value}</p>
     </div>
   )
 }
@@ -292,11 +290,11 @@ function Metric({ label, value }: { label: string; value: number }) {
 function StatusMetric({ label, value, detail, tone }: { label: string; value: number; detail: string; tone: 'green' | 'gray' }) {
   const classes = tone === 'green'
     ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-    : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
+    : 'bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-200'
   return (
-    <div className={`${classes} rounded p-2 min-h-[76px]`}>
+    <div className={`${classes} rounded-md p-2 min-h-[76px]`}>
       <p className="text-xs font-semibold">{label}</p>
-      <p className="text-2xl font-black leading-tight">{value}</p>
+      <p className="text-2xl font-black leading-tight tabular-nums">{value}</p>
       <p className="text-xs text-gray-600 dark:text-gray-300">{detail}</p>
     </div>
   )

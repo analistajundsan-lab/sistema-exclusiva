@@ -61,7 +61,7 @@ export function Audit() {
           <p className="text-sm text-gray-500 dark:text-gray-400">Histórico de importações, confirmações, trocas e alterações.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 grid grid-cols-1 md:grid-cols-[220px_220px_180px_auto] gap-2 items-end">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-2xl shadow-card p-3 grid grid-cols-1 md:grid-cols-[220px_220px_180px_auto] gap-2 items-end">
           <label className="text-xs text-gray-500 dark:text-gray-400">
             Recurso
             <select
@@ -103,7 +103,7 @@ export function Audit() {
           </button>
         </form>
 
-        <section className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-card overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between text-sm text-gray-600 dark:text-gray-300">
             <span>{total} registros</span>
             {loading && <span>Carregando...</span>}

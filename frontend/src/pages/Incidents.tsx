@@ -373,7 +373,7 @@ export function Incidents() {
                           </button>
                         )}
                         {whatsAppMenu === i.id && (
-                          <div className="absolute right-0 top-8 z-10 min-w-44 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg p-1">
+                          <div className="absolute right-0 top-8 z-10 min-w-44 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-card-lg p-1">
                             <button
                               onClick={() => sendWhatsApp(incidentText(i), 'personal')}
                               className="block w-full text-left rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -449,7 +449,7 @@ export function Incidents() {
       {/* Modal de registro */}
       {modal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal w-full max-w-md overflow-hidden">
             {/* Modal header */}
             <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-white">

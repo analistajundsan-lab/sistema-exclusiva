@@ -76,7 +76,7 @@ export function Profile() {
           </div>
 
           {/* Avatar card */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 flex flex-col items-center gap-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-card-lg border border-gray-200 dark:border-gray-700 p-6 flex flex-col items-center gap-4">
             {/* Avatar with camera overlay */}
             <div className="relative group">
               <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white dark:border-gray-700 shadow-md ring-2 ring-brand-200 dark:ring-brand-700">
@@ -141,7 +141,7 @@ export function Profile() {
           </div>
 
           {/* Form card */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-card-lg border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-5">Informações</h2>
 
             <form onSubmit={handleSave} className="space-y-5">

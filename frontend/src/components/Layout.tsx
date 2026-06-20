@@ -228,9 +228,11 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {/* Page content */}
+        {/* Page content — re-mounts per route so it rises in on navigation */}
         <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
-          {children}
+          <div key={location.pathname} className="ex-anim-rise">
+            {children}
+          </div>
         </main>
       </div>
 

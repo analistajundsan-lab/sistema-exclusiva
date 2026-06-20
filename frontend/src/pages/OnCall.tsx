@@ -833,7 +833,7 @@ export function OnCall() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <form
               onSubmit={handleStatusChange}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal w-full max-w-md overflow-hidden"
             >
               {/* Modal header */}
               <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">

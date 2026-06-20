@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { formatCpf } from '../utils/cpf'
-import { Eye, EyeOff, User, Lock, Building2, AlertCircle, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, User, Lock, Bus, AlertCircle, ShieldCheck } from 'lucide-react'
 import { BusIntro } from '../components/BusIntro'
 
 export function Login() {
@@ -45,7 +45,7 @@ export function Login() {
 
         <div className="relative z-10 text-center">
           <div className="flex items-center justify-center w-20 h-20 bg-white/10 rounded-2xl mb-8 mx-auto border border-white/20">
-            <Building2 className="w-10 h-10 text-white" />
+            <Bus className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-4xl font-extrabold text-white tracking-tight mb-3">
             Sistema Exclusiva
@@ -71,18 +71,18 @@ export function Login() {
 
       {/* Right panel */}
       <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-6 py-12">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm ex-anim-rise">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-700 rounded-2xl mb-4">
-              <Building2 className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-700 rounded-2xl mb-4 shadow-brand">
+              <Bus className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">Sistema Exclusiva</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Central operacional</p>
           </div>
 
           {/* Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-card-lg border border-gray-200 dark:border-gray-700 p-8">
             {mfaToken ? (
               <form onSubmit={handleMfaSubmit} className="space-y-5">
                 <div className="text-center mb-2">
@@ -136,7 +136,7 @@ export function Login() {
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Entre com seu CPF e senha para continuar</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5 ex-stagger">
               {/* CPF */}
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">

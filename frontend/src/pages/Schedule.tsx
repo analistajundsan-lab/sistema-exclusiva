@@ -250,7 +250,7 @@ export function Schedule() {
         {/* Filtros */}
         <form
           onSubmit={handleSearch}
-          className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end border dark:border-gray-700"
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-card p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end border dark:border-gray-700"
         >
           <label className="text-xs text-gray-500 dark:text-gray-400">
             Data
@@ -327,7 +327,7 @@ export function Schedule() {
         {isAdmin && (
           <form
             onSubmit={handleImport}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 items-end border-l-4 border-brand-700 dark:border-gray-700"
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-card p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 items-end border-l-4 border-brand-700 dark:border-gray-700"
           >
             <div>
               <h2 className="font-semibold text-gray-800 dark:text-gray-100">
@@ -432,7 +432,7 @@ export function Schedule() {
         {/* Conteudo principal */}
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
           {/* Tabela */}
-          <section className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden border dark:border-gray-700">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-card overflow-hidden border dark:border-gray-700">
             <div className="px-4 py-3 border-b dark:border-gray-700 flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
               <span>
                 {total} linhas em{' '}
@@ -683,7 +683,7 @@ export function Schedule() {
 
           {/* Painel lateral */}
           <aside className="space-y-4">
-            <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border dark:border-gray-700">
+            <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-card p-4 border dark:border-gray-700">
               <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">
                 Resumo por unidade
               </h2>
@@ -713,7 +713,7 @@ export function Schedule() {
               </div>
             </section>
 
-            <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border dark:border-gray-700">
+            <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-card p-4 border dark:border-gray-700">
               <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
                 Texto para WhatsApp
               </h2>

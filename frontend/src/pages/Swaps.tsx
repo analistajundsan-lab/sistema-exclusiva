@@ -68,7 +68,7 @@ export function Swaps() {
         </button>
       </div>
 
-      <form onSubmit={handleSearch} className="bg-white rounded-lg shadow p-3 mb-4 flex flex-wrap gap-2 items-end">
+      <form onSubmit={handleSearch} className="bg-white rounded-2xl shadow-card p-3 mb-4 flex flex-wrap gap-2 items-end">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Prefixo SAI</label>
           <input value={search.vehicle_out} onChange={e => setSearch(s => ({ ...s, vehicle_out: e.target.value }))}
@@ -95,7 +95,7 @@ export function Swaps() {
 
       {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
       {loading ? <p className="text-gray-500 py-8 text-center">Carregando...</p> : (
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-2xl shadow-card">
           <SwapTable
             swaps={swaps}
             total={total}
@@ -112,7 +112,7 @@ export function Swaps() {
 
       {modal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
+          <div className="bg-white rounded-2xl shadow-modal p-6 w-full max-w-lg mx-4">
             <h2 className="text-lg font-semibold mb-4">{modal === 'create' ? 'Nova troca' : 'Editar troca'}</h2>
             <SwapForm
               initial={editing || undefined}

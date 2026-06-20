@@ -238,7 +238,7 @@ export function Users() {
       {error && <p className="text-red-600 text-sm mb-3 bg-red-50 p-3 rounded">{error}</p>}
 
       {loading ? <p className="text-gray-500 py-8 text-center">Carregando...</p> : (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden overflow-x-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-card overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-100 dark:bg-gray-700 text-left">
@@ -304,7 +304,7 @@ export function Users() {
 
       {modal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
               {modalMode === 'create' ? 'Novo Usuário' : 'Editar Usuário'}
             </h2>

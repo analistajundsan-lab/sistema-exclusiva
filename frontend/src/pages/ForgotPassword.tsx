@@ -37,7 +37,7 @@ export function ForgotPassword() {
           <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">Sistema Exclusiva</h1>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-card-lg border border-gray-200 dark:border-gray-700 p-8">
           {sent ? (
             <div className="text-center">
               <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />

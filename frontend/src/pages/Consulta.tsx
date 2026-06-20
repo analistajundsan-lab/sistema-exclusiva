@@ -159,7 +159,7 @@ export function Consulta() {
 
         <form
           onSubmit={handleSearch}
-          className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end"
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-card border border-gray-100 dark:border-gray-700 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end"
         >
           <label className="text-xs font-medium text-gray-600 dark:text-gray-400 flex flex-col gap-1">
             <span className="flex items-center gap-1"><Calendar size={11} /> Data</span>
@@ -353,7 +353,7 @@ function ResultSection({
 }) {
   const isEmpty = Array.isArray(children) && children.length === 0
   return (
-    <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+    <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-card border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
         {icon}
         <h2 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{title}</h2>

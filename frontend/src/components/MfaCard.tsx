@@ -73,7 +73,7 @@ export function MfaCard() {
   )
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-card-lg border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-center gap-2 mb-1">
         <ShieldCheck className="w-5 h-5 text-brand-700 dark:text-brand-400" />
         <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">

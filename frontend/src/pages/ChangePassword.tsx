@@ -173,7 +173,7 @@ export function ChangePassword() {
           </button>
 
           {/* Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-card-lg border border-gray-200 dark:border-gray-700 p-8">
             {/* Header */}
             <div className="flex flex-col items-center mb-8">
               <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-900/30 border border-brand-100 dark:border-brand-800 mb-4">

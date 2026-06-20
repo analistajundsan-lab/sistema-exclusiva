@@ -1,13 +1,15 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
+import { useCountUp } from '../../hooks/useCountUp'
 
-type Color = 'brand' | 'red' | 'yellow' | 'green' | 'gray'
+type Color = 'brand' | 'red' | 'yellow' | 'green' | 'blue' | 'gray'
 
 const COLORS: Record<Color, string> = {
-  brand: 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400',
-  red: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400',
-  yellow: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400',
-  green: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400',
-  gray: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  brand: 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400',
+  red: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  yellow: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  green: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  blue: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  gray: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
 }
 
 export function KpiCard({
@@ -18,6 +20,7 @@ export function KpiCard({
   color = 'brand',
   deltaPct,
   upIsBad = false,
+  countUp = true,
   hint,
 }: {
   label: string
@@ -27,8 +30,10 @@ export function KpiCard({
   color?: Color
   deltaPct?: number
   upIsBad?: boolean
+  countUp?: boolean
   hint?: string
 }) {
+  const shown = useCountUp(value, countUp)
   const showDelta = typeof deltaPct === 'number' && Number.isFinite(deltaPct)
   const up = (deltaPct ?? 0) > 0
   const down = (deltaPct ?? 0) < 0
@@ -42,7 +47,10 @@ export function KpiCard({
   const DeltaIcon = deltaPct === 0 || !showDelta ? Minus : up ? ArrowUpRight : ArrowDownRight
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900" title={hint}>
+    <div
+      className="card card-hover p-4"
+      title={hint}
+    >
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
         <span className={`rounded-lg p-2 ${COLORS[color]}`}>
@@ -50,8 +58,8 @@ export function KpiCard({
         </span>
       </div>
       <div className="mt-2 flex items-end justify-between gap-2">
-        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {value}
+        <p className="text-3xl font-bold leading-tight text-gray-900 dark:text-gray-100 tabular-nums">
+          {shown}
           {suffix ? <span className="ml-0.5 text-base font-semibold text-gray-400">{suffix}</span> : null}
         </p>
         {showDelta && (
