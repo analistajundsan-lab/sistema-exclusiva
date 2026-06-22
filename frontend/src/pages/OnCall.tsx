@@ -7,11 +7,35 @@ import { useAuthStore } from '../store/auth'
 import client from '../api/client'
 import {
   CheckCircle2, ArrowLeftRight, X, MessageCircle, Clock,
-  Bus, MapPin, User, ChevronRight, Filter, Bell,
+  Bus, MapPin, User, ChevronRight, Filter, Bell, Pencil, RotateCcw, Ban,
 } from 'lucide-react'
 import { enablePush, currentPushState, pushSupported, isIOS, isStandalone, PushState } from '../utils/push'
 
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
+
+interface EditForm {
+  prefix_code: string
+  driver_name: string
+  start_time: string
+  end_time: string
+  line_code: string
+  direction: string
+  client_name: string
+  route_name: string
+}
+
+function lineToForm(line: ScheduleLine): EditForm {
+  return {
+    prefix_code: line.prefix_code,
+    driver_name: line.driver_name,
+    start_time: line.start_time,
+    end_time: line.end_time,
+    line_code: line.line_code,
+    direction: line.direction,
+    client_name: line.client_name,
+    route_name: line.route_name ?? '',
+  }
+}
 
 // Copia texto de forma robusta. No iOS o navigator.clipboard rejeita quando
 // chamado depois de um await (perde o "gesto do usuario"); por isso ha o
@@ -120,14 +144,18 @@ export function OnCall() {
     status: lineSearch ? undefined : 'pendente',
     line_code: lineSearch || undefined,
     ...(autoMode && !lineSearch ? { start_in_minutes: '120' } : {}),
+    // Na lista padrao, esconde as linhas marcadas "nao opera hoje". Na busca
+    // por linha elas aparecem (com indicador), para o plantonista poder desfazer.
+    ...(lineSearch ? {} : { hide_non_operating: 'true' }),
   }), [filters, autoMode, lineSearch])
 
   const pending = useSchedule(pendingFilters)
   const swapsList = useSwaps({ unit: filters.unit, schedule_date: filters.schedule_date })
   const canManageLines = hasFullAccess || role === 'admin' || role === 'gerente' || role === 'supervisao' || role === 'supervisor'
-  // Desativar linha que não vai rodar: operadores da Confirmação (Tráfego/Analista)
-  // além de quem já gerencia. O backend grava status "cancelada" no banco.
+  // "Nao operar" (por dia) e editar a linha: operadores da Confirmacao
+  // (Trafego/Analista/Plantonista) alem de quem ja gerencia.
   const canCancelLine = canManageLines || role === 'plantonista' || role === 'analista'
+  const canEditLine = canCancelLine
   // Apenas admin/acesso total escolhe a unidade. Plantonista fica travado na
   // garagem cadastrada (a unica do seu perfil).
   const canChooseUnit = hasFullAccess || role === 'admin'
@@ -143,6 +171,11 @@ export function OnCall() {
   const [relatedLines, setRelatedLines] = useState<ScheduleLine[]>([])
   const [relatedLoading, setRelatedLoading] = useState(false)
   const [selectedRelatedIds, setSelectedRelatedIds] = useState<number[]>([])
+
+  // Edicao inline da linha (estilo ADM), direto no painel.
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<EditForm | null>(null)
+  const [editSaving, setEditSaving] = useState(false)
 
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -175,8 +208,12 @@ export function OnCall() {
     }
   }
 
-  const [statusLine, setStatusLine] = useState<{ line: ScheduleLine; action: 'cancel' } | null>(null)
-  const [statusReason, setStatusReason] = useState('')
+  // Modal "Nao operar" (por dia, com par Entrada/Saida).
+  const [nonOpLine, setNonOpLine] = useState<ScheduleLine | null>(null)
+  const [nonOpPair, setNonOpPair] = useState<ScheduleLine[]>([])
+  const [nonOpSelected, setNonOpSelected] = useState<number[]>([])
+  const [nonOpLoading, setNonOpLoading] = useState(false)
+  const [nonOpSaving, setNonOpSaving] = useState(false)
 
   const handleFilter = (event: React.FormEvent) => {
     event.preventDefault()
@@ -307,18 +344,84 @@ export function OnCall() {
     }
   }
 
-  const handleStatusChange = async (event: React.FormEvent) => {
-    event.preventDefault()
-    if (!statusLine) return
+  // Abre o modal "Nao operar" e busca a linha-par (ex.: a Saida da Entrada),
+  // ja pre-selecionada — confirmando que as duas nao rodam hoje.
+  const openNonOp = async (line: ScheduleLine) => {
+    setNonOpLine(line)
+    setNonOpPair([])
+    setNonOpSelected([])
+    setActionError(null)
+    if (!filters.schedule_date) return
+    setNonOpLoading(true)
+    try {
+      const pair = await pending.fetchPair(line.id, filters.schedule_date)
+      const operable = pair.filter(item => item.non_operating !== true)
+      setNonOpPair(operable)
+      setNonOpSelected(operable.map(item => item.id))
+    } catch {
+      setNonOpPair([])
+    } finally {
+      setNonOpLoading(false)
+    }
+  }
+
+  const confirmNonOp = async () => {
+    if (!nonOpLine || !filters.schedule_date) return
+    setNonOpSaving(true)
     setActionError(null)
     try {
-      await pending.cancelLine(statusLine.line.id, statusReason)
+      await pending.setNonOperation(nonOpLine.id, filters.schedule_date, nonOpSelected)
       await pending.refetch(pendingFilters, 0)
-      setActionMessage('Linha desativada (não vai rodar).')
-      setStatusLine(null)
-      setStatusReason('')
+      const extra = nonOpSelected.length ? ` (+${nonOpSelected.length} linha-par)` : ''
+      setActionMessage(`Linha ${nonOpLine.line_code} marcada para não operar hoje${extra}.`)
+      setNonOpLine(null)
+      setNonOpPair([])
+      setNonOpSelected([])
     } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Não foi possível cancelar a linha.')
+      setActionError(e?.response?.data?.detail || 'Não foi possível marcar a linha.')
+    } finally {
+      setNonOpSaving(false)
+    }
+  }
+
+  const handleBackToOperate = async (line: ScheduleLine) => {
+    if (!filters.schedule_date) return
+    setActionError(null)
+    try {
+      await pending.clearNonOperation(line.id, filters.schedule_date)
+      await pending.refetch(pendingFilters, 0)
+      setActionMessage(`Linha ${line.line_code} voltou a operar hoje.`)
+    } catch (e: any) {
+      setActionError(e?.response?.data?.detail || 'Não foi possível reverter.')
+    }
+  }
+
+  const openEdit = (line: ScheduleLine) => {
+    setSwapOpenId(null)
+    setEditingId(line.id)
+    setEditForm(lineToForm(line))
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditForm(null)
+  }
+
+  const saveEdit = async (line: ScheduleLine) => {
+    if (!editForm) return
+    setEditSaving(true)
+    setActionError(null)
+    try {
+      // Mantem o status atual (nao "vira" alterada nem some dos pendentes).
+      await pending.updateLine(line.id, { ...editForm, status: line.status })
+      await pending.refetch(pendingFilters, 0)
+      setEditingId(null)
+      setEditForm(null)
+      setActionMessage(`Linha ${line.line_code} atualizada.`)
+    } catch (e: any) {
+      setActionError(e?.response?.data?.detail || 'Não foi possível salvar as alterações.')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -595,6 +698,12 @@ export function OnCall() {
                     <span className="rounded-full px-3 py-1.5 text-sm font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
                       {line.direction}
                     </span>
+                    {line.non_operating && (
+                      <span className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                        <Ban size={13} />
+                        Não opera hoje
+                      </span>
+                    )}
                   </div>
 
                   {/* Prefixo destaque + cliente */}
@@ -623,32 +732,131 @@ export function OnCall() {
                   </div>
 
                   {/* Botões de ação */}
-                  {swapOpenId !== line.id ? (
-                    <div className="flex gap-2">
-                      {line.status !== 'confirmada' && (
-                        <button
-                          onClick={() => handleConfirm(line.id)}
-                          className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                  {editingId === line.id && editForm ? (
+                    /* Edição inline (estilo ADM) */
+                    <div className="mt-1 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400/60 dark:border-blue-500/40 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Pencil size={14} className="text-blue-600 dark:text-blue-400" />
+                        <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                          Editar linha {line.line_code}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="time"
+                          value={editForm.start_time}
+                          onChange={e => setEditForm(f => f && { ...f, start_time: e.target.value })}
+                          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                        />
+                        <input
+                          type="time"
+                          value={editForm.end_time}
+                          onChange={e => setEditForm(f => f && { ...f, end_time: e.target.value })}
+                          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                        />
+                        <input
+                          value={editForm.prefix_code}
+                          onChange={e => setEditForm(f => f && { ...f, prefix_code: e.target.value })}
+                          placeholder="Prefixo"
+                          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                        />
+                        <input
+                          value={editForm.line_code}
+                          onChange={e => setEditForm(f => f && { ...f, line_code: e.target.value })}
+                          placeholder="Linha"
+                          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                        />
+                        <select
+                          value={editForm.direction}
+                          onChange={e => setEditForm(f => f && { ...f, direction: e.target.value })}
+                          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
                         >
-                          <CheckCircle2 size={15} />
-                          Confirmar
-                        </button>
-                      )}
-                      <button
-                        onClick={() => openSwap(line)}
-                        className="flex-1 flex items-center justify-center gap-1.5 border-2 border-accent-500 text-accent-600 dark:text-accent-400 dark:border-accent-500 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-all"
-                      >
-                        <ArrowLeftRight size={15} />
-                        {line.status === 'confirmada' ? 'Trocar novamente' : 'Trocar'}
-                      </button>
-                      {canCancelLine && (
+                          <option value="ENTRADA">ENTRADA</option>
+                          <option value="SAIDA">SAIDA</option>
+                        </select>
+                        <input
+                          value={editForm.client_name}
+                          onChange={e => setEditForm(f => f && { ...f, client_name: e.target.value })}
+                          placeholder="Cliente"
+                          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                        />
+                        <input
+                          value={editForm.driver_name}
+                          onChange={e => setEditForm(f => f && { ...f, driver_name: e.target.value })}
+                          placeholder="Motorista"
+                          className="col-span-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                        />
+                        <input
+                          value={editForm.route_name}
+                          onChange={e => setEditForm(f => f && { ...f, route_name: e.target.value })}
+                          placeholder="Rota"
+                          className="col-span-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+                        />
+                      </div>
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => setStatusLine({ line, action: 'cancel' })}
-                          className="flex items-center justify-center border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 px-3 py-2.5 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-                          title="Desativar linha (não vai rodar)"
+                          onClick={() => saveEdit(line)}
+                          disabled={editSaving}
+                          className="flex-1 bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+                        >
+                          {editSaving ? 'Salvando...' : 'Salvar alterações'}
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 px-3 py-2.5 rounded-xl text-sm transition-all"
                         >
                           <X size={15} />
                         </button>
+                      </div>
+                    </div>
+                  ) : swapOpenId !== line.id ? (
+                    <div className="flex gap-2">
+                      {line.non_operating ? (
+                        <button
+                          onClick={() => handleBackToOperate(line)}
+                          className="flex-1 flex items-center justify-center gap-1.5 border-2 border-green-500 text-green-700 dark:text-green-400 dark:border-green-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-green-50 dark:hover:bg-green-900/20 transition-all"
+                          title="Desfazer: a linha volta a operar hoje"
+                        >
+                          <RotateCcw size={15} />
+                          Voltar a operar hoje
+                        </button>
+                      ) : (
+                        <>
+                          {line.status !== 'confirmada' && (
+                            <button
+                              onClick={() => handleConfirm(line.id)}
+                              className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                            >
+                              <CheckCircle2 size={15} />
+                              Confirmar
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openSwap(line)}
+                            className="flex-1 flex items-center justify-center gap-1.5 border-2 border-accent-500 text-accent-600 dark:text-accent-400 dark:border-accent-500 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-all"
+                          >
+                            <ArrowLeftRight size={15} />
+                            {line.status === 'confirmada' ? 'Trocar novamente' : 'Trocar'}
+                          </button>
+                          {canEditLine && (
+                            <button
+                              onClick={() => openEdit(line)}
+                              className="flex items-center justify-center border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 px-3 py-2.5 rounded-xl text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"
+                              title="Editar a linha"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                          )}
+                          {canCancelLine && (
+                            <button
+                              onClick={() => openNonOp(line)}
+                              className="flex items-center justify-center border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 px-3 py-2.5 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                              title="Não operar hoje (não vai rodar)"
+                            >
+                              <Ban size={15} />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   ) : (
@@ -825,22 +1033,19 @@ export function OnCall() {
           </aside>
         </div>
 
-        {/* Modal cancelar linha */}
-        {statusLine && (
+        {/* Modal "Não operar" (por dia, com par Entrada/Saída) */}
+        {nonOpLine && (
           <div className="modal-overlay">
-            <form
-              onSubmit={handleStatusChange}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal w-full max-w-md overflow-hidden"
-            >
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal w-full max-w-md overflow-hidden">
               {/* Modal header */}
               <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-white">
-                  <X size={18} />
-                  <h2 className="text-base font-bold">Desativar linha</h2>
+                  <Ban size={18} />
+                  <h2 className="text-base font-bold">Não operar</h2>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setStatusLine(null)}
+                  onClick={() => setNonOpLine(null)}
                   className="text-red-200 hover:text-white transition-colors"
                 >
                   <X size={18} />
@@ -851,37 +1056,71 @@ export function OnCall() {
               <div className="p-6">
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-2">
                   <Bus size={14} className="shrink-0 text-brand-500" />
-                  Linha {statusLine.line.line_code} · Prefixo {statusLine.line.prefix_code}
+                  Linha {nonOpLine.line_code} · {nonOpLine.direction} · Prefixo {nonOpLine.prefix_code}
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
-                  A linha será marcada como <strong>não vai rodar</strong> e sairá da lista de pendentes. O registro fica salvo no sistema.
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                  Confirme que esta linha <strong>não vai rodar apenas hoje</strong>
+                  {filters.schedule_date ? ` (${filters.schedule_date.split('-').reverse().join('/')})` : ''}.
+                  Ela sai do painel e volta sozinha como pendente no próximo dia.
                 </p>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1.5">
-                  Motivo (opcional)
-                </label>
-                <input
-                  value={statusReason}
-                  onChange={e => setStatusReason(e.target.value)}
-                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full mb-5"
-                  placeholder="Ex: linha não vai rodar hoje"
-                />
+
+                {/* Linha-par (Entrada/Saída) */}
+                {nonOpLoading ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Buscando a linha-par (Entrada/Saída)...</p>
+                ) : nonOpPair.length > 0 ? (
+                  <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50/60 dark:bg-red-900/10 p-3 mb-5">
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2">
+                      Marcar também a linha-par
+                    </p>
+                    <div className="space-y-1.5">
+                      {nonOpPair.map(item => (
+                        <label
+                          key={item.id}
+                          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-red-100/70 dark:hover:bg-red-900/20"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={nonOpSelected.includes(item.id)}
+                            onChange={e => {
+                              setNonOpSelected(prev =>
+                                e.target.checked
+                                  ? [...prev, item.id]
+                                  : prev.filter(id => id !== item.id),
+                              )
+                            }}
+                          />
+                          <span className="font-mono font-semibold">L - {item.line_code}</span>
+                          <span className="font-semibold">{item.direction}</span>
+                          <span>{item.start_time} - {item.end_time}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">
+                    Sem outra linha-par (Entrada/Saída) para marcar junto.
+                  </p>
+                )}
+
                 <div className="flex gap-2 justify-end">
                   <button
                     type="button"
-                    onClick={() => setStatusLine(null)}
+                    onClick={() => setNonOpLine(null)}
                     className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-all"
                   >
                     Voltar
                   </button>
                   <button
-                    type="submit"
-                    className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all"
+                    type="button"
+                    onClick={confirmNonOp}
+                    disabled={nonOpSaving}
+                    className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:opacity-50"
                   >
-                    Desativar linha
+                    {nonOpSaving ? 'Salvando...' : 'Confirmar não operar'}
                   </button>
                 </div>
               </div>
-            </form>
+            </div>
           </div>
         )}
       </div>

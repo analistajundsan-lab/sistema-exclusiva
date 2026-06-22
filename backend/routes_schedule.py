@@ -22,6 +22,7 @@ from models import (
     ScheduleImport,
     ScheduleLine,
     ScheduleLineStatus,
+    ScheduleNonOperation,
     User,
     UserRole,
     get_db,
@@ -36,6 +37,7 @@ from schemas import (
     ScheduleLineResponse,
     ScheduleLineStatusChange,
     ScheduleLineUpdate,
+    ScheduleNonOperationCreate,
     ScheduleSummaryItem,
     ScheduleWhatsappResponse,
 )
@@ -110,6 +112,39 @@ def apply_schedule_date_scope(db: Session, query, schedule_date: Optional[date] 
 
     # Compatibilidade com escalas antigas gravadas antes do versionamento.
     return query.filter(ScheduleLine.schedule_date == schedule_date)
+
+
+def non_operating_ids_for_date(db: Session, schedule_date: Optional[date]) -> set[int]:
+    """IDs de linhas marcadas como 'nao opera' naquele dia (por dia, volta sozinho)."""
+    if not schedule_date:
+        return set()
+    rows = (
+        db.query(ScheduleNonOperation.schedule_line_id)
+        .filter(ScheduleNonOperation.operation_date == schedule_date)
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+def apply_operation_visibility(
+    db: Session,
+    query,
+    schedule_date: Optional[date] = None,
+    include_inactive: bool = False,
+    hide_non_operating: bool = False,
+):
+    """Esconde da operacao o que nao roda:
+    - is_active=False: desativada por periodo (so o ADM ve, via include_inactive).
+    - 'nao opera' naquele dia: some apenas quando hide_non_operating=True.
+    """
+    if not include_inactive:
+        query = query.filter(ScheduleLine.is_active.isnot(False))
+    if hide_non_operating and schedule_date:
+        nonop_subq = db.query(ScheduleNonOperation.schedule_line_id).filter(
+            ScheduleNonOperation.operation_date == schedule_date
+        )
+        query = query.filter(ScheduleLine.id.notin_(nonop_subq))
+    return query
 
 
 def build_import_warnings(parsed_lines) -> list[str]:
@@ -364,7 +399,9 @@ def status_for_operation_date(
 
 
 def line_response_for_operation_date(
-    line: ScheduleLine, operation_date: Optional[date] = None
+    line: ScheduleLine,
+    operation_date: Optional[date] = None,
+    non_operating: bool = False,
 ) -> dict:
     return {
         "id": line.id,
@@ -379,6 +416,8 @@ def line_response_for_operation_date(
         "start_time": line.start_time,
         "end_time": line.end_time,
         "status": status_for_operation_date(line, operation_date),
+        "is_active": line.is_active,
+        "non_operating": non_operating,
         "notes": line.notes,
         "confirmed_by": line.confirmed_by,
         "confirmed_at": line.confirmed_at,
@@ -502,6 +541,8 @@ async def count_schedule_lines(
     start_time_gte: Optional[str] = None,
     start_time_lt: Optional[str] = None,
     start_in_minutes: Optional[int] = Query(None, ge=1, le=1440),
+    include_inactive: bool = False,
+    hide_non_operating: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -517,6 +558,9 @@ async def count_schedule_lines(
     )
     query = apply_schedule_date_scope(db, query, schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
+    query = apply_operation_visibility(
+        db, query, schedule_date, include_inactive, hide_non_operating
+    )
     if start_time_gte:
         query = query.filter(ScheduleLine.start_time >= start_time_gte)
     if start_time_lt:
@@ -545,6 +589,8 @@ async def list_schedule_lines(
     prefix_code: Optional[str] = None,
     status: Optional[ScheduleLineStatus] = None,
     start_in_minutes: Optional[int] = Query(None, ge=1, le=1440),
+    include_inactive: bool = False,
+    hide_non_operating: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -560,6 +606,9 @@ async def list_schedule_lines(
     )
     query = apply_schedule_date_scope(db, query, schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
+    query = apply_operation_visibility(
+        db, query, schedule_date, include_inactive, hide_non_operating
+    )
     query = apply_start_window(query, start_in_minutes, schedule_date)
     rows = query.order_by(
         ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
@@ -572,7 +621,11 @@ async def list_schedule_lines(
         ]
     rows = rows[skip : skip + limit]
     if schedule_date:
-        return [line_response_for_operation_date(line, schedule_date) for line in rows]
+        nonop_ids = non_operating_ids_for_date(db, schedule_date)
+        return [
+            line_response_for_operation_date(line, schedule_date, line.id in nonop_ids)
+            for line in rows
+        ]
     return rows
 
 
@@ -581,7 +634,18 @@ async def update_schedule_line(
     line_id: int,
     body: ScheduleLineUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    # Edicao inline tambem no painel de confirmacao (plantonista/analista),
+    # alem dos gestores. Escopo de garagem garantido por ensure_unit_access.
+    current_user: User = Depends(
+        require_role(
+            UserRole.ADMIN,
+            UserRole.GERENTE,
+            UserRole.SUPERVISAO,
+            UserRole.SUPERVISOR,
+            UserRole.ANALISTA,
+            UserRole.PLANTONISTA,
+        )
+    ),
 ):
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
@@ -722,6 +786,195 @@ async def cancel_schedule_line(
     return line
 
 
+@router.post("/lines/{line_id}/deactivate", response_model=ScheduleLineResponse)
+async def deactivate_schedule_line(
+    line_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    """Desativa a linha por periodo (ex.: Mercado Livre retirou a linha). Ela
+    sai do painel de confirmacao/contagens ate ser reativada, sem ser apagada."""
+    line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
+
+    line.is_active = False
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="DEACTIVATE",
+            resource="schedule_line",
+            resource_id=line.id,
+            details=f"Linha {line.line_code} desativada (periodo); prefixo={line.prefix_code}; unidade={line.unit}",
+        )
+    )
+    db.commit()
+    db.refresh(line)
+    return line
+
+
+@router.post("/lines/{line_id}/reactivate", response_model=ScheduleLineResponse)
+async def reactivate_schedule_line(
+    line_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    """Reativa uma linha desativada por periodo: volta ao painel de confirmacao."""
+    line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
+
+    line.is_active = True
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="REACTIVATE",
+            resource="schedule_line",
+            resource_id=line.id,
+            details=f"Linha {line.line_code} reativada; prefixo={line.prefix_code}; unidade={line.unit}",
+        )
+    )
+    db.commit()
+    db.refresh(line)
+    return line
+
+
+@router.get("/lines/{line_id}/pair", response_model=List[ScheduleLineResponse])
+async def schedule_line_pair(
+    line_id: int,
+    operation_date: date,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Linhas-par: mesma linha + mesma unidade (ex.: a Saida da Entrada
+    selecionada). Usado pelo 'Nao operar' para marcar Entrada e Saida juntas."""
+    line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
+    if not line.line_code:
+        return []
+
+    query = db.query(ScheduleLine).filter(
+        ScheduleLine.id != line.id,
+        ScheduleLine.unit == line.unit,
+        ScheduleLine.line_code == line.line_code,
+    )
+    query = apply_schedule_date_scope(db, query, operation_date)
+    query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
+    query = query.filter(ScheduleLine.is_active.isnot(False))
+    siblings = query.order_by(ScheduleLine.direction, ScheduleLine.start_time).all()
+
+    nonop_ids = non_operating_ids_for_date(db, operation_date)
+    return [
+        line_response_for_operation_date(item, operation_date, item.id in nonop_ids)
+        for item in siblings
+    ]
+
+
+@router.post("/lines/{line_id}/non-operation")
+async def set_schedule_non_operation(
+    line_id: int,
+    body: ScheduleNonOperationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_role(
+            UserRole.ADMIN,
+            UserRole.GERENTE,
+            UserRole.SUPERVISAO,
+            UserRole.SUPERVISOR,
+            UserRole.ANALISTA,
+            UserRole.PLANTONISTA,
+        )
+    ),
+):
+    """Marca que a(s) linha(s) NAO vao rodar apenas naquele dia. Some do painel
+    e volta sozinha no dia seguinte. also_line_ids = linhas-par (ex.: a Saida)."""
+    line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
+
+    target_ids = [line_id] + [i for i in body.also_line_ids if i != line_id]
+    marked: list[int] = []
+    for target_id in target_ids:
+        target = db.query(ScheduleLine).filter(ScheduleLine.id == target_id).first()
+        if not target:
+            continue
+        ensure_unit_access(current_user, target.unit)
+        exists = (
+            db.query(ScheduleNonOperation)
+            .filter(
+                ScheduleNonOperation.schedule_line_id == target_id,
+                ScheduleNonOperation.operation_date == body.operation_date,
+            )
+            .first()
+        )
+        if not exists:
+            db.add(
+                ScheduleNonOperation(
+                    schedule_line_id=target_id,
+                    operation_date=body.operation_date,
+                    unit=target.unit,
+                    line_code=target.line_code,
+                    created_by=current_user.id,
+                )
+            )
+        marked.append(target_id)
+
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="NAO_OPERAR",
+            resource="schedule_line",
+            resource_id=line_id,
+            details=f"Linhas {marked} nao operam em {body.operation_date}; unidade={line.unit}",
+        )
+    )
+    db.commit()
+    return {"marked": marked, "operation_date": body.operation_date}
+
+
+@router.delete("/lines/{line_id}/non-operation", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_schedule_non_operation(
+    line_id: int,
+    operation_date: date,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_role(
+            UserRole.ADMIN,
+            UserRole.GERENTE,
+            UserRole.SUPERVISAO,
+            UserRole.SUPERVISOR,
+            UserRole.ANALISTA,
+            UserRole.PLANTONISTA,
+        )
+    ),
+):
+    """Desfaz o 'nao operar' daquele dia: a linha volta a aparecer como pendente."""
+    line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
+    ensure_unit_access(current_user, line.unit)
+
+    db.query(ScheduleNonOperation).filter(
+        ScheduleNonOperation.schedule_line_id == line_id,
+        ScheduleNonOperation.operation_date == operation_date,
+    ).delete()
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="VOLTAR_OPERAR",
+            resource="schedule_line",
+            resource_id=line_id,
+            details=f"Linha {line.line_code} volta a operar em {operation_date}; unidade={line.unit}",
+        )
+    )
+    db.commit()
+
+
 @router.get("/summary", response_model=List[ScheduleSummaryItem])
 async def schedule_summary(
     schedule_date: Optional[date] = None,
@@ -731,6 +984,9 @@ async def schedule_summary(
     query = db.query(ScheduleLine)
     query = apply_schedule_date_scope(db, query, schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
+    query = apply_operation_visibility(
+        db, query, schedule_date, include_inactive=False, hide_non_operating=True
+    )
 
     rows = (
         query.with_entities(
@@ -779,6 +1035,9 @@ async def schedule_dashboard_turns(
 ):
     query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
+    query = apply_operation_visibility(
+        db, query, schedule_date, include_inactive=False, hide_non_operating=True
+    )
     lines = query.order_by(
         ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
     ).all()
@@ -880,6 +1139,9 @@ async def schedule_whatsapp_text(
         ScheduleLine.unit == unit,
     )
     ensure_unit_access(current_user, unit)
+    query = apply_operation_visibility(
+        db, query, schedule_date, include_inactive=False, hide_non_operating=True
+    )
     if only_changes:
         query = query.filter(
             ScheduleLine.status.in_(
@@ -947,6 +1209,9 @@ async def download_schedule(
     """Gera planilha XLSX no formato em blocos, semelhante ao arquivo importado."""
     query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
+    query = apply_operation_visibility(
+        db, query, schedule_date, include_inactive=False, hide_non_operating=True
+    )
     if unit:
         ensure_unit_access(current_user, unit)
         query = query.filter(ScheduleLine.unit == unit)

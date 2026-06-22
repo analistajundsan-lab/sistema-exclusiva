@@ -14,6 +14,9 @@ export interface ScheduleLine {
   start_time: string
   end_time: string
   status: 'pendente' | 'confirmada' | 'alterada' | 'cancelada'
+  // is_active=false: desativada por periodo (ADM). non_operating: nao opera hoje.
+  is_active?: boolean
+  non_operating?: boolean
   confirmed_by?: number
   confirmed_at?: string
 }
@@ -51,6 +54,8 @@ export interface ScheduleFilters {
   prefix_code?: string
   status?: string
   start_in_minutes?: string
+  include_inactive?: string
+  hide_non_operating?: string
 }
 
 const PAGE_SIZE = 100
@@ -186,6 +191,47 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     return res.data
   }
 
+  // Desativar/Reativar por periodo (ADM). Nao refazem o fetch sozinhos: quem
+  // chama decide com quais filtros recarregar (ex.: a aba ADM vs. o painel).
+  const deactivateLine = async (id: number) => {
+    const res = await api.post<ScheduleLine>(`/schedule/lines/${id}/deactivate`)
+    return res.data
+  }
+
+  const reactivateLine = async (id: number) => {
+    const res = await api.post<ScheduleLine>(`/schedule/lines/${id}/reactivate`)
+    return res.data
+  }
+
+  // "Nao operar" por dia. alsoLineIds = linhas-par (ex.: a Saida) que tambem
+  // nao vao rodar naquele dia.
+  const setNonOperation = async (id: number, operationDate: string, alsoLineIds: number[] = []) => {
+    const res = await api.post(`/schedule/lines/${id}/non-operation`, {
+      operation_date: operationDate,
+      also_line_ids: alsoLineIds,
+    })
+    return res.data
+  }
+
+  const clearNonOperation = async (id: number, operationDate: string) => {
+    await api.delete(`/schedule/lines/${id}/non-operation`, {
+      params: { operation_date: operationDate },
+    })
+  }
+
+  // Linhas-par (mesma linha + unidade) para o modal de "Nao operar".
+  const fetchPair = async (id: number, operationDate: string) => {
+    const res = await api.get<ScheduleLine[]>(`/schedule/lines/${id}/pair`, {
+      params: { operation_date: operationDate },
+    })
+    return res.data
+  }
+
+  const updateLine = async (id: number, payload: Record<string, unknown>) => {
+    const res = await api.patch<ScheduleLine>(`/schedule/lines/${id}`, payload)
+    return res.data
+  }
+
   const fetchWhatsappText = useCallback(async (scheduleDate: string, unit: string, onlyChanges = false) => {
     const res = await api.get<{ text: string; total: number }>('/schedule/whatsapp', {
       params: { schedule_date: scheduleDate, unit, only_changes: onlyChanges },
@@ -217,6 +263,12 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     confirmLine,
     undoConfirmLine,
     cancelLine,
+    deactivateLine,
+    reactivateLine,
+    setNonOperation,
+    clearNonOperation,
+    fetchPair,
+    updateLine,
     fetchWhatsappText,
     refetch: fetchSchedule,
   }

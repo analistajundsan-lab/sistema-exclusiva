@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pencil, Trash2, Download, X, Check } from 'lucide-react'
+import { Pencil, Trash2, Download, X, Check, Ban, RotateCcw } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { ScheduleLine, ScheduleFilters, useSchedule } from '../hooks/useSchedule'
 import { useAuthStore } from '../store/auth'
@@ -68,6 +68,9 @@ export function Schedule() {
       ...saved,
       schedule_date: saved.schedule_date || DEFAULT_OPERATION_DATE,
       unit: (readOnly && u) ? u : (isUnitTab(saved.unit) ? saved.unit : 'Caieiras'),
+      // Aba de gestao mostra tambem as linhas desativadas por periodo, para
+      // poder reativar. As telas operacionais escondem por padrao.
+      include_inactive: 'true',
     }
   })
   const [file, setFile] = useState<File | null>(null)
@@ -78,6 +81,7 @@ export function Schedule() {
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [togglingId, setTogglingId] = useState<number | null>(null)
 
   const role = useAuthStore(s => s.role)
   const unit = useAuthStore(s => s.userUnit)
@@ -103,6 +107,8 @@ export function Schedule() {
     applyFilters,
     previewImport,
     importSchedule,
+    deactivateLine,
+    reactivateLine,
     fetchWhatsappText,
     refetch,
   } = useSchedule(search)
@@ -205,6 +211,26 @@ export function Schedule() {
       alert('Erro ao excluir linha. Tente novamente.')
     } finally {
       setDeleting(null)
+    }
+  }
+
+  const handleToggleActive = async (line: ScheduleLine) => {
+    setTogglingId(line.id)
+    try {
+      if (line.is_active === false) {
+        await reactivateLine(line.id)
+      } else {
+        const ok = confirm(
+          `Desativar a linha ${line.line_code}? Ela sai do painel de confirmacoes ate ser reativada (continua no historico, sem ser apagada).`,
+        )
+        if (!ok) return
+        await deactivateLine(line.id)
+      }
+      refetch()
+    } catch {
+      alert('Erro ao atualizar a linha. Tente novamente.')
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -604,13 +630,20 @@ export function Schedule() {
                       /* Linha normal */
                       <tr
                         key={line.id}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                        className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${line.is_active === false ? 'opacity-60' : ''}`}
                       >
                         <td className="px-3 py-2 border dark:border-gray-700 font-mono text-gray-900 dark:text-gray-100 whitespace-nowrap">
                           {line.start_time} - {line.end_time}
                         </td>
                         <td className="px-3 py-2 border dark:border-gray-700 font-mono font-semibold text-gray-900 dark:text-gray-100">
-                          {line.prefix_code}
+                          <div className="flex items-center gap-1.5">
+                            <span>{line.prefix_code}</span>
+                            {line.is_active === false && (
+                              <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                                Desativada
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2 border dark:border-gray-700 font-mono text-gray-900 dark:text-gray-100">
                           {line.line_code}
@@ -637,6 +670,19 @@ export function Schedule() {
                                 className="p-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800"
                               >
                                 <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleActive(line)}
+                                disabled={togglingId === line.id}
+                                title={line.is_active === false ? 'Reativar linha' : 'Desativar (sai do painel ate reativar)'}
+                                className={`p-1 rounded disabled:opacity-50 ${
+                                  line.is_active === false
+                                    ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800'
+                                    : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800'
+                                }`}
+                              >
+                                {line.is_active === false ? <RotateCcw size={14} /> : <Ban size={14} />}
                               </button>
                               <button
                                 type="button"

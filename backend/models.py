@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     Text,
+    UniqueConstraint,
     func,
     create_engine,
 )
@@ -212,6 +213,11 @@ class ScheduleLine(Base):
         nullable=False,
         index=True,
     )
+    # Desativacao por periodo (ex.: Mercado Livre retira a linha por um tempo).
+    # Linha inativa some do painel de confirmacao/contagens ate ser reativada,
+    # sem ser apagada. Diferente de "nao operar" (que e por dia, ver
+    # ScheduleNonOperation).
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
     notes = Column(String(500))
     confirmed_by = Column(Integer)
     confirmed_at = Column(DateTime)
@@ -234,6 +240,29 @@ class ScheduleImport(Base):
     created_by = Column(Integer, nullable=False, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ScheduleNonOperation(Base):
+    """Marca que uma linha especifica NAO vai rodar em UM dia (decisao do
+    plantonista no painel de confirmacao). E por data: no dia seguinte a linha
+    volta a aparecer como pendente automaticamente, sem ninguem reativar.
+    Diferente de ScheduleLine.is_active (desativacao por periodo)."""
+
+    __tablename__ = "schedule_non_operations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    schedule_line_id = Column(Integer, nullable=False, index=True)
+    operation_date = Column(Date, nullable=False, index=True)
+    unit = Column(String(80), index=True)
+    line_code = Column(String(20), index=True)
+    created_by = Column(Integer, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "schedule_line_id", "operation_date", name="uq_nonop_line_date"
+        ),
+    )
 
 
 class AuditLog(Base):

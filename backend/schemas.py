@@ -302,6 +302,9 @@ class ScheduleLineResponse(BaseModel):
     start_time: str
     end_time: str
     status: ScheduleLineStatus
+    # Desativada por periodo (ADM). Linha "nao opera hoje" (plantonista, por dia).
+    is_active: bool = True
+    non_operating: bool = False
     notes: Optional[str] = None
     confirmed_by: Optional[int] = None
     confirmed_at: Optional[datetime] = None
@@ -327,6 +330,13 @@ class ScheduleLineUpdate(BaseModel):
 
 class ScheduleLineStatusChange(BaseModel):
     reason: Optional[str] = Field(None, max_length=255)
+
+
+class ScheduleNonOperationCreate(BaseModel):
+    # Dia em que a(s) linha(s) nao vao rodar. also_line_ids = linhas-par
+    # (ex.: a Saida da mesma linha/unidade) que tambem nao devem rodar.
+    operation_date: date
+    also_line_ids: List[int] = Field(default_factory=list)
 
 
 class ScheduleImportResponse(BaseModel):

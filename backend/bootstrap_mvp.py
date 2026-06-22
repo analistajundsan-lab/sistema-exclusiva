@@ -150,6 +150,11 @@ def migrate_existing_sqlite() -> None:
         )
     if "schedule_lines" in tables:
         ensure_column("schedule_lines", "import_id", "import_id INTEGER")
+        ensure_column(
+            "schedule_lines",
+            "is_active",
+            "is_active BOOLEAN DEFAULT TRUE NOT NULL",
+        )
     if "vehicle_checklists" in tables:
         ensure_column("vehicle_checklists", "crlv_status", "crlv_status VARCHAR(50)")
         ensure_column("vehicle_checklists", "emtu_status", "emtu_status VARCHAR(50)")
