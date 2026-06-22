@@ -250,3 +250,35 @@ def test_plantonista_can_edit_line_inline(admin_token, plantonista_token):
     assert resp.json()["driver_name"] == "NOVO MOTORISTA"
     # Status preservado (nao virou "alterada" nem sumiu dos pendentes)
     assert resp.json()["status"] == entrada["status"]
+
+
+def _preview(admin_token: str, filename: str, schedule_date: str) -> dict:
+    return client.post(
+        f"/schedule/import/preview?schedule_date={schedule_date}",
+        headers=auth(admin_token),
+        files={
+            "file": (
+                filename,
+                build_pair_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    ).json()
+
+
+def test_preview_avisa_coexistencia_de_vigencia(admin_token):
+    import_pair(admin_token)  # importa "escala.xlsx" na vigencia DATE
+
+    # Mesmo nome + mesma vigencia -> vai substituir
+    same = _preview(admin_token, "escala.xlsx", DATE)
+    assert same["will_replace"] is True
+    assert same["existing_other_files"] == []
+
+    # Nome diferente + mesma vigencia -> coexistencia (duplicaria)
+    other = _preview(admin_token, "OUTRA ESCALA.xlsx", DATE)
+    assert other["will_replace"] is False
+    assert "escala.xlsx" in other["existing_other_files"]
+
+    # Nome diferente + OUTRA vigencia -> sem coexistencia
+    other_date = _preview(admin_token, "OUTRA ESCALA.xlsx", NEXT_DATE)
+    assert other_date["existing_other_files"] == []

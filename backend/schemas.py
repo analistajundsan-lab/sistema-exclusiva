@@ -360,6 +360,11 @@ class ScheduleImportPreviewResponse(BaseModel):
     units: list[ScheduleImportPreviewUnit]
     clients: list[ScheduleImportPreviewClient]
     warnings: list[str]
+    # Vigencia (Data) escolhida e checagem de coexistencia: se ja existir escala
+    # nessa mesma vigencia com OUTRO nome de arquivo, importar vai SOMAR (duplicar).
+    effective_date: Optional[date] = None
+    existing_other_files: list[str] = Field(default_factory=list)
+    will_replace: bool = False
 
 
 class ScheduleSummaryItem(BaseModel):

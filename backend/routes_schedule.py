@@ -169,11 +169,29 @@ def build_import_warnings(parsed_lines) -> list[str]:
 @router.post("/import/preview", response_model=ScheduleImportPreviewResponse)
 async def preview_schedule_import(
     file: UploadFile = File(...),
+    schedule_date: Optional[date] = None,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     _, parsed_lines = await parse_upload_file(file)
+    filename = normalized_filename(file)
     unit_counts = Counter(line.unit for line in parsed_lines)
     client_counts = Counter(line.client_name or "Sem cliente" for line in parsed_lines)
+
+    # Coexistencia: outras escalas na MESMA vigencia com nome diferente vao
+    # SOMAR (duplicar) em vez de substituir. Mesmo nome -> substitui no lugar.
+    existing_other_files: list[str] = []
+    will_replace = False
+    if schedule_date:
+        for existing in (
+            db.query(ScheduleImport)
+            .filter(ScheduleImport.effective_date == schedule_date)
+            .all()
+        ):
+            if existing.filename == filename:
+                will_replace = True
+            elif existing.filename not in existing_other_files:
+                existing_other_files.append(existing.filename)
 
     return ScheduleImportPreviewResponse(
         total=len(parsed_lines),
@@ -186,6 +204,9 @@ async def preview_schedule_import(
             for client, total in client_counts.most_common(8)
         ],
         warnings=build_import_warnings(parsed_lines),
+        effective_date=schedule_date,
+        existing_other_files=existing_other_files,
+        will_replace=will_replace,
     )
 
 

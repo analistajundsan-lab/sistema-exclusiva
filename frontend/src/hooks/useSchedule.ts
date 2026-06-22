@@ -43,6 +43,10 @@ export interface ScheduleImportPreview {
   units: { unit: string; total: number }[]
   clients: { client_name: string; total: number }[]
   warnings: string[]
+  // Vigencia escolhida + checagem de coexistencia (duplicacao).
+  effective_date?: string | null
+  existing_other_files?: string[]
+  will_replace?: boolean
 }
 
 export interface ScheduleFilters {
@@ -150,7 +154,7 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     }
   }
 
-  const previewImport = async (file: File) => {
+  const previewImport = async (file: File, scheduleDate?: string) => {
     setPreviewing(true)
     setError(null)
     setImportMessage(null)
@@ -159,6 +163,7 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
       const form = new FormData()
       form.append('file', file)
       const res = await api.post<ScheduleImportPreview>('/schedule/import/preview', form, {
+        params: scheduleDate ? { schedule_date: scheduleDate } : {},
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setImportPreview(res.data)

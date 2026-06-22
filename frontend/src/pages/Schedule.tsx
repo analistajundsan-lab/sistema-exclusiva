@@ -47,6 +47,11 @@ function isUnitTab(value?: string | null): value is UnitTab {
   return !!value && (UNIT_TABS as readonly string[]).includes(value)
 }
 
+// YYYY-MM-DD -> DD/MM/YYYY (para mostrar a vigencia de forma clara)
+function fmtBR(iso?: string): string {
+  return iso ? iso.split('-').reverse().join('/') : ''
+}
+
 export function Schedule() {
   const [activeTab, setActiveTab] = useState<UnitTab>(() => {
     const s = useAuthStore.getState()
@@ -117,6 +122,13 @@ export function Schedule() {
     localStorage.setItem(SCHEDULE_FILTERS_KEY, JSON.stringify(search))
   }, [search])
 
+  // Se trocar a Data com um arquivo ja em previa, recalcula a previa para o
+  // aviso de vigencia/duplicacao ficar correto para a nova data.
+  useEffect(() => {
+    if (file && importPreview) previewImport(file, search.schedule_date)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.schedule_date])
+
   useEffect(() => {
     if (!search.schedule_date || !activeTab) {
       setWhatsappText('')
@@ -160,12 +172,26 @@ export function Schedule() {
     event.preventDefault()
     if (!file || !search.schedule_date) return
     if (!importPreview) {
-      await previewImport(file)
+      await previewImport(file, search.schedule_date)
       return
     }
-    if (replace) {
+    const vig = fmtBR(search.schedule_date)
+    const coexisting = importPreview.existing_other_files ?? []
+    if (coexisting.length > 0) {
       const ok = confirm(
-        `Esta acao substituira apenas um upload anterior com o mesmo arquivo e a mesma vigencia (${search.schedule_date}). Outros arquivos ou vigencias ficam no historico. Continuar?`,
+        `ATENCAO: ja existe outra escala vigente em ${vig} (${coexisting.join(', ')}).\n\n` +
+        `Importar com esta data vai SOMAR as duas (escala duplicada), nao substituir.\n\n` +
+        `Se a intencao e trocar a escala, cancele e use no campo Data a DATA DE INICIO desta escala.\n\n` +
+        `Importar mesmo assim?`,
+      )
+      if (!ok) return
+    } else if (replace) {
+      const ok = confirm(
+        `Esta escala passara a valer a partir de ${vig}.` +
+        (importPreview.will_replace
+          ? ' Vai substituir o envio anterior com este mesmo arquivo e vigencia.'
+          : '') +
+        '\n\nContinuar?',
       )
       if (!ok) return
     }
@@ -360,17 +386,20 @@ export function Schedule() {
                 Importar escala em blocos
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Informe no filtro Data a vigencia inicial da escala enviada. Reenvios com o
-                mesmo arquivo e vigencia substituem aquele lote; arquivos ou vigencias
-                diferentes ficam no historico.
+                A <strong>Data</strong> selecionada acima é a <strong>vigência</strong> (a partir de quando a
+                escala vale). Reenvios com o mesmo arquivo e vigência substituem; arquivos
+                ou vigências diferentes ficam no histórico.
               </p>
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 px-2.5 py-1.5 text-xs font-semibold text-brand-800 dark:text-brand-300">
+                Vigência: vale a partir de {fmtBR(search.schedule_date) || '— selecione a Data'}
+              </div>
               <input
                 id="schedule-file"
                 type="file"
                 accept=".xlsx,.xlsm"
                 onChange={e => {
                   setFile(e.target.files?.[0] || null)
-                  if (e.target.files?.[0]) previewImport(e.target.files[0])
+                  if (e.target.files?.[0]) previewImport(e.target.files[0], search.schedule_date)
                 }}
                 className="block w-full text-sm border dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
@@ -393,7 +422,7 @@ export function Schedule() {
                 : importing
                   ? 'Importando...'
                   : importPreview
-                    ? 'Confirmar importacao'
+                    ? `Confirmar — vale a partir de ${fmtBR(search.schedule_date)}`
                     : 'Gerar previa'}
             </button>
           </form>
@@ -402,6 +431,38 @@ export function Schedule() {
         {/* Preview da importacao */}
         {isAdmin && importPreview && (
           <section className="bg-brand-50 dark:bg-gray-700 border border-brand-200 dark:border-gray-600 rounded-lg p-4">
+            {/* Vigencia em destaque */}
+            <div className="mb-3 flex items-center gap-2 rounded-lg bg-white dark:bg-gray-800 border border-brand-200 dark:border-gray-600 px-3 py-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-400">
+                Vigência
+              </span>
+              <span className="text-sm font-bold text-gray-800 dark:text-gray-100">
+                vale a partir de {fmtBR(search.schedule_date)}
+              </span>
+            </div>
+
+            {/* Alerta de coexistencia (duplicacao) */}
+            {(importPreview.existing_other_files?.length ?? 0) > 0 && (
+              <div className="mb-3 rounded-lg bg-red-50 dark:bg-red-900/30 border-2 border-red-300 dark:border-red-700 p-3">
+                <p className="text-sm font-bold text-red-800 dark:text-red-300">
+                  ⚠️ Já existe outra escala nesta vigência ({fmtBR(search.schedule_date)})
+                </p>
+                <p className="text-xs text-red-700 dark:text-red-300 mt-1">
+                  Arquivo(s): {importPreview.existing_other_files?.join(', ')}. Como o nome é
+                  diferente, importar com esta data vai <strong>SOMAR as duas (escala duplicada)</strong>,
+                  não substituir. Se a intenção é trocar a escala, mude o campo <strong>Data</strong> para a
+                  data de início desta escala.
+                </p>
+              </div>
+            )}
+            {importPreview.will_replace && (importPreview.existing_other_files?.length ?? 0) === 0 && (
+              <div className="mb-3 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 px-3 py-2">
+                <p className="text-xs text-green-800 dark:text-green-300">
+                  ✓ Vai substituir o envio anterior com este mesmo arquivo e vigência.
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
               <div>
                 <h2 className="font-semibold text-brand-900 dark:text-gray-100">
