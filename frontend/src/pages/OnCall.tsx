@@ -329,7 +329,7 @@ export function OnCall() {
           lines_covered: `${item.direction} - ${item.line_code}`,
         } as any)
       }
-      await pending.refetch(pendingFilters, 0)
+      await pending.refetch(pendingFilters, 0, { fresh: true })
       setSwapOpenId(null)
       setSwapVehicle('')
       setSwapDriver('')
@@ -371,7 +371,7 @@ export function OnCall() {
     setActionError(null)
     try {
       await pending.setNonOperation(nonOpLine.id, filters.schedule_date, nonOpSelected)
-      await pending.refetch(pendingFilters, 0)
+      await pending.refetch(pendingFilters, 0, { fresh: true })
       const extra = nonOpSelected.length ? ` (+${nonOpSelected.length} linha-par)` : ''
       setActionMessage(`Linha ${nonOpLine.line_code} marcada para não operar hoje${extra}.`)
       setNonOpLine(null)
@@ -389,7 +389,7 @@ export function OnCall() {
     setActionError(null)
     try {
       await pending.clearNonOperation(line.id, filters.schedule_date)
-      await pending.refetch(pendingFilters, 0)
+      await pending.refetch(pendingFilters, 0, { fresh: true })
       setActionMessage(`Linha ${line.line_code} voltou a operar hoje.`)
     } catch (e: any) {
       setActionError(e?.response?.data?.detail || 'Não foi possível reverter.')
@@ -414,7 +414,7 @@ export function OnCall() {
     try {
       // Mantem o status atual (nao "vira" alterada nem some dos pendentes).
       await pending.updateLine(line.id, { ...editForm, status: line.status })
-      await pending.refetch(pendingFilters, 0)
+      await pending.refetch(pendingFilters, 0, { fresh: true })
       setEditingId(null)
       setEditForm(null)
       setActionMessage(`Linha ${line.line_code} atualizada.`)

@@ -96,26 +96,26 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
   const fetchSchedule = useCallback(async (
     f = filters,
     skip = page * PAGE_SIZE,
-    opts: { silent?: boolean } = {},
+    opts: { silent?: boolean; fresh?: boolean } = {},
   ) => {
-    const { silent = false } = opts
+    const { silent = false, fresh = false } = opts
     const seq = ++requestSeq.current
     if (!silent) setLoading(true)
     setError(null)
     try {
+      // Um unico request (/board) traz lines + total + summary, cortando 2/3 dos
+      // round-trips por refresh. fresh=1 ignora o cache do servidor (usado logo
+      // apos uma acao para quem agiu ver o resultado na hora).
       const params = paramsFrom(f, skip)
-      const summaryParams = f.schedule_date ? { schedule_date: f.schedule_date } : {}
-      const [listRes, countRes, summaryRes] = await Promise.all([
-        api.get('/schedule/lines', { params }),
-        api.get('/schedule/lines/count', { params: paramsFrom(f, 0) }),
-        api.get('/schedule/summary', { params: summaryParams }),
-      ])
+      if (fresh) params.fresh = '1'
+      const res = await api.get('/schedule/board', { params })
       // Resposta obsoleta: outra requisicao mais recente ja foi disparada.
       // Ignora para nao "ressuscitar" uma linha que ja foi confirmada.
       if (seq !== requestSeq.current) return
-      setLines(prev => JSON.stringify(prev) === JSON.stringify(listRes.data) ? prev : listRes.data)
-      setTotal(prev => prev === countRes.data.total ? prev : countRes.data.total)
-      setSummary(prev => JSON.stringify(prev) === JSON.stringify(summaryRes.data) ? prev : summaryRes.data)
+      const data = res.data as { lines: ScheduleLine[]; total: number; summary: ScheduleSummary[] }
+      setLines(prev => JSON.stringify(prev) === JSON.stringify(data.lines) ? prev : data.lines)
+      setTotal(prev => prev === data.total ? prev : data.total)
+      setSummary(prev => JSON.stringify(prev) === JSON.stringify(data.summary) ? prev : data.summary)
     } catch (err: any) {
       if (!silent && seq === requestSeq.current) setError(apiErrorMessage(err, 'Erro ao carregar escala'))
     } finally {
@@ -143,7 +143,7 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
       const nextFilters = { ...filters, schedule_date: scheduleDate }
       setFilters(nextFilters)
       setPage(0)
-      await fetchSchedule(nextFilters, 0)
+      await fetchSchedule(nextFilters, 0, { fresh: true })
       return res.data
     } catch (err: any) {
       const detail = err.response?.data?.detail
@@ -180,19 +180,19 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
   const confirmLine = async (id: number) => {
     const res = await api.post<ScheduleLine>(`/schedule/lines/${id}/confirm`)
     setLines(prev => prev.map(line => line.id === id ? res.data : line))
-    await fetchSchedule(filters, page * PAGE_SIZE)
+    await fetchSchedule(filters, page * PAGE_SIZE, { fresh: true })
     return res.data
   }
 
   const undoConfirmLine = async (id: number, reason?: string) => {
     const res = await api.post<ScheduleLine>(`/schedule/lines/${id}/undo-confirm`, { reason })
-    await fetchSchedule(filters, page * PAGE_SIZE)
+    await fetchSchedule(filters, page * PAGE_SIZE, { fresh: true })
     return res.data
   }
 
   const cancelLine = async (id: number, reason?: string) => {
     const res = await api.post<ScheduleLine>(`/schedule/lines/${id}/cancel`, { reason })
-    await fetchSchedule(filters, page * PAGE_SIZE)
+    await fetchSchedule(filters, page * PAGE_SIZE, { fresh: true })
     return res.data
   }
 
