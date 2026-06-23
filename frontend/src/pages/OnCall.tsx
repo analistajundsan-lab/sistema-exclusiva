@@ -10,6 +10,7 @@ import {
   Bus, MapPin, User, ChevronRight, Filter, Bell, Pencil, RotateCcw, Ban,
 } from 'lucide-react'
 import { enablePush, currentPushState, pushSupported, isIOS, isStandalone, PushState } from '../utils/push'
+import { openScheduleStream } from '../utils/scheduleStream'
 
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
@@ -254,6 +255,21 @@ export function OnCall() {
     const interval = window.setInterval(tick, 2000)
     return () => window.clearInterval(interval)
   }, [pendingFilters, filters.unit, filters.schedule_date])
+
+  // Tempo-real <1s via SSE (push direto do backend). Camada ADITIVA: se a
+  // conexao cair, o polling de versao acima (~2s) cobre. O handler le sempre os
+  // filtros mais recentes (ref), entao o stream nao reconecta a cada mudanca.
+  const onStreamEventRef = useRef<(ev: { unit?: string | null; schedule_date?: string | null }) => void>(() => {})
+  onStreamEventRef.current = (ev) => {
+    if (ev.unit && filters.unit && ev.unit !== filters.unit) return
+    if (ev.schedule_date && filters.schedule_date && ev.schedule_date !== filters.schedule_date) return
+    pending.refetch(pendingFilters, 0, { silent: true })
+    swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0, { silent: true })
+  }
+  useEffect(() => {
+    const close = openScheduleStream((ev) => onStreamEventRef.current(ev))
+    return close
+  }, [])
 
   useEffect(() => {
     const t = window.setInterval(() => setTick(x => x + 1), 30000)
