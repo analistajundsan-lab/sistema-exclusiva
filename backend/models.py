@@ -11,9 +11,11 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
     create_engine,
+    event,
 )
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session as _SASession
 import enum
 from datetime import datetime
 from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
@@ -705,3 +707,33 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# --- Barramento de versao da escala (tempo-real) ---
+# Qualquer commit que crie/altere/exclua uma linha de escala, um "nao operar"
+# ou uma troca incrementa a versao global (ver cache.bump_schedule_version).
+# Centralizar aqui evita espalhar chamadas por todos os endpoints de escrita e
+# pega tambem escritas futuras automaticamente.
+_SCHEDULE_VERSIONED_MODELS = (ScheduleLine, ScheduleNonOperation, Swap)
+
+
+@event.listens_for(_SASession, "after_flush")
+def _track_schedule_changes(session, flush_context):
+    if session.info.get("schedule_changed"):
+        return
+    for obj in (*session.new, *session.dirty, *session.deleted):
+        if isinstance(obj, _SCHEDULE_VERSIONED_MODELS):
+            session.info["schedule_changed"] = True
+            return
+
+
+@event.listens_for(_SASession, "after_commit")
+def _bump_schedule_version_on_commit(session):
+    if not session.info.pop("schedule_changed", False):
+        return
+    try:
+        from cache import bump_schedule_version
+
+        bump_schedule_version()
+    except Exception:
+        pass

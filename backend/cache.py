@@ -46,3 +46,59 @@ def cache_clear_prefix(prefix: str) -> None:
     with _lock:
         for key in [k for k in _store if k.startswith(prefix)]:
             _store.pop(key, None)
+
+
+# --- Barramento de versao da escala (tempo-real "quase instantaneo") ---
+# Um inteiro global que sobe a cada escrita (confirmar/trocar/cancelar/etc),
+# via models.py (listener after_commit). Serve a dois propositos:
+#   1) Invalidacao de cache CROSS-WORKER: o /board inclui a versao na chave; um
+#      bump num worker invalida o board de todos (a versao vive no Redis).
+#   2) Tempo-real barato: o front faz polling leve de /schedule/version (so um
+#      inteiro) a cada ~2s e so baixa a escala inteira quando a versao muda.
+# Sem Redis cai num contador local do processo (degrada gracioso).
+_local_version = 0
+_version_cache = {"v": 0, "at": -1e9}
+_VERSION_TTL = 1.0  # s que a versao do Redis fica cacheada em processo
+
+
+def bump_schedule_version() -> int:
+    """Incrementa a versao global (chamado apos cada escrita de escala/troca)."""
+    global _local_version
+    _local_version += 1
+    try:
+        from rate_limit import get_redis_client
+
+        r = get_redis_client()
+        if r is not None:
+            v = int(r.incr("schedule:ver"))
+            _version_cache["v"] = v
+            _version_cache["at"] = time.monotonic()
+            return v
+    except Exception:
+        pass
+    _version_cache["v"] = _local_version
+    _version_cache["at"] = time.monotonic()
+    return _local_version
+
+
+def schedule_version() -> int:
+    """Versao atual. Le do Redis no maximo a cada _VERSION_TTL (throttle), para
+    o polling de /schedule/version nao virar 1 comando Redis por requisicao."""
+    now = time.monotonic()
+    if now - _version_cache["at"] < _VERSION_TTL:
+        return _version_cache["v"]
+    try:
+        from rate_limit import get_redis_client
+
+        r = get_redis_client()
+        if r is not None:
+            raw = r.get("schedule:ver")
+            v = int(raw) if raw is not None else 0
+            _version_cache["v"] = v
+            _version_cache["at"] = now
+            return v
+    except Exception:
+        pass
+    _version_cache["v"] = _local_version
+    _version_cache["at"] = now
+    return _local_version

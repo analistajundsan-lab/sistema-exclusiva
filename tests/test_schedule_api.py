@@ -593,6 +593,40 @@ def test_schedule_board_fresh_reflects_confirmation(admin_token, operator_token)
     assert all(line["id"] != line_id for line in pending["lines"])
 
 
+def test_schedule_version_bumps_on_confirm(admin_token, operator_token):
+    client.post(
+        "/schedule/import?schedule_date=2026-04-13&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    v0 = client.get(
+        "/schedule/version",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()["v"]
+
+    line_id = client.get(
+        "/schedule/board?schedule_date=2026-04-13&status=pendente",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()["lines"][0]["id"]
+    client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+
+    v1 = client.get(
+        "/schedule/version",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()["v"]
+    # Qualquer escrita de escala incrementa a versao global (tempo-real ~2s).
+    assert v1 > v0
+
+
 def test_confirm_schedule_line_is_idempotent(admin_token, operator_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",

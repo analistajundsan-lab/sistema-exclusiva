@@ -19,7 +19,7 @@ from auth import (
     require_role,
     user_allowed_units,
 )
-from cache import cache_get, cache_set
+from cache import cache_get, cache_set, schedule_version
 from models import (
     AuditLog,
     ScheduleImport,
@@ -1079,9 +1079,12 @@ async def schedule_board(
     """
     allowed = user_allowed_units(current_user)
     scope_key = "*" if allowed is None else ",".join(sorted(allowed))
+    # A versao entra na chave: qualquer escrita de escala bumpa a versao e
+    # invalida o board de TODOS os workers automaticamente (sem limpeza manual).
     cache_key = "schedule_board:" + "|".join(
         str(part)
         for part in (
+            schedule_version(),
             scope_key,
             schedule_date or "",
             unit or "",
@@ -1188,10 +1191,18 @@ async def schedule_board(
     payload = jsonable_encoder(
         {"lines": lines_payload, "total": total, "summary": summary_payload}
     )
-    # TTL curto: limita o quanto OUTROS usuarios veem dado velho; o autor da
-    # acao usa ?fresh=1 e nao depende disso.
-    cache_set(cache_key, payload, ttl_seconds=5)
+    # TTL serve so como coletor de chaves de versoes antigas: o frescor de fato
+    # vem da versao na chave (bump em toda escrita invalida o board na hora).
+    cache_set(cache_key, payload, ttl_seconds=30)
     return payload
+
+
+@router.get("/version")
+async def schedule_version_endpoint(current_user: User = Depends(get_current_user)):
+    """Versao atual da escala (inteiro que sobe a cada escrita). O front faz
+    polling leve disto a cada ~2s e so recarrega o painel inteiro quando muda —
+    tempo-real barato (~2s) sem baixar a escala a cada ciclo."""
+    return {"v": schedule_version()}
 
 
 @router.get("/dashboard-turns")
