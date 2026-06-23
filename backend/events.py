@@ -84,8 +84,13 @@ async def listen_loop() -> None:
             pubsub = client.pubsub()
             await pubsub.subscribe(CHANNEL)
             logger.info("events: inscrito em %s", CHANNEL)
-            async for msg in pubsub.listen():
-                if msg.get("type") == "message":
+            # get_message (em vez de listen()) e o padrao mais robusto: entrega a
+            # mensagem assim que chega; o timeout so limita a espera ociosa.
+            while True:
+                msg = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=5.0
+                )
+                if msg is not None and msg.get("type") == "message":
                     _fanout_local(msg["data"])
         except Exception as e:
             logger.warning("events: loop de subscribe caiu (%s); retry em 3s", e)
