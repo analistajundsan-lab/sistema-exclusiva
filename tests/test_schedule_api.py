@@ -529,6 +529,70 @@ def test_confirm_schedule_line_moves_to_confirmed_history(admin_token, operator_
     assert history_after[0]["id"] == line_id
 
 
+def test_schedule_board_consolidates_lines_total_summary(admin_token, operator_token):
+    client.post(
+        "/schedule/import?schedule_date=2026-04-13&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    board = client.get(
+        "/schedule/board?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    assert board.status_code == 200
+    data = board.json()
+    assert set(data.keys()) == {"lines", "total", "summary"}
+
+    # Consistencia com os endpoints originais que o /board substitui.
+    lines = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()
+    count = client.get(
+        "/schedule/lines/count?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()
+    assert data["total"] == count["total"]
+    assert len(data["lines"]) == len(lines)
+
+
+def test_schedule_board_fresh_reflects_confirmation(admin_token, operator_token):
+    client.post(
+        "/schedule/import?schedule_date=2026-04-13&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    line_id = client.get(
+        "/schedule/board?schedule_date=2026-04-13&status=pendente",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()["lines"][0]["id"]
+
+    client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+
+    # fresh=1 ignora o cache: a linha confirmada nao volta para os pendentes.
+    pending = client.get(
+        "/schedule/board?schedule_date=2026-04-13&status=pendente&fresh=1",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()
+    assert all(line["id"] != line_id for line in pending["lines"])
+
+
 def test_confirm_schedule_line_is_idempotent(admin_token, operator_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",

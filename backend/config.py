@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     )
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
+    # URL completa do Redis (ex.: rediss://default:senha@host:port). Quando
+    # definida, tem precedencia sobre REDIS_HOST/PORT e habilita senha+TLS
+    # (Redis gerenciado/Upstash). Vazio = usa host/port simples (dev local).
+    REDIS_URL: str = ""
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     # Pepper para HMAC do hash de CPF. Vazio = mantem hash legado (SHA-256

@@ -7,16 +7,29 @@ redis_client: Optional[redis.Redis] = None
 
 
 def init_redis():
-    """Initialize Redis connection."""
+    """Initialize Redis connection.
+
+    Usa REDIS_URL (rediss:// com senha/TLS, p/ Redis gerenciado) quando
+    definida; senao cai no host/port simples do dev local. Falha de conexao
+    nunca derruba o app: redis_client fica None e tudo degrada gracioso.
+    """
     global redis_client
     try:
-        redis_client = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            db=0,
-            decode_responses=True,
-            socket_connect_timeout=5,
-        )
+        if settings.REDIS_URL:
+            redis_client = redis.from_url(
+                settings.REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+            )
+        else:
+            redis_client = redis.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                db=0,
+                decode_responses=True,
+                socket_connect_timeout=5,
+            )
         redis_client.ping()
         print("[OK] Redis connected successfully")
     except Exception as e:

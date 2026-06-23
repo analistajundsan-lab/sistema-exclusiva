@@ -5,6 +5,7 @@ from typing import List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -16,7 +17,9 @@ from auth import (
     ensure_unit_access,
     get_current_user,
     require_role,
+    user_allowed_units,
 )
+from cache import cache_get, cache_set
 from models import (
     AuditLog,
     ScheduleImport,
@@ -1046,6 +1049,149 @@ async def schedule_summary(
         )
         for row in rows
     ]
+
+
+@router.get("/board")
+async def schedule_board(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    schedule_date: Optional[date] = None,
+    unit: Optional[str] = None,
+    client_name: Optional[str] = None,
+    line_code: Optional[str] = None,
+    driver_name: Optional[str] = None,
+    prefix_code: Optional[str] = None,
+    status: Optional[ScheduleLineStatus] = None,
+    start_in_minutes: Optional[int] = Query(None, ge=1, le=1440),
+    include_inactive: bool = False,
+    hide_non_operating: bool = False,
+    fresh: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Painel de escala em UMA requisicao: lines + total + summary.
+
+    Junta o que antes eram 3 chamadas (/lines + /lines/count + /summary), cortando
+    2/3 dos round-trips por refresh (grande ganho no celular). O resultado fica
+    em cache de memoria por poucos segundos (ver cache.py). ?fresh=1 ignora o
+    cache e o repopula — o front usa logo apos confirmar/trocar para QUEM agiu
+    ver o resultado correto na hora (sem a linha confirmada reaparecer).
+    """
+    allowed = user_allowed_units(current_user)
+    scope_key = "*" if allowed is None else ",".join(sorted(allowed))
+    cache_key = "schedule_board:" + "|".join(
+        str(part)
+        for part in (
+            scope_key,
+            schedule_date or "",
+            unit or "",
+            client_name or "",
+            line_code or "",
+            driver_name or "",
+            prefix_code or "",
+            status.value if status else "",
+            start_in_minutes or "",
+            int(include_inactive),
+            int(hide_non_operating),
+            skip,
+            limit,
+        )
+    )
+    if not fresh:
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+    # ---- lines + total (espelha /lines e /lines/count) ----
+    query = apply_filters(
+        db.query(ScheduleLine),
+        None,
+        unit,
+        client_name,
+        line_code,
+        driver_name,
+        prefix_code,
+        None if schedule_date and status else status,
+    )
+    query = apply_schedule_date_scope(db, query, schedule_date)
+    query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
+    query = apply_operation_visibility(
+        db, query, schedule_date, include_inactive, hide_non_operating
+    )
+    query = apply_start_window(query, start_in_minutes, schedule_date)
+    rows = query.order_by(
+        ScheduleLine.unit, ScheduleLine.start_time, ScheduleLine.line_code
+    ).all()
+    if schedule_date and status:
+        rows = [
+            line
+            for line in rows
+            if status_for_operation_date(line, schedule_date) == status
+        ]
+    total = len(rows)
+    page_rows = rows[skip : skip + limit]
+    nonop_ids = non_operating_ids_for_date(db, schedule_date)
+    lines_payload = [
+        line_response_for_operation_date(line, schedule_date, line.id in nonop_ids)
+        for line in page_rows
+    ]
+
+    # ---- summary (espelha /summary) ----
+    summary_query = apply_schedule_date_scope(db, db.query(ScheduleLine), schedule_date)
+    summary_query = apply_user_unit_scope(
+        summary_query, ScheduleLine.unit, current_user
+    )
+    summary_query = apply_operation_visibility(
+        db,
+        summary_query,
+        schedule_date,
+        include_inactive=False,
+        hide_non_operating=True,
+    )
+    summary_rows = (
+        summary_query.with_entities(
+            ScheduleLine.unit,
+            func.count(ScheduleLine.id),
+            func.sum(case((ScheduleLine.direction == "ENTRADA", 1), else_=0)),
+            func.sum(case((ScheduleLine.direction == "SAIDA", 1), else_=0)),
+            func.sum(
+                case((ScheduleLine.status == ScheduleLineStatus.PENDENTE, 1), else_=0)
+            ),
+            func.sum(
+                case((ScheduleLine.status == ScheduleLineStatus.CONFIRMADA, 1), else_=0)
+            ),
+            func.sum(
+                case((ScheduleLine.status == ScheduleLineStatus.ALTERADA, 1), else_=0)
+            ),
+            func.sum(
+                case((ScheduleLine.status == ScheduleLineStatus.CANCELADA, 1), else_=0)
+            ),
+        )
+        .group_by(ScheduleLine.unit)
+        .order_by(ScheduleLine.unit)
+        .all()
+    )
+    summary_payload = [
+        {
+            "unit": row[0],
+            "total": row[1] or 0,
+            "entrada": row[2] or 0,
+            "saida": row[3] or 0,
+            "pending": row[4] or 0,
+            "confirmed": row[5] or 0,
+            "changed": row[6] or 0,
+            "cancelled": row[7] or 0,
+        }
+        for row in summary_rows
+    ]
+
+    payload = jsonable_encoder(
+        {"lines": lines_payload, "total": total, "summary": summary_payload}
+    )
+    # TTL curto: limita o quanto OUTROS usuarios veem dado velho; o autor da
+    # acao usa ?fresh=1 e nao depende disso.
+    cache_set(cache_key, payload, ttl_seconds=5)
+    return payload
 
 
 @router.get("/dashboard-turns")
