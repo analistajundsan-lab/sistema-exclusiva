@@ -237,6 +237,17 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     return res.data
   }
 
+  // Versao global da escala (sobe a cada escrita). O painel faz polling leve
+  // disto a cada ~2s e so recarrega tudo quando muda — tempo-real barato.
+  const fetchVersion = useCallback(async (): Promise<number | null> => {
+    try {
+      const res = await api.get<{ v: number }>('/schedule/version')
+      return res.data.v
+    } catch {
+      return null
+    }
+  }, [])
+
   const fetchWhatsappText = useCallback(async (scheduleDate: string, unit: string, onlyChanges = false) => {
     const res = await api.get<{ text: string; total: number }>('/schedule/whatsapp', {
       params: { schedule_date: scheduleDate, unit, only_changes: onlyChanges },
@@ -274,6 +285,7 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     clearNonOperation,
     fetchPair,
     updateLine,
+    fetchVersion,
     fetchWhatsappText,
     refetch: fetchSchedule,
   }

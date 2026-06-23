@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { ScheduleFilters, ScheduleLine, useSchedule } from '../hooks/useSchedule'
 import { useSwaps } from '../hooks/useSwaps'
@@ -232,14 +232,26 @@ export function OnCall() {
     swapsList.applyFilters({ unit: filters.unit, schedule_date: filters.schedule_date })
   }, [filters.unit, filters.schedule_date])
 
+  // Tempo-real barato: a cada 2s checa a VERSAO da escala (um inteiro). So
+  // recarrega o painel quando algo mudou de fato (por qualquer usuario) — uma
+  // confirmacao/troca alheia aparece em ~2s, sem baixar a escala a cada ciclo.
+  // A atualizacao e silenciosa (sem spinner; so re-renderiza se os dados mudarem).
+  const lastVersionRef = useRef<number | null>(null)
   useEffect(() => {
-    const refresh = () => {
-      // Atualizacao silenciosa: sem spinner e so re-renderiza se algo mudou,
-      // para a lista nao "tremer" enquanto o plantonista clica nos botoes.
-      pending.refetch(pendingFilters, 0, { silent: true })
-      swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0, { silent: true })
+    const tick = async () => {
+      const v = await pending.fetchVersion()
+      if (v == null) return
+      if (lastVersionRef.current === null) {
+        lastVersionRef.current = v
+        return
+      }
+      if (v !== lastVersionRef.current) {
+        lastVersionRef.current = v
+        pending.refetch(pendingFilters, 0, { silent: true })
+        swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0, { silent: true })
+      }
     }
-    const interval = window.setInterval(refresh, 8000)
+    const interval = window.setInterval(tick, 2000)
     return () => window.clearInterval(interval)
   }, [pendingFilters, filters.unit, filters.schedule_date])
 
