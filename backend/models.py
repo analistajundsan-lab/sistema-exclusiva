@@ -719,21 +719,41 @@ _SCHEDULE_VERSIONED_MODELS = (ScheduleLine, ScheduleNonOperation, Swap)
 
 @event.listens_for(_SASession, "after_flush")
 def _track_schedule_changes(session, flush_context):
-    if session.info.get("schedule_changed"):
-        return
     for obj in (*session.new, *session.dirty, *session.deleted):
         if isinstance(obj, _SCHEDULE_VERSIONED_MODELS):
             session.info["schedule_changed"] = True
-            return
+            unit = getattr(obj, "unit", None)
+            if unit:
+                session.info.setdefault("schedule_units", set()).add(unit)
+            sched_date = getattr(obj, "schedule_date", None) or getattr(
+                obj, "operation_date", None
+            )
+            if sched_date is not None:
+                session.info.setdefault("schedule_dates", set()).add(str(sched_date))
 
 
 @event.listens_for(_SASession, "after_commit")
 def _bump_schedule_version_on_commit(session):
     if not session.info.pop("schedule_changed", False):
         return
+    units = session.info.pop("schedule_units", set())
+    dates = session.info.pop("schedule_dates", set())
     try:
         from cache import bump_schedule_version
 
         bump_schedule_version()
+    except Exception:
+        pass
+    # Empurra o evento de tempo-real (SSE). unit/date so quando ha um unico;
+    # varios (ex.: import) -> None = "recarregue tudo" (o front filtra).
+    try:
+        import events
+
+        events.publish_sync(
+            {
+                "unit": next(iter(units)) if len(units) == 1 else None,
+                "schedule_date": next(iter(dates)) if len(dates) == 1 else None,
+            }
+        )
     except Exception:
         pass

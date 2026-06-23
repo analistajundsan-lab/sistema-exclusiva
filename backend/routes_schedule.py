@@ -1,10 +1,20 @@
+import asyncio
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import List, Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
@@ -20,6 +30,7 @@ from auth import (
     user_allowed_units,
 )
 from cache import cache_get, cache_set, schedule_version
+import events
 from models import (
     AuditLog,
     ScheduleImport,
@@ -1203,6 +1214,45 @@ async def schedule_version_endpoint(current_user: User = Depends(get_current_use
     polling leve disto a cada ~2s e so recarrega o painel inteiro quando muda —
     tempo-real barato (~2s) sem baixar a escala a cada ciclo."""
     return {"v": schedule_version()}
+
+
+@router.get("/events")
+async def schedule_events(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Stream SSE de mudancas de escala (tempo-real <1s). Empurra um evento
+    sempre que alguem confirma/troca/cancela/etc — o front recarrega o painel na
+    hora. E ADITIVO: se a conexao cair, o polling de versao (~2s) cobre.
+
+    Eventos: linhas `data: {"unit": ..., "schedule_date": ...}`. Comentarios
+    `: keep-alive` a cada 15s mantem a conexao viva atraves de proxies.
+    """
+    queue = events.subscribe()
+
+    async def gen():
+        try:
+            yield ": ok\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=15)
+                    yield f"data: {msg}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+        finally:
+            events.unsubscribe(queue)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/dashboard-turns")

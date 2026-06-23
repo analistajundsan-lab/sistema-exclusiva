@@ -627,6 +627,14 @@ def test_schedule_version_bumps_on_confirm(admin_token, operator_token):
     assert v1 > v0
 
 
+def test_schedule_events_requires_auth():
+    # Sem token -> 401 (a rota existe e e protegida). NAO abrimos o stream
+    # autenticado aqui porque ele e infinito e travaria o teste; o fluxo de
+    # ponta-a-ponta do SSE e verificado por curl em producao.
+    res = client.get("/schedule/events")
+    assert res.status_code == 401
+
+
 def test_confirm_schedule_line_is_idempotent(admin_token, operator_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",

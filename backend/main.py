@@ -126,6 +126,16 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     init_redis()
+
+    # Loop de tempo-real (SSE): assina o canal Redis e entrega eventos as
+    # conexoes SSE locais. Aditivo — se cair, o polling de versao cobre.
+    try:
+        import events
+
+        asyncio.create_task(events.listen_loop())
+        logger.info("Loop de eventos de escala (SSE) iniciado")
+    except Exception as e:
+        logger.error("Falha ao iniciar loop de eventos (nao critico): %s", e)
     try:
         from bootstrap_mvp import main as bootstrap_main
 
