@@ -176,6 +176,9 @@ export function OnCall() {
   // carro (prefixo) para confirmar tudo de uma vez (mesma logica da troca).
   const [confirmOpenId, setConfirmOpenId] = useState<number | null>(null)
   const [confirmSaving, setConfirmSaving] = useState(false)
+  // Linha cujo "Confirmar" esta carregando as demais linhas do carro (antes de
+  // decidir entre abrir o painel ou confirmar direto).
+  const [confirmLoadingId, setConfirmLoadingId] = useState<number | null>(null)
 
   // Edicao inline da linha (estilo ADM), direto no painel.
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -280,18 +283,14 @@ export function OnCall() {
     return () => window.clearInterval(t)
   }, [])
 
-  // Abre o painel de confirmacao em lote: carrega as OUTRAS linhas pendentes do
-  // mesmo carro (prefixo) que ainda vao comecar, ja pre-selecionadas — mesma
-  // mecanica do "Trocar", mas para confirmar de uma vez.
+  // Ao clicar "Confirmar": carrega as OUTRAS linhas pendentes do mesmo carro
+  // (prefixo) que ainda vao comecar. Se houver mais de uma, abre o painel em
+  // lote (pre-selecionadas); se for so esta, confirma direto (sem painel).
   const openConfirm = async (line: ScheduleLine) => {
-    setConfirmOpenId(line.id)
-    setSwapOpenId(null)
-    setEditingId(null)
-    setRelatedLines([])
-    setSelectedRelatedIds([])
     setActionError(null)
     setActionMessage(null)
-    setRelatedLoading(true)
+    setConfirmLoadingId(line.id)
+    let related: ScheduleLine[] = []
     try {
       const res = await client.get<ScheduleLine[]>('/schedule/lines', {
         params: {
@@ -312,18 +311,38 @@ export function OnCall() {
         hour: '2-digit', minute: '2-digit', hour12: false,
       }).format(new Date())
       const isToday = filters.schedule_date === spDate
-      const related = res.data.filter(item =>
+      related = res.data.filter(item =>
         item.id !== line.id &&
         item.status === 'pendente' &&
         item.non_operating !== true &&
         (!isToday || (item.start_time || '') >= spTime),
       )
+    } catch {
+      // Nao conseguiu carregar as outras linhas -> confirma so esta (abaixo).
+      related = []
+    }
+
+    if (related.length > 0) {
+      // Carro com mais de uma linha -> abre o painel para confirmar em lote.
+      setSwapOpenId(null)
+      setEditingId(null)
       setRelatedLines(related)
       setSelectedRelatedIds(related.map(item => item.id)) // pre-seleciona todas
-    } catch {
-      setActionError('Nao foi possivel carregar as outras linhas deste prefixo.')
+      setConfirmOpenId(line.id)
+      setConfirmLoadingId(null)
+      return
+    }
+
+    // Carro com uma unica linha -> confirma direto, sem abrir painel.
+    try {
+      await client.post(`/schedule/lines/${line.id}/confirm`)
+      await pending.refetch(pendingFilters, 0, { fresh: true })
+      await swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0)
+      setActionMessage('Linha confirmada.')
+    } catch (e: any) {
+      setActionError(e?.response?.data?.detail || 'Não foi possível confirmar a linha.')
     } finally {
-      setRelatedLoading(false)
+      setConfirmLoadingId(null)
     }
   }
 
@@ -995,10 +1014,11 @@ export function OnCall() {
                           {line.status !== 'confirmada' && (
                             <button
                               onClick={() => openConfirm(line)}
-                              className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                              disabled={confirmLoadingId === line.id}
+                              className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-60"
                             >
                               <CheckCircle2 size={15} />
-                              Confirmar
+                              {confirmLoadingId === line.id ? 'Confirmando...' : 'Confirmar'}
                             </button>
                           )}
                           <button
