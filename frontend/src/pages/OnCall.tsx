@@ -172,6 +172,10 @@ export function OnCall() {
   const [relatedLines, setRelatedLines] = useState<ScheduleLine[]>([])
   const [relatedLoading, setRelatedLoading] = useState(false)
   const [selectedRelatedIds, setSelectedRelatedIds] = useState<number[]>([])
+  // Confirmacao em lote: clicar "Confirmar" abre as demais linhas do mesmo
+  // carro (prefixo) para confirmar tudo de uma vez (mesma logica da troca).
+  const [confirmOpenId, setConfirmOpenId] = useState<number | null>(null)
+  const [confirmSaving, setConfirmSaving] = useState(false)
 
   // Edicao inline da linha (estilo ADM), direto no painel.
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -276,20 +280,83 @@ export function OnCall() {
     return () => window.clearInterval(t)
   }, [])
 
-  const handleConfirm = async (id: number) => {
+  // Abre o painel de confirmacao em lote: carrega as OUTRAS linhas pendentes do
+  // mesmo carro (prefixo) que ainda vao comecar, ja pre-selecionadas — mesma
+  // mecanica do "Trocar", mas para confirmar de uma vez.
+  const openConfirm = async (line: ScheduleLine) => {
+    setConfirmOpenId(line.id)
+    setSwapOpenId(null)
+    setEditingId(null)
+    setRelatedLines([])
+    setSelectedRelatedIds([])
+    setActionError(null)
+    setActionMessage(null)
+    setRelatedLoading(true)
+    try {
+      const res = await client.get<ScheduleLine[]>('/schedule/lines', {
+        params: {
+          schedule_date: filters.schedule_date,
+          unit: line.unit,
+          prefix_code: line.prefix_code,
+          limit: 500,
+        },
+      })
+      // Mesmo corte por horario do "Trocar": se a escala e de hoje, so as linhas
+      // que ainda vao comecar. So pendentes (confirmar) e que operam hoje.
+      const spDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date())
+      const spTime = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).format(new Date())
+      const isToday = filters.schedule_date === spDate
+      const related = res.data.filter(item =>
+        item.id !== line.id &&
+        item.status === 'pendente' &&
+        item.non_operating !== true &&
+        (!isToday || (item.start_time || '') >= spTime),
+      )
+      setRelatedLines(related)
+      setSelectedRelatedIds(related.map(item => item.id)) // pre-seleciona todas
+    } catch {
+      setActionError('Nao foi possivel carregar as outras linhas deste prefixo.')
+    } finally {
+      setRelatedLoading(false)
+    }
+  }
+
+  // Confirma a linha clicada + as demais linhas selecionadas do mesmo carro.
+  // Todas as confirmadas somem do painel do dia.
+  const handleConfirmMulti = async (line: ScheduleLine) => {
+    setConfirmSaving(true)
     setActionError(null)
     setActionMessage(null)
     try {
-      await pending.confirmLine(id)
+      const toConfirm = [
+        line,
+        ...relatedLines.filter(item => selectedRelatedIds.includes(item.id)),
+      ].filter(item => item.status !== 'confirmada')
+      for (const item of toConfirm) {
+        await client.post(`/schedule/lines/${item.id}/confirm`)
+      }
+      await pending.refetch(pendingFilters, 0, { fresh: true })
       await swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0)
-      setActionMessage('Linha confirmada.')
+      setConfirmOpenId(null)
+      setRelatedLines([])
+      setSelectedRelatedIds([])
+      setActionMessage(`${toConfirm.length} linha(s) confirmada(s).`)
     } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Não foi possível confirmar a linha.')
+      setActionError(e?.response?.data?.detail || 'Não foi possível confirmar as linhas.')
+    } finally {
+      setConfirmSaving(false)
     }
   }
 
   const openSwap = async (line: ScheduleLine) => {
     setSwapOpenId(line.id)
+    setConfirmOpenId(null)
     setSwapVehicle('')
     setSwapDriver('')
     setSwapReason('')
@@ -426,6 +493,7 @@ export function OnCall() {
 
   const openEdit = (line: ScheduleLine) => {
     setSwapOpenId(null)
+    setConfirmOpenId(null)
     setEditingId(line.id)
     setEditForm(lineToForm(line))
   }
@@ -837,6 +905,80 @@ export function OnCall() {
                         </button>
                       </div>
                     </div>
+                  ) : confirmOpenId === line.id ? (
+                    /* Confirmacao em lote — demais linhas do mesmo carro */
+                    <div className="mt-1 bg-green-50 dark:bg-green-900/20 border-2 border-green-500/60 dark:border-green-500/40 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <CheckCircle2 size={14} className="text-green-600 dark:text-green-400" />
+                        <p className="text-xs font-bold text-green-700 dark:text-green-300 uppercase tracking-wide">
+                          Confirmar carro — prefixo {line.prefix_code}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-300">
+                        Confirme de uma vez as linhas que este carro vai realizar. As confirmadas somem do painel.
+                      </p>
+                      <div className="rounded-xl border border-green-200 dark:border-green-800 bg-white/70 dark:bg-gray-800/60 p-3">
+                        <label className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-green-800 dark:text-green-300">
+                          <input type="checkbox" checked disabled />
+                          <span className="font-mono">L - {line.line_code}</span>
+                          <span>{line.direction}</span>
+                          <span>{line.start_time} - {line.end_time}</span>
+                          <span className="text-green-600 dark:text-green-400">(esta)</span>
+                        </label>
+                        <p className="mt-2 mb-1 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide">
+                          Outras linhas deste carro
+                        </p>
+                        {relatedLoading && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Carregando sequencia...</p>
+                        )}
+                        {!relatedLoading && relatedLines.length === 0 && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Nenhuma outra linha pendente deste carro.
+                          </p>
+                        )}
+                        {!relatedLoading && relatedLines.length > 0 && (
+                          <div className="space-y-1.5">
+                            {relatedLines.map(item => (
+                              <label
+                                key={item.id}
+                                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-green-100/70 dark:hover:bg-green-900/20"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRelatedIds.includes(item.id)}
+                                  onChange={e => {
+                                    setSelectedRelatedIds(prev =>
+                                      e.target.checked
+                                        ? [...prev, item.id]
+                                        : prev.filter(id => id !== item.id),
+                                    )
+                                  }}
+                                />
+                                <span className="font-mono font-semibold">L - {item.line_code}</span>
+                                <span>{item.direction}</span>
+                                <span>{item.start_time} - {item.end_time}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleConfirmMulti(line)}
+                          disabled={confirmSaving}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 whitespace-nowrap"
+                        >
+                          <CheckCircle2 size={15} />
+                          {confirmSaving ? 'Confirmando...' : `Confirmar ${1 + selectedRelatedIds.length} linha(s)`}
+                        </button>
+                        <button
+                          onClick={() => setConfirmOpenId(null)}
+                          className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 px-3 py-2.5 rounded-xl text-sm transition-all"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    </div>
                   ) : swapOpenId !== line.id ? (
                     <div className="flex gap-2">
                       {line.non_operating ? (
@@ -852,7 +994,7 @@ export function OnCall() {
                         <>
                           {line.status !== 'confirmada' && (
                             <button
-                              onClick={() => handleConfirm(line.id)}
+                              onClick={() => openConfirm(line)}
                               className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
                             >
                               <CheckCircle2 size={15} />
