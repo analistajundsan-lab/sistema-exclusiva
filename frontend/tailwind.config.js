@@ -36,10 +36,29 @@ module.exports = {
           600: '#d98700',
           700: '#b86f00',
         },
-        // Custom mid-tone for dark-mode table heads (between gray-700 and 800).
-        // Shallow-merged into Tailwind's default gray ramp, so 50–950 stay intact.
+        // Acento tecnológico (ciano) — usado apenas em brilhos/realces sutis.
+        tech: {
+          300: '#67e8f9',
+          400: '#22d3ee',
+          500: '#06b6d4',
+          600: '#0891b2',
+        },
+        // Cinzas FRIOS (slate) — dão o ar moderno/tecnológico em todas as
+        // superfícies, mantendo a mesma luminosidade dos cinzas anteriores
+        // (contraste preservado em claro e escuro). 750 = cabeçalho de tabela.
         gray: {
+          50:  '#f6f8fb',
+          100: '#eef2f7',
+          200: '#e0e6ee',
+          300: '#c9d2de',
+          400: '#94a3b4',
+          500: '#647387',
+          600: '#475264',
+          700: '#333c4c',
           750: '#262f3c',
+          800: '#1c2430',
+          900: '#111722',
+          950: '#0a0e16',
         },
       },
       fontFamily: {
@@ -58,6 +77,13 @@ module.exports = {
         'brand':    '0 6px 16px -4px rgb(0 52 27 / 0.28)',
         // Hairline ring for crisp card edges.
         'ring-hairline': '0 0 0 1px rgb(17 24 39 / 0.04)',
+        // Brilhos sutis (toque futurista) para estados ativos/realces.
+        'glow-brand':  '0 0 0 1px rgb(34 136 96 / 0.25), 0 0 24px -6px rgb(34 136 96 / 0.45)',
+        'glow-accent': '0 0 22px -6px rgb(242 155 0 / 0.50)',
+        'glow-tech':   '0 0 22px -6px rgb(34 211 238 / 0.45)',
+      },
+      backdropBlur: {
+        xs: '2px',
       },
       // Three-speed motion system (micro / base / screen).
       transitionDuration: {
