@@ -203,7 +203,7 @@ export function Dashboard() {
                   <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wide">{unit.unit}</h2>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 tabular-nums">
-                  {unit.total.entrada} entradas <span className="text-gray-300 dark:text-gray-600">|</span> {unit.total.saida} saídas
+                  <span className="font-semibold text-green-600 dark:text-green-400">{unit.total.confirmed_entrada + unit.total.confirmed_saida} confirmadas</span> <span className="text-gray-300 dark:text-gray-600">|</span> {unit.total.entrada} entradas <span className="text-gray-300 dark:text-gray-600">|</span> {unit.total.saida} saídas
                 </p>
               </div>
 
@@ -303,10 +303,16 @@ function TurnCard({ turn }: { turn: TurnStats }) {
 }
 
 function ClientCardView({ card }: { card: ClientCard }) {
+  const confirmed = card.confirmed_entrada + card.confirmed_saida
+  const pending = card.pending_entrada + card.pending_saida
   return (
     <div className="card card-hover p-4 border-l-4 border-l-blue-500">
       <p className="section-title">Cliente avulso</p>
       <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">{card.client}</h3>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <StatusMetric label="Confirmadas" value={confirmed} detail={`E ${card.confirmed_entrada} | S ${card.confirmed_saida}`} tone="green" />
+        <StatusMetric label="Pendentes" value={pending} detail={`E ${card.pending_entrada} | S ${card.pending_saida}`} tone="gray" />
+      </div>
       <div className="grid grid-cols-2 gap-2 text-sm">
         <Metric label="Entradas" value={card.entrada} />
         <Metric label="Saídas" value={card.saida} />
