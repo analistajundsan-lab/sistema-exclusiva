@@ -8,6 +8,14 @@
 @layer base {
   html {
     @apply antialiased;
+    min-height: 100%;
+  }
+
+  /* Ancora o shell ao viewport: sem isto, #root pode colapsar e o conteudo
+     "sobe" / nao enquadra na tela em alguns desktops. min-height (nao height)
+     preserva paginas longas roláveis. */
+  #root {
+    min-height: 100vh;
   }
 
   body {
