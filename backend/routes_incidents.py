@@ -4,7 +4,6 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import (
@@ -18,6 +17,25 @@ from typing import List, Optional
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def brt_day_utc_window(day: date_type) -> tuple[datetime, datetime]:
+    """Janela [inicio, fim) de um dia no fuso de Brasilia, expressa em UTC naive.
+
+    `Incident.created_at` e gravado por `func.now()` numa coluna sem fuso (UTC no
+    servidor). Comparar `func.date(created_at)` com a data BRT faz o "dia" virar
+    as 21:00 BRT (00:00 UTC) — ocorrencias da noite somem do "hoje". Filtrando por
+    esta janela, o dashboard diario zera exatamente as 00:00 BRT.
+    """
+    start_brt = datetime(day.year, day.month, day.day, tzinfo=BRASILIA_TZ)
+    end_brt = start_brt + timedelta(days=1)
+    start_utc = start_brt.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_brt.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc
+
+
+def today_brt() -> date_type:
+    return datetime.now(BRASILIA_TZ).date()
 
 
 def format_incident_whatsapp_text(incident: Incident) -> str:
@@ -84,8 +102,9 @@ async def count_incidents(
     if status:
         query = query.filter(Incident.status == status)
     if today:
+        start_utc, end_utc = brt_day_utc_window(today_brt())
         query = query.filter(
-            func.date(Incident.created_at) == datetime.now(BRASILIA_TZ).date()
+            Incident.created_at >= start_utc, Incident.created_at < end_utc
         )
     return {"total": query.count()}
 
@@ -176,11 +195,15 @@ async def list_incidents(
     if status:
         query = query.filter(Incident.status == status)
     if today:
+        start_utc, end_utc = brt_day_utc_window(today_brt())
         query = query.filter(
-            func.date(Incident.created_at) == datetime.now(BRASILIA_TZ).date()
+            Incident.created_at >= start_utc, Incident.created_at < end_utc
         )
     if incident_date:
-        query = query.filter(func.date(Incident.created_at) == incident_date)
+        start_utc, end_utc = brt_day_utc_window(incident_date)
+        query = query.filter(
+            Incident.created_at >= start_utc, Incident.created_at < end_utc
+        )
     return query.offset(skip).limit(limit).all()
 
 

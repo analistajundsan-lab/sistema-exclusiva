@@ -730,7 +730,12 @@ async def confirm_schedule_line(
 
     line.status = ScheduleLineStatus.CONFIRMADA
     line.confirmed_by = current_user.id
-    line.confirmed_at = datetime.now(timezone.utc)
+    # Grava UTC "naive" de forma deterministica: a coluna e TIMESTAMP sem fuso e,
+    # se passassemos um datetime aware, o Postgres converteria pelo timezone da
+    # SESSAO antes de descartar o offset. Forcando naive-UTC, o dashboard sempre
+    # le confirmed_at como UTC e o "reset diario" das confirmacoes cai exatamente
+    # 00:00 BRT (ver status_for_operation_date), em qualquer servidor/banco.
+    line.confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(
         AuditLog(
             user_id=current_user.id,

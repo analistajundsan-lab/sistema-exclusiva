@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
-import { DEFAULT_OPERATION_DATE } from '../config/demo'
+import { currentOperationDate } from '../config/demo'
+import { openScheduleStream } from '../utils/scheduleStream'
 import { AlertTriangle, ArrowLeftRight, Building2, RefreshCw, TrendingUp } from 'lucide-react'
-
-const TODAY = DEFAULT_OPERATION_DATE
 
 interface DirectionStats {
   entrada: number
@@ -46,7 +45,10 @@ interface DayStats {
 }
 
 export function Dashboard() {
-  const [selectedDate, setSelectedDate] = useState(TODAY)
+  // "Hoje" no fuso BRT, recalculado ao vivo (ver efeito de virada de dia abaixo):
+  // o painel e diario e passa para o proximo dia sozinho a partir das 00:00 BRT.
+  const [today, setToday] = useState(currentOperationDate())
+  const [selectedDate, setSelectedDate] = useState(today)
   const [dashboard, setDashboard] = useState<DashboardTurns | null>(null)
   const [dayStats, setDayStats] = useState<DayStats>({ ocorrencias_hoje: 0, trocas_hoje: 0 })
   const [loading, setLoading] = useState(true)
@@ -66,7 +68,7 @@ export function Dashboard() {
   const loadStats = useCallback(async () => {
     const [dash, inc, swp] = await Promise.all([
       api.get<DashboardTurns>('/schedule/dashboard-turns', { params: { schedule_date: selectedDate } }),
-      api.get('/incidents/count', { params: { today: selectedDate === TODAY ? 'true' : undefined } }),
+      api.get('/incidents/count', { params: { today: selectedDate === today ? 'true' : undefined } }),
       api.get('/swaps/count', { params: { schedule_date: selectedDate } }),
     ])
     setDashboard(dash.data)
@@ -74,7 +76,7 @@ export function Dashboard() {
       ocorrencias_hoje: inc.data.total,
       trocas_hoje: swp.data.total,
     })
-  }, [selectedDate])
+  }, [selectedDate, today])
 
   useEffect(() => {
     setLoading(true)
@@ -86,6 +88,38 @@ export function Dashboard() {
     }, 8000)
     return () => window.clearInterval(interval)
   }, [loadStats])
+
+  // Virada de dia (00:00 BRT): se o dia BRT mudou e o operador esta vendo "hoje",
+  // o painel passa a mostrar o novo dia — zerando os dados do dia anterior.
+  const todayRef = useRef(today)
+  todayRef.current = today
+  const selectedRef = useRef(selectedDate)
+  selectedRef.current = selectedDate
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      const d = currentOperationDate()
+      if (d !== todayRef.current) {
+        const wasToday = selectedRef.current === todayRef.current
+        setToday(d)
+        if (wasToday) setSelectedDate(d)
+      }
+    }, 30000)
+    return () => window.clearInterval(t)
+  }, [])
+
+  // Tempo-real (<1s): ao confirmar/trocar/cancelar, o backend faz push via SSE e
+  // o painel recarrega na hora — sem esperar o ciclo de 8s. Camada ADITIVA: se a
+  // conexao cair, o polling acima cobre. O handler le sempre o estado mais
+  // recente (ref), entao o stream nao reconecta a cada mudanca de data.
+  const onStreamRef = useRef<(ev: { schedule_date?: string | null }) => void>(() => {})
+  onStreamRef.current = (ev) => {
+    if (ev.schedule_date && ev.schedule_date !== selectedDate) return
+    loadStats().catch(() => {})
+  }
+  useEffect(() => {
+    const close = openScheduleStream((ev) => onStreamRef.current(ev))
+    return close
+  }, [])
 
   const handleRefresh = async () => {
     setRefreshing(true)
