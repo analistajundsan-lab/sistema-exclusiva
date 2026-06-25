@@ -25,6 +25,7 @@ import { SSTLiberacao } from "./pages/SSTLiberacao";
 import { SSTSaude } from "./pages/SSTSaude";
 import { SSTChecklistView } from "./pages/SSTChecklistView";
 import { SSTMobile } from "./pages/SSTMobile";
+import { UpdateBanner } from "./components/UpdateBanner";
 
 function InactivityGuard({ children }: { children: React.ReactNode }) {
   useInactivityTimer()
@@ -129,6 +130,7 @@ export default function App() {
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="*" element={<HomeRedirect />} />
       </Routes>
+      <UpdateBanner />
     </BrowserRouter>
   );
 }
