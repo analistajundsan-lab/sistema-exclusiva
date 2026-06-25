@@ -71,6 +71,14 @@ UNIT_SHEET_TITLES = {
 # proprio no dashboard (decisao operacional) — nao diluidos dentro dos turnos.
 FORCE_AVULSO_CLIENTS = {"PLATLOG"}
 
+# Linhas especificas que viram um CARD AVULSO proprio com nome customizado, mesmo
+# mapeadas em TURN_REFERENCE. Ex.: SORTATION MARABRAZ (4997/4998) — tinham rotulo
+# de turno fora do padrao e nao apareciam em card nenhum no painel.
+FORCE_AVULSO_LINES = {
+    "4997": "SORTATION MARABRAZ",
+    "4998": "SORTATION MARABRAZ",
+}
+
 
 async def parse_upload_file(file: UploadFile):
     if not file.filename.lower().endswith(".xlsx"):
@@ -1358,8 +1366,10 @@ async def schedule_dashboard_turns(
             continue
 
         reference = TURN_REFERENCE.get(line_code)
-        forced_client = None
-        if reference and reference["client"] in FORCE_AVULSO_CLIENTS:
+        forced_client = FORCE_AVULSO_LINES.get(line_code)
+        if forced_client:
+            reference = None  # linha vira card avulso c/ nome custom (ex.: SORTATION MARABRAZ)
+        elif reference and reference["client"] in FORCE_AVULSO_CLIENTS:
             forced_client = reference["client"]  # ex.: PLATLOG -> card avulso, fora dos turnos
             reference = None
         if reference:
