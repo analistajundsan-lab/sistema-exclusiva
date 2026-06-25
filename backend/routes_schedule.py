@@ -385,6 +385,42 @@ def normalize_dashboard_client(value: str) -> str:
     return text or "SEM CLIENTE"
 
 
+def start_minutes(value: Optional[str]) -> Optional[int]:
+    """'HH:MM' -> minutos do dia. None se vazio/invalido."""
+    if not value or ":" not in value:
+        return None
+    try:
+        h, m = value.split(":")[:2]
+        return int(h) * 60 + int(m)
+    except (ValueError, TypeError):
+        return None
+
+
+def turn_by_similar_time(
+    start_min: int, direction: str, refs: list, k: int = 5
+) -> Optional[str]:
+    """Encaixa uma linha SEM turno mapeado (ex.: MERCADO LIVRE) no turno das
+    linhas JA mapeadas com horario de inicio mais parecido, no MESMO sentido
+    (entrada com entrada, saida com saida). Voto da maioria entre os k vizinhos
+    mais proximos no horario; empate -> turno do vizinho mais proximo.
+    `refs` = lista de (direction_upper, start_min, turno)."""
+    direction = (direction or "").upper()
+    cand = sorted(
+        (abs(m - start_min), turn) for d, m, turn in refs if d == direction
+    )[:k]
+    if not cand:
+        return None
+    counts = Counter(turn for _, turn in cand)
+    top = max(counts.values())
+    winners = {t for t, c in counts.items() if c == top}
+    if len(winners) == 1:
+        return next(iter(winners))
+    for _, turn in cand:  # empate: desempata pelo vizinho mais proximo
+        if turn in winners:
+            return turn
+    return cand[0][1]
+
+
 def empty_direction_stats() -> dict:
     return {
         "entrada": 0,
@@ -1276,9 +1312,23 @@ async def schedule_dashboard_turns(
     ).all()
 
     turn_order = ["T1", "T2", "T3", "T4", "T5", "APRENDIZ"]
+    standard_turns = set(turn_order)
     units: dict[str, dict] = {}
     client_index: dict[str, dict] = defaultdict(empty_direction_stats)
     excluded_found: dict[str, dict] = defaultdict(empty_direction_stats)
+
+    # Referencia horario->turno por unidade, a partir das linhas JA mapeadas em
+    # TURN_REFERENCE (so turnos padrao). Usada para encaixar o MERCADO LIVRE nos
+    # turnos pela similaridade de horario (mesmo sentido), em vez de card avulso.
+    turn_ref: dict[str, list] = defaultdict(list)
+    for line in lines:
+        lc = normalize_line_code(line.line_code)
+        if not lc or lc in EXCLUDED_TURN_LINES:
+            continue
+        ref = TURN_REFERENCE.get(lc)
+        sm = start_minutes(line.start_time)
+        if ref and sm is not None and ref["turn"] in standard_turns:
+            turn_ref[line.unit].append(((line.direction or "").upper(), sm, ref["turn"]))
 
     for line in lines:
         line_code = normalize_line_code(line.line_code)
@@ -1310,7 +1360,22 @@ async def schedule_dashboard_turns(
             add_direction_stats(client_index[client], line, schedule_date)
         else:
             client = normalize_dashboard_client(line.client_name)
-            add_direction_stats(unit_data["client_cards"][client], line, schedule_date)
+            sm = start_minutes(line.start_time)
+            # MERCADO LIVRE nao tem turno mapeado: encaixa no turno das linhas com
+            # horario mais parecido (mesmo sentido), em vez de virar card avulso.
+            # Continua aparecendo no indice por cliente (detalhe). Outros avulsos
+            # (GARDNER, SP02 sem ref, etc.) seguem como card avulso, como antes.
+            ml_turn = (
+                turn_by_similar_time(sm, line.direction, turn_ref.get(line.unit, []))
+                if "MERCADO LIVRE" in client and sm is not None
+                else None
+            )
+            if ml_turn:
+                if ml_turn not in unit_data["turns"]:
+                    unit_data["turns"][ml_turn] = empty_direction_stats()
+                add_direction_stats(unit_data["turns"][ml_turn], line, schedule_date)
+            else:
+                add_direction_stats(unit_data["client_cards"][client], line, schedule_date)
             add_direction_stats(client_index[client], line, schedule_date)
 
         add_direction_stats(unit_data["total"], line, schedule_date)
