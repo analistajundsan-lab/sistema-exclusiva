@@ -24,6 +24,10 @@ const emptyForm = {
 const nowHHMM = () =>
   new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 
+// Chave do rascunho do registro de ocorrência: sobrevive a um refresh acidental
+// ou ao voltar de background no PWA, para o operador não perder o que digitou.
+const DRAFT_KEY = 'incident_draft_v1'
+
 // Item de detalhe (linha expandida da tabela).
 function Detail({ label, value, mono, icon }: {
   label: string
@@ -60,6 +64,40 @@ export function Incidents() {
   // Ocorrência já salva no banco neste fluxo (habilita o envio por WhatsApp).
   const [savedIncident, setSavedIncident] = useState<Incident | null>(null)
   const [cepLoading, setCepLoading] = useState(false)
+
+  // O form esta "sujo" (vale salvar/avisar)? Ignora o campo horario, que ja vem
+  // preenchido automaticamente ao abrir — sozinho ele nao conta como rascunho.
+  const draftDirty = () =>
+    Object.entries(form).some(([k, v]) => k !== 'horario' && String(v).trim() !== '')
+
+  // Restaura o rascunho ao abrir o modal de CRIACAO (nunca na edicao).
+  useEffect(() => {
+    if (!modal || editing) return
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (raw) setForm(f => ({ ...f, ...JSON.parse(raw) }))
+    } catch { /* rascunho corrompido: ignora */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal, editing])
+
+  // Autosave: enquanto o modal de criacao esta aberto e sujo, persiste o rascunho
+  // a cada tecla. Assim um refresh acidental nao perde nada.
+  useEffect(() => {
+    if (!modal || editing || savedIncident) return
+    if (draftDirty()) {
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(form)) } catch { /* cota cheia: ignora */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, modal, editing, savedIncident])
+
+  // Aviso nativo antes de recarregar/fechar a aba com rascunho nao salvo.
+  useEffect(() => {
+    if (!modal || editing || savedIncident || !draftDirty()) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, modal, editing, savedIncident])
 
   const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -194,6 +232,7 @@ export function Incidents() {
         ? await updateIncident(editing.id, payload)
         : await createIncident(payload)
       setSavedIncident(saved)
+      try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignora */ }
       await fetchIncidents(filters, page * 20)
     } catch (e: any) {
       setFormError(e?.response?.data?.detail || 'Erro ao registrar ocorrência.')
@@ -448,9 +487,9 @@ export function Incidents() {
 
       {/* Modal de registro */}
       {modal && (
-        <div className="modal-overlay">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700">
-            {/* Modal header */}
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
+          <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-modal dark:border-gray-700 dark:bg-gray-800 my-auto">
+            {/* Modal header (fixo no topo do card) */}
             <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-white">
                 <AlertTriangle size={18} />
@@ -464,8 +503,8 @@ export function Incidents() {
               </button>
             </div>
 
-            {/* Modal body */}
-            <div className="p-6">
+            {/* Modal body (rolavel; header e rodape ficam fixos) */}
+            <div className="flex-1 overflow-y-auto p-6">
               {formError && (
                 <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-xl p-3 mb-4">
                   <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>
@@ -651,7 +690,7 @@ export function Incidents() {
                     Ocorrência registrada no sistema. Agora você pode enviar via WhatsApp.
                   </div>
                 )}
-                <div className="flex gap-2 justify-end pt-1">
+                <div className="sticky bottom-0 -mx-6 -mb-6 mt-2 flex justify-end gap-2 border-t border-gray-100 bg-white/95 px-6 py-3 backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
                   <button
                     onClick={closeModal}
                     className="btn-secondary"
