@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -122,11 +122,19 @@ async def create_swap(
                 status_code=404, detail="Linha de escala nao encontrada"
             )
         ensure_unit_access(current_user, schedule_line.unit)
-        if schedule_line.status != ScheduleLineStatus.CONFIRMADA:
+        if schedule_line.status == ScheduleLineStatus.CANCELADA:
             raise HTTPException(
                 status_code=422,
-                detail="A troca so pode ser criada para linha confirmada",
+                detail="Linha cancelada nao pode ser trocada/confirmada",
             )
+        # A TROCA CONFIRMA A LINHA PARA O DIA: o carro previsto teve uma ocorrencia
+        # e outro vai rodar, entao a linha esta confirmada (com a nova info de
+        # carro/motorista). Carimba a confirmacao de HOJE para a linha entrar nas
+        # "Confirmadas" do dashboard. Recarimba mesmo se ja estava confirmada (ex.:
+        # confirmada ontem) para contar no dia da troca. UTC naive deterministico.
+        schedule_line.status = ScheduleLineStatus.CONFIRMADA
+        schedule_line.confirmed_by = current_user.id
+        schedule_line.confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         data["schedule_date"] = body.schedule_date or schedule_line.schedule_date
         data["unit"] = schedule_line.unit
         data["client_name"] = schedule_line.client_name
