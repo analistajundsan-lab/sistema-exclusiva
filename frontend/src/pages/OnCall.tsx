@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { ScheduleFilters, ScheduleLine, useSchedule } from '../hooks/useSchedule'
 import { useSwaps } from '../hooks/useSwaps'
-import { DEFAULT_OPERATION_DATE } from '../config/demo'
+import { DEFAULT_OPERATION_DATE, currentOperationDate } from '../config/demo'
 import { useAuthStore } from '../store/auth'
 import client from '../api/client'
 import {
@@ -280,6 +280,25 @@ export function OnCall() {
 
   useEffect(() => {
     const t = window.setInterval(() => setTick(x => x + 1), 30000)
+    return () => window.clearInterval(t)
+  }, [])
+
+  // Virada de dia (00:00 BRT): se o plantonista deixou o painel aberto e estava
+  // vendo "hoje", rola para o novo dia. As linhas voltam a pendente (reset diario
+  // que o cliente exige) para serem reconfirmadas. Se ele escolheu outra data no
+  // filtro, respeita a escolha.
+  const schedDateRef = useRef(filters.schedule_date)
+  schedDateRef.current = filters.schedule_date
+  const dayRef = useRef(currentOperationDate())
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      const d = currentOperationDate()
+      if (d !== dayRef.current) {
+        const wasToday = schedDateRef.current === dayRef.current
+        dayRef.current = d
+        if (wasToday) setFilters(s => ({ ...s, schedule_date: d }))
+      }
+    }, 30000)
     return () => window.clearInterval(t)
   }, [])
 
