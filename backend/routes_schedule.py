@@ -67,6 +67,10 @@ UNIT_SHEET_TITLES = {
     "Santana de Parnaiba": "santana",
 }
 
+# Clientes que, mesmo mapeados em TURN_REFERENCE, devem aparecer como CARD AVULSO
+# proprio no dashboard (decisao operacional) — nao diluidos dentro dos turnos.
+FORCE_AVULSO_CLIENTS = {"PLATLOG"}
+
 
 async def parse_upload_file(file: UploadFile):
     if not file.filename.lower().endswith(".xlsx"):
@@ -1327,7 +1331,10 @@ async def schedule_dashboard_turns(
             continue
         ref = TURN_REFERENCE.get(lc)
         sm = start_minutes(line.start_time)
-        if ref and sm is not None and ref["turn"] in standard_turns:
+        if (
+            ref and sm is not None and ref["turn"] in standard_turns
+            and ref["client"] not in FORCE_AVULSO_CLIENTS
+        ):
             turn_ref[line.unit].append(((line.direction or "").upper(), sm, ref["turn"]))
 
     for line in lines:
@@ -1351,6 +1358,10 @@ async def schedule_dashboard_turns(
             continue
 
         reference = TURN_REFERENCE.get(line_code)
+        forced_client = None
+        if reference and reference["client"] in FORCE_AVULSO_CLIENTS:
+            forced_client = reference["client"]  # ex.: PLATLOG -> card avulso, fora dos turnos
+            reference = None
         if reference:
             turn = reference["turn"]
             client = reference["client"]
@@ -1359,7 +1370,7 @@ async def schedule_dashboard_turns(
             add_direction_stats(unit_data["turns"][turn], line, schedule_date)
             add_direction_stats(client_index[client], line, schedule_date)
         else:
-            client = normalize_dashboard_client(line.client_name)
+            client = forced_client or normalize_dashboard_client(line.client_name)
             sm = start_minutes(line.start_time)
             # MERCADO LIVRE nao tem turno mapeado: encaixa no turno das linhas com
             # horario mais parecido (mesmo sentido), em vez de virar card avulso.
