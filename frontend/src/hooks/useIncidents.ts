@@ -27,6 +27,7 @@ export interface IncidentFilters {
   line?: string
   incident_type?: string
   status?: IncidentStatus | ''
+  unit?: string
 }
 
 const PAGE_SIZE = 20
@@ -44,6 +45,7 @@ export function useIncidents(initialFilters?: IncidentFilters) {
     if (f.prefix_code) p.prefix_code = f.prefix_code
     if (f.line) p.line = f.line
     if (f.incident_type) p.incident_type = f.incident_type
+    if (f.unit) p.unit = f.unit
     return p
   }
 

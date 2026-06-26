@@ -7,7 +7,6 @@ import { DEFAULT_OPERATION_DATE } from '../config/demo'
 import api from '../api/client'
 
 const UNIT_TABS = ['Caieiras', 'Santana de Parnaiba', 'Jundiai'] as const
-type UnitTab = (typeof UNIT_TABS)[number]
 const SCHEDULE_FILTERS_KEY = 'scheduleFilters'
 
 interface EditForm {
@@ -43,8 +42,26 @@ function readSavedScheduleFilters(): ScheduleFilters {
   }
 }
 
-function isUnitTab(value?: string | null): value is UnitTab {
-  return !!value && (UNIT_TABS as readonly string[]).includes(value)
+// Perfis que enxergam TODAS as garagens (alem de hasFullAccess).
+function canSeeAllUnits(role?: string | null, hasFullAccess?: boolean): boolean {
+  return !!hasFullAccess || ['admin', 'gerente', 'supervisao', 'supervisor'].includes(role || '')
+}
+
+// Garagens que o usuario pode visualizar/alternar na tela.
+// - ve todas      -> as 3 abas (UNIT_TABS)
+// - 2+ no perfil  -> apenas as garagens dele (userUnits)
+// - 1 no perfil   -> apenas a primaria (travado)
+// - sem unidade   -> fallback para todas
+function resolveAvailableUnits(
+  role: string | null,
+  hasFullAccess: boolean,
+  userUnit: string | null,
+  userUnits: string[] | null,
+): string[] {
+  if (canSeeAllUnits(role, hasFullAccess)) return [...UNIT_TABS]
+  if (userUnits && userUnits.length > 0) return userUnits
+  if (userUnit) return [userUnit]
+  return [...UNIT_TABS]
 }
 
 // YYYY-MM-DD -> DD/MM/YYYY (para mostrar a vigencia de forma clara)
@@ -53,26 +70,24 @@ function fmtBR(iso?: string): string {
 }
 
 export function Schedule() {
-  const [activeTab, setActiveTab] = useState<UnitTab>(() => {
+  const [activeTab, setActiveTab] = useState<string>(() => {
     const s = useAuthStore.getState()
-    const r = s.role
-    const u = s.userUnit
+    const available = resolveAvailableUnits(s.role, s.hasFullAccess, s.userUnit, s.userUnits)
     const saved = readSavedScheduleFilters()
-    const readOnly = !s.hasFullAccess && !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
-    if (readOnly && isUnitTab(u)) return u
-    if (isUnitTab(saved.unit)) return saved.unit
-    return 'Caieiras'
+    // Respeita o filtro salvo SE for uma garagem que o usuario pode ver.
+    if (saved.unit && available.includes(saved.unit)) return saved.unit
+    return available[0] ?? 'Caieiras'
   })
   const [search, setSearch] = useState<ScheduleFilters>(() => {
     const s = useAuthStore.getState()
-    const r = s.role
-    const u = s.userUnit
+    const available = resolveAvailableUnits(s.role, s.hasFullAccess, s.userUnit, s.userUnits)
     const saved = readSavedScheduleFilters()
-    const readOnly = !s.hasFullAccess && !['admin', 'gerente', 'supervisao', 'supervisor'].includes(r || '')
+    // Garante que unit nunca caia fora das garagens permitidas.
+    const unit = saved.unit && available.includes(saved.unit) ? saved.unit : (available[0] ?? 'Caieiras')
     return {
       ...saved,
       schedule_date: saved.schedule_date || DEFAULT_OPERATION_DATE,
-      unit: (readOnly && u) ? u : (isUnitTab(saved.unit) ? saved.unit : 'Caieiras'),
+      unit,
       // Aba de gestao mostra tambem as linhas desativadas por periodo, para
       // poder reativar. As telas operacionais escondem por padrao.
       include_inactive: 'true',
@@ -90,11 +105,14 @@ export function Schedule() {
 
   const role = useAuthStore(s => s.role)
   const unit = useAuthStore(s => s.userUnit)
+  const userUnits = useAuthStore(s => s.userUnits)
   const hasFullAccess = useAuthStore(s => s.hasFullAccess)
   const isAdmin = hasFullAccess || role === 'admin'
   const canEdit = hasFullAccess || role === 'admin'
-  const isReadOnly = !hasFullAccess && !['admin', 'gerente', 'supervisao', 'supervisor'].includes(role || '')
-  const lockedUnit = isReadOnly && unit ? unit : null
+  // Garagens disponiveis: todas (quem ve tudo), as do perfil (multi-unidade)
+  // ou a unica do perfil. Trava so quando ha exatamente 1 garagem.
+  const availableUnits = resolveAvailableUnits(role, hasFullAccess, unit, userUnits)
+  const lockedUnit = availableUnits.length <= 1 ? (availableUnits[0] ?? null) : null
 
   const {
     lines,
@@ -150,7 +168,7 @@ export function Schedule() {
   }, [activeTab, fetchWhatsappText, search.schedule_date])
 
   // Switch tab: atualiza aba e unit nos filtros, reseta busca texto
-  const handleTabChange = (tab: UnitTab) => {
+  const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     const next: ScheduleFilters = {
       ...search,
@@ -351,7 +369,7 @@ export function Schedule() {
         {/* Abas de unidade - só mostra se pode trocar */}
         {!lockedUnit && (
           <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-            {UNIT_TABS.map(tab => (
+            {availableUnits.map(tab => (
               <button
                 key={tab}
                 type="button"

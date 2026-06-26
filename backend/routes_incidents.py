@@ -89,10 +89,14 @@ async def count_incidents(
     line: Optional[str] = None,
     status: Optional[IncidentStatus] = None,
     today: bool = Query(False),
+    unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     query = apply_user_unit_scope(db.query(Incident), Incident.unit, current_user)
+    if unit:
+        ensure_unit_access(current_user, unit)
+        query = query.filter(Incident.unit == unit)
     if prefix_code:
         query = query.filter(Incident.prefix_code.ilike(f"%{prefix_code}%"))
     if incident_type:
@@ -178,6 +182,7 @@ async def list_incidents(
     status: Optional[IncidentStatus] = None,
     today: bool = Query(False),
     incident_date: Optional[date_type] = None,
+    unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -186,6 +191,9 @@ async def list_incidents(
         Incident.unit,
         current_user,
     )
+    if unit:
+        ensure_unit_access(current_user, unit)
+        query = query.filter(Incident.unit == unit)
     if prefix_code:
         query = query.filter(Incident.prefix_code.ilike(f"%{prefix_code}%"))
     if incident_type:

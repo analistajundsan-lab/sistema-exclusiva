@@ -1,10 +1,12 @@
-import { useEffect, useState, Fragment } from 'react'
+import { useEffect, useState, useMemo, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { Layout } from '../components/Layout'
 import { Incident, useIncidents } from '../hooks/useIncidents'
 import { useAuthStore } from '../store/auth'
 import api from '../api/client'
-import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, ChevronDown, MessageCircle, Pencil, Trash2, Check, MapPin, User as UserIcon, Users as UsersIcon } from 'lucide-react'
+import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, ChevronDown, MessageCircle, Pencil, Trash2, Check, MapPin, Building2, User as UserIcon, Users as UsersIcon } from 'lucide-react'
+
+const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
 const emptyForm = {
   prefix_code: '',
@@ -49,11 +51,22 @@ function Detail({ label, value, mono, icon }: {
 }
 
 export function Incidents() {
-  const { incidents, loading, error, total, page, totalPages, setPage, createIncident, updateIncident, deleteIncident, fetchIncidents, filters } = useIncidents()
+  const { incidents, loading, error, total, page, totalPages, setPage, createIncident, updateIncident, deleteIncident, fetchIncidents, filters, applyFilters } = useIncidents()
   const role = useAuthStore(s => s.role)
   const userId = useAuthStore(s => s.userId)
   const userUnit = useAuthStore(s => s.userUnit)
+  const userUnits = useAuthStore(s => s.userUnits)
   const hasFullAccess = useAuthStore(s => s.hasFullAccess)
+
+  // Garagens que este usuario pode filtrar: admin ve todas; quem tem 2+ unidades
+  // no perfil filtra entre as suas; quem tem 1 unidade nao precisa do filtro.
+  const isAdmin = hasFullAccess || role === 'admin'
+  const garageOptions = useMemo(() => {
+    if (isAdmin) return ALL_UNITS
+    if (userUnits && userUnits.length > 0) return userUnits
+    return userUnit ? [userUnit] : []
+  }, [isAdmin, userUnit, userUnits])
+  const showGarageFilter = garageOptions.length > 1
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState<Incident | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -297,10 +310,25 @@ export function Incidents() {
       ) : (
         <div className="card overflow-hidden">
           {/* Sub-header */}
-          <div className="px-5 py-3.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <div className="px-5 py-3.5 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 justify-between items-center">
             <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
               {total} ocorrência{total !== 1 ? 's' : ''} hoje
             </span>
+            {showGarageFilter && (
+              <div className="relative">
+                <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-700 dark:text-brand-400 pointer-events-none" />
+                <select
+                  value={filters.unit || ''}
+                  onChange={e => applyFilters({ ...filters, unit: e.target.value || undefined })}
+                  className="select pl-9 font-semibold"
+                >
+                  <option value="">{isAdmin ? 'Todas as garagens' : 'Todas as minhas garagens'}</option>
+                  {garageOptions.map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Tabela */}

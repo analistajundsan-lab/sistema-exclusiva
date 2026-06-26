@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Layout } from '../components/Layout'
-import { AlertTriangle, CheckCircle2, ClipboardList, Download, ExternalLink, Link as LinkIcon, Mail, ShieldCheck, UserCheck, X } from 'lucide-react'
+import { AlertTriangle, Building2, CheckCircle2, ClipboardList, Download, ExternalLink, Link as LinkIcon, Mail, ShieldCheck, UserCheck, X } from 'lucide-react'
 import {
   approveTicketForSST,
   getSafetyDashboard,
@@ -16,6 +16,8 @@ import {
 import { useAuthStore } from '../store/auth'
 import api from '../api/client'
 
+const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
+
 const statusLabel: Record<string, string> = {
   ok: 'OK',
   attention: 'Atencao',
@@ -30,8 +32,21 @@ const statusLabel: Record<string, string> = {
 export function Safety() {
   const role = useAuthStore((s) => s.role)
   const hasFullAccess = useAuthStore((s) => s.hasFullAccess)
+  const userUnit = useAuthStore((s) => s.userUnit)
+  const userUnits = useAuthStore((s) => s.userUnits)
   const canApprove = hasFullAccess || role === 'admin' || role === 'gerente'
+  const isAdmin = hasFullAccess || role === 'admin'
 
+  // Garagens que este usuario pode filtrar: admin ve todas; quem tem 2+ unidades
+  // no perfil filtra entre as suas; 1 unidade nao precisa do filtro.
+  const garageOptions = useMemo(() => {
+    if (isAdmin) return ALL_UNITS
+    if (userUnits && userUnits.length > 0) return userUnits
+    return userUnit ? [userUnit] : []
+  }, [isAdmin, userUnit, userUnits])
+  const showGarageFilter = garageOptions.length > 1
+
+  const [garagem, setGaragem] = useState('')
   const [dashboard, setDashboard] = useState<SafetyDashboard | null>(null)
   const [submissions, setSubmissions] = useState<SafetySubmission[]>([])
   const [tickets, setTickets] = useState<SafetyTicket[]>([])
@@ -42,11 +57,12 @@ export function Safety() {
   const [approving, setApproving] = useState(false)
 
   const load = async () => {
+    const u = garagem || undefined
     const [dash, subs, ticketRows, vehicleRows] = await Promise.all([
-      getSafetyDashboard(),
-      listSafetySubmissions(),
-      listSafetyTickets(),
-      listSafetyVehicles(),
+      getSafetyDashboard(u),
+      listSafetySubmissions(u),
+      listSafetyTickets(u),
+      listSafetyVehicles(u),
     ])
     setDashboard(dash)
     setSubmissions(subs)
@@ -56,12 +72,13 @@ export function Safety() {
 
   useEffect(() => {
     load().finally(() => setLoading(false))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [garagem])
 
   const publicUrl = (token: string) => `${window.location.origin}/v/${token}`
 
   const downloadExport = async (format: 'csv' | 'xlsx') => {
-    const res = await api.get('/safety/submissions/export', { params: { format }, responseType: 'blob' })
+    const res = await api.get('/safety/submissions/export', { params: { format, unit: garagem || undefined }, responseType: 'blob' })
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
@@ -107,6 +124,22 @@ export function Safety() {
           </button>
         </div>
       </div>
+
+      {showGarageFilter && (
+        <div className="relative mb-4 sm:max-w-xs">
+          <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-700 dark:text-brand-400" />
+          <select
+            value={garagem}
+            onChange={e => setGaragem(e.target.value)}
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border-2 border-brand-200 dark:border-brand-700 bg-white dark:bg-gray-800 text-sm font-semibold text-gray-700 dark:text-gray-200"
+          >
+            <option value="">{isAdmin ? 'Todas as garagens' : 'Todas as minhas garagens'}</option>
+            {garageOptions.map(g => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-500">Carregando...</p>

@@ -317,17 +317,22 @@ async def create_public_submission(
 
 @router.get("/safety/vehicles", response_model=list[SafetyVehicleResponse])
 async def list_safety_vehicles(
+    unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_safety_user(current_user)
     query = db.query(SafetyVehicle).order_by(SafetyVehicle.unit, SafetyVehicle.prefix)
     query = apply_user_unit_scope(query, SafetyVehicle.unit, current_user)
+    if unit:
+        ensure_unit_access(current_user, unit)
+        query = query.filter(SafetyVehicle.unit == unit)
     return [_vehicle_response(vehicle) for vehicle in query.all()]
 
 
 @router.get("/safety/dashboard", response_model=SafetyDashboardResponse)
 async def safety_dashboard(
+    unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -341,6 +346,11 @@ async def safety_dashboard(
     submissions = apply_user_unit_scope(submissions, SafetyVehicle.unit, current_user)
     tickets = apply_user_unit_scope(tickets, MaintenanceTicket.unit, current_user)
     vehicles = apply_user_unit_scope(vehicles, SafetyVehicle.unit, current_user)
+    if unit:
+        ensure_unit_access(current_user, unit)
+        submissions = submissions.filter(SafetyVehicle.unit == unit)
+        tickets = tickets.filter(MaintenanceTicket.unit == unit)
+        vehicles = vehicles.filter(SafetyVehicle.unit == unit)
 
     today_submissions = submissions.filter(
         func.date(DriverChecklistSubmission.submitted_at) == today
@@ -420,6 +430,7 @@ async def list_safety_submissions(
 
 @router.get("/safety/maintenance", response_model=list[SafetyTicketListItem])
 async def list_safety_tickets(
+    unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -430,6 +441,9 @@ async def list_safety_tickets(
         .order_by(MaintenanceTicket.created_at.desc())
     )
     query = apply_user_unit_scope(query, MaintenanceTicket.unit, current_user)
+    if unit:
+        ensure_unit_access(current_user, unit)
+        query = query.filter(MaintenanceTicket.unit == unit)
     return [
         _ticket_response(ticket, vehicle.prefix)
         for ticket, vehicle in query.limit(500).all()
@@ -595,6 +609,7 @@ async def sst_view(
 @router.get("/safety/submissions/export")
 async def export_safety_submissions(
     format: str = Query("csv", pattern="^(csv|xlsx)$"),
+    unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -604,9 +619,11 @@ async def export_safety_submissions(
         .join(SafetyVehicle, SafetyVehicle.id == DriverChecklistSubmission.vehicle_id)
         .order_by(DriverChecklistSubmission.submitted_at.desc())
     )
-    rows = (
-        apply_user_unit_scope(rows, SafetyVehicle.unit, current_user).limit(5000).all()
-    )
+    rows = apply_user_unit_scope(rows, SafetyVehicle.unit, current_user)
+    if unit:
+        ensure_unit_access(current_user, unit)
+        rows = rows.filter(SafetyVehicle.unit == unit)
+    rows = rows.limit(5000).all()
     data = [
         [
             submission.id,

@@ -74,23 +74,23 @@ export async function submitPublicSafetyChecklist(token: string, data: {
   return res.data as { id: number; overall_status: string; maintenance_ticket_id?: number; message: string }
 }
 
-export async function getSafetyDashboard() {
-  const res = await api.get<SafetyDashboard>('/safety/dashboard')
+export async function getSafetyDashboard(unit?: string) {
+  const res = await api.get<SafetyDashboard>('/safety/dashboard', { params: { unit } })
   return res.data
 }
 
-export async function listSafetySubmissions() {
-  const res = await api.get<SafetySubmission[]>('/safety/submissions')
+export async function listSafetySubmissions(unit?: string) {
+  const res = await api.get<SafetySubmission[]>('/safety/submissions', { params: { unit } })
   return res.data
 }
 
-export async function listSafetyTickets() {
-  const res = await api.get<SafetyTicket[]>('/safety/maintenance')
+export async function listSafetyTickets(unit?: string) {
+  const res = await api.get<SafetyTicket[]>('/safety/maintenance', { params: { unit } })
   return res.data
 }
 
-export async function listSafetyVehicles() {
-  const res = await api.get<SafetyVehicle[]>('/safety/vehicles')
+export async function listSafetyVehicles(unit?: string) {
+  const res = await api.get<SafetyVehicle[]>('/safety/vehicles', { params: { unit } })
   return res.data
 }
 
