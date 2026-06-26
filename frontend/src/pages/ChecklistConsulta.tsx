@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { useChecklist, ChecklistData } from '../hooks/useChecklist'
 import { useAuthStore } from '../store/auth'
 import {
   ClipboardList, Plus, Search, X, ChevronDown, ChevronUp,
-  Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus, Pencil, Trash2, Download,
+  Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus, Pencil, Trash2, Download, Building2,
 } from 'lucide-react'
+
+const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
 function hasPendency(c: ChecklistData): 'red' | 'amber' | 'ok' {
   const camValues = [
@@ -285,15 +287,25 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
 
 export function ChecklistConsulta() {
   const navigate = useNavigate()
-  const { role, hasFullAccess } = useAuthStore()
+  const { role, hasFullAccess, userUnit, userUnits } = useAuthStore()
   const { listChecklists, deleteChecklist, downloadChecklistReport } = useChecklist()
   const isAdmin = hasFullAccess || role === 'admin'
+
+  // Garagens que este usuario pode filtrar: admin ve todas; quem tem 2+ unidades
+  // no perfil (ex.: analista Jonathan) filtra entre as suas; 1 unidade nao precisa.
+  const garageOptions = useMemo(() => {
+    if (isAdmin) return ALL_UNITS
+    if (userUnits && userUnits.length > 0) return userUnits
+    return userUnit ? [userUnit] : []
+  }, [isAdmin, userUnit, userUnits])
+  const showGarageFilter = garageOptions.length > 1
 
   const [items, setItems] = useState<ChecklistData[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [downloading, setDownloading] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
 
+  const [garagem, setGaragem] = useState('')
   const [prefixo, setPrefixo] = useState('')
   const [tipo, setTipo] = useState('')
   const [situacao, setSituacao] = useState('')
@@ -305,6 +317,7 @@ export function ChecklistConsulta() {
     try {
       const data = await listChecklists({
         prefixo: prefixo || undefined,
+        garagem: garagem || undefined,
         tipo: tipo || undefined,
         situacao: situacao || undefined,
         data_inicio: dataInicio || undefined,
@@ -315,12 +328,12 @@ export function ChecklistConsulta() {
     } catch { /* ignore */ } finally {
       setLoadingList(false)
     }
-  }, [prefixo, tipo, situacao, dataInicio, dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [prefixo, garagem, tipo, situacao, dataInicio, dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
-  const clearFilters = () => { setPrefixo(''); setTipo(''); setSituacao(''); setDataInicio(''); setDataFim('') }
-  const hasFilters = prefixo || tipo || situacao || dataInicio || dataFim
+  const clearFilters = () => { setGaragem(''); setPrefixo(''); setTipo(''); setSituacao(''); setDataInicio(''); setDataFim('') }
+  const hasFilters = garagem || prefixo || tipo || situacao || dataInicio || dataFim
 
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
 
@@ -340,6 +353,7 @@ export function ChecklistConsulta() {
     try {
       const blobData = await downloadChecklistReport({
         prefixo: prefixo || undefined,
+        garagem: garagem || undefined,
         tipo: tipo || undefined,
         situacao: situacao || undefined,
         data_inicio: dataInicio || undefined,
@@ -394,6 +408,21 @@ export function ChecklistConsulta() {
 
       {/* Filters */}
       <div className="card p-4 mb-4 space-y-3">
+        {showGarageFilter && (
+          <div className="relative">
+            <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-700 dark:text-brand-400" />
+            <select
+              value={garagem}
+              onChange={e => setGaragem(e.target.value)}
+              className="w-full pl-9 pr-3 py-2.5 rounded-xl border-2 border-brand-200 dark:border-brand-700 bg-white dark:bg-gray-800 text-sm font-semibold text-gray-700 dark:text-gray-200"
+            >
+              <option value="">{isAdmin ? 'Todas as garagens' : 'Todas as minhas garagens'}</option>
+              {garageOptions.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
