@@ -488,9 +488,9 @@ export function Incidents() {
       {/* Modal de registro */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
-          <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-modal dark:border-gray-700 dark:bg-gray-800 my-auto">
-            {/* Modal header (fixo no topo do card) */}
-            <div className="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
+          <div className="max-h-[90vh] max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-modal dark:border-gray-700 dark:bg-gray-800 my-auto">
+            {/* Modal header (fixo no topo enquanto rola) */}
+            <div className="sticky top-0 z-10 bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-white">
                 <AlertTriangle size={18} />
                 <h2 className="text-base font-bold">{editing ? 'Editar Ocorrencia' : 'Registrar Ocorrência'}</h2>
@@ -503,8 +503,8 @@ export function Incidents() {
               </button>
             </div>
 
-            {/* Modal body (rolavel; header e rodape ficam fixos) */}
-            <div className="flex-1 overflow-y-auto p-6">
+            {/* Modal body (a caixa inteira rola; header/rodape ficam sticky) */}
+            <div className="p-6">
               {formError && (
                 <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-xl p-3 mb-4">
                   <p className="text-red-600 dark:text-red-400 text-sm">{formError}</p>
