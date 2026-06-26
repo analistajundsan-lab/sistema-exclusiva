@@ -162,7 +162,12 @@ export function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* ── Main area ── */}
-      <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
+      {/* min-w-0: sem isto, um filho largo (ex.: a tabela de Ocorrencias) faz a
+          largura intrinseca "vazar" pela cadeia flex e estoura a viewport no
+          celular — a pagina fica mais larga que a tela e o zoom quebra. Com
+          min-w-0 o overflow-x-auto realmente contem o conteudo e a pagina
+          sempre cabe na tela, em qualquer aparelho. */}
+      <div className="flex-1 md:ml-60 flex flex-col min-h-screen min-w-0">
 
         {/* Top bar (mobile) */}
         <header className="md:hidden sticky top-0 z-20 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -229,7 +234,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Page content — re-mounts per route so it rises in on navigation */}
-        <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
+        <main className="flex-1 min-w-0 p-4 md:p-6 pb-24 md:pb-6">
           <div key={location.pathname} className="ex-anim-rise">
             {children}
           </div>

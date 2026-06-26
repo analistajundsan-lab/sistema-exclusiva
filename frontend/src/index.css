@@ -258,6 +258,19 @@
   }
 }
 
+/* No celular, campos com fonte < 16px fazem o iOS Safari dar zoom automatico
+   ao focar (o formulario "incha" e desalinha). Forcamos 16px nos campos em
+   telas pequenas para o zoom nunca disparar — em qualquer aparelho. O 16px
+   vale so no mobile; no desktop os campos seguem com text-sm. */
+@media (max-width: 767px) {
+  .input,
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* ── Utilities ── */
 @layer utilities {
   .text-balance {
