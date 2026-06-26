@@ -1,4 +1,5 @@
 import { useEffect, useState, Fragment } from 'react'
+import { createPortal } from 'react-dom'
 import { Layout } from '../components/Layout'
 import { Incident, useIncidents } from '../hooks/useIncidents'
 import { useAuthStore } from '../store/auth'
@@ -485,9 +486,12 @@ export function Incidents() {
         </div>
       )}
 
-      {/* Modal de registro */}
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
+      {/* Modal de registro — renderizado num PORTAL no body, para nao ficar preso
+          ao container da pagina (o wrapper animado do layout tem transform, que
+          vira containing block e cortava o modal fixed). Assim ele e um menu
+          flutuante de verdade, solto da pagina, mostrando tudo e rolando certo. */}
+      {modal && createPortal(
+        <div data-modal-open className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
           <div className="max-h-[90vh] max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-modal dark:border-gray-700 dark:bg-gray-800 my-auto">
             {/* Modal header (fixo no topo enquanto rola) */}
             <div className="sticky top-0 z-10 bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center justify-between">
@@ -719,7 +723,8 @@ export function Incidents() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </Layout>
   )
