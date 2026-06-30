@@ -976,7 +976,10 @@ def test_swap_can_change_only_driver_from_confirmed_schedule_line(
     assert "MOTORISTA MOTORISTA RESERVA" in data["whatsapp_text"]
 
 
-def test_swap_requires_confirmed_schedule_line(admin_token, operator_token):
+def test_swap_confirms_a_pending_schedule_line(admin_token, operator_token):
+    # A troca de uma linha AINDA pendente e permitida e CONFIRMA a linha para o
+    # dia (o carro previsto teve ocorrencia e outro vai rodar). So linha
+    # CANCELADA nao pode ser trocada.
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -999,4 +1002,9 @@ def test_swap_requires_confirmed_schedule_line(admin_token, operator_token):
         json={"schedule_line_id": line_id, "vehicle_out": "1580", "vehicle_in": "1590"},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 201
+    confirmed = client.get(
+        "/schedule/lines?schedule_date=2026-04-13&status=confirmada",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()
+    assert any(item["id"] == line_id for item in confirmed)
