@@ -264,6 +264,8 @@ class SwapResponse(BaseModel):
     driver_in: Optional[str] = None
     reason: Optional[str] = None
     lines_covered: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     whatsapp_text: Optional[str] = None
     created_by: int
     created_at: datetime

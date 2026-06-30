@@ -856,6 +856,27 @@ def test_audit_logs_are_listed(admin_token):
     assert data[0]["action"] == "IMPORT"
 
 
+def test_swap_start_within_window():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from routes_swaps import start_within_window
+
+    tz = ZoneInfo("America/Sao_Paulo")
+    now = datetime(2026, 6, 30, 12, 0, tzinfo=tz)
+    # Dentro de +/- 180 min (turno do meio-dia).
+    assert start_within_window("12:30", now, 180) is True
+    assert start_within_window("10:00", now, 180) is True
+    assert start_within_window("14:30", now, 180) is True
+    # Fora da janela (turno da manha / da noite).
+    assert start_within_window("03:40", now, 180) is False
+    assert start_within_window("18:00", now, 180) is False
+    # Virada de meia-noite: 00:15 esta a 45 min de 23:30.
+    near_midnight = datetime(2026, 6, 30, 23, 30, tzinfo=tz)
+    assert start_within_window("00:15", near_midnight, 60) is True
+    # Sem horario (troca antiga) nao entra no envio por turno.
+    assert start_within_window(None, now, 180) is False
+
+
 def test_swap_can_be_created_from_confirmed_schedule_line(admin_token, operator_token):
     client.post(
         "/schedule/import?schedule_date=2026-04-13&replace=true",
@@ -868,10 +889,11 @@ def test_swap_can_be_created_from_confirmed_schedule_line(admin_token, operator_
             )
         },
     )
-    line_id = client.get(
+    first_line = client.get(
         "/schedule/lines?schedule_date=2026-04-13",
         headers={"Authorization": f"Bearer {operator_token}"},
-    ).json()[0]["id"]
+    ).json()[0]
+    line_id = first_line["id"]
     client.post(
         f"/schedule/lines/{line_id}/confirm",
         headers={"Authorization": f"Bearer {operator_token}"},
@@ -892,6 +914,8 @@ def test_swap_can_be_created_from_confirmed_schedule_line(admin_token, operator_
     data = response.json()
     assert data["schedule_line_id"] == line_id
     assert data["unit"] == "Caieiras"
+    # Horario denormalizado da linha (usado no envio ao CCO por turno).
+    assert data["start_time"] == first_line["start_time"]
     assert "PREFIXO 1590" in data["whatsapp_text"]
     assert "ATENDERA AS LINHAS" in data["whatsapp_text"]
 

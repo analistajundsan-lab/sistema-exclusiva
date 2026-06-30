@@ -188,6 +188,10 @@ class Swap(Base):
     driver_in = Column(String(255), index=True)
     reason = Column(String(255))
     lines_covered = Column(String(500))
+    # Horario da linha trocada (denormalizado da schedule_line), para o envio
+    # ao CCO por TURNO: filtra as trocas pela hora de inicio em torno de agora.
+    start_time = Column(String(5), index=True)
+    end_time = Column(String(5))
     whatsapp_text = Column(String(1000))
     created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), index=True)

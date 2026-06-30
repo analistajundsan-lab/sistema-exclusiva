@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
@@ -23,6 +24,30 @@ from models import (
 from schemas import CountResponse, SwapCreate, SwapResponse, SwapUpdate
 
 router = APIRouter(prefix="/swaps", tags=["swaps"])
+
+BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def start_within_window(
+    start_time: Optional[str], now_brt: datetime, window_minutes: int
+) -> bool:
+    """True se a hora de inicio (HH:MM) esta a no maximo window_minutes de agora,
+    medindo pela menor distancia no relogio (trata a virada de meia-noite).
+
+    Sem horario (trocas antigas) NAO entram no envio por turno — so as do dia
+    apareceriam em todos os turnos, que e justamente o que queremos evitar."""
+    if not start_time:
+        return False
+    try:
+        hh, mm = str(start_time).split(":")
+        line_min = int(hh) * 60 + int(mm)
+    except (ValueError, AttributeError):
+        return False
+    now_min = now_brt.hour * 60 + now_brt.minute
+    diff = (line_min - now_min) % 1440
+    if diff > 720:
+        diff -= 1440
+    return abs(diff) <= window_minutes
 
 
 def direction_abbrev(direction: str) -> str:
@@ -143,6 +168,9 @@ async def create_swap(
         data["lines_covered"] = data.get("lines_covered") or format_lines_covered(
             schedule_line.direction, schedule_line.line_code
         )
+        # Horario da linha (para o envio ao CCO por turno).
+        data["start_time"] = schedule_line.start_time
+        data["end_time"] = schedule_line.end_time
     if not data.get("vehicle_out"):
         raise HTTPException(status_code=422, detail="Informe o prefixo de origem")
     if not data.get("vehicle_in") and not data.get("driver_in"):
@@ -219,6 +247,7 @@ async def list_swaps(
 async def swaps_whatsapp_text(
     unit: Optional[str] = None,
     schedule_date: Optional[date] = None,
+    window_minutes: Optional[int] = Query(None, ge=1, le=720),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -231,10 +260,25 @@ async def swaps_whatsapp_text(
         query = query.filter(Swap.schedule_date == schedule_date)
     swaps = query.all()
 
+    # Envio por TURNO: so as trocas das linhas que comecam por volta de agora
+    # (janela centrada de +/- window_minutes). Evita repetir os turnos ja
+    # enviados (manha/meio-dia/noite). Sem window_minutes = dia inteiro (legado).
+    if window_minutes is not None:
+        now_brt = datetime.now(BRASILIA_TZ)
+        swaps = [
+            s
+            for s in swaps
+            if start_within_window(s.start_time, now_brt, window_minutes)
+        ]
+
     if not swaps:
         return {
             "total": 0,
-            "text": "Nenhuma troca registrada para os filtros informados.",
+            "text": (
+                "Nenhuma troca deste horario."
+                if window_minutes is not None
+                else "Nenhuma troca registrada para os filtros informados."
+            ),
         }
 
     # Agrupa linhas por prefixo e/ou motorista substituto.

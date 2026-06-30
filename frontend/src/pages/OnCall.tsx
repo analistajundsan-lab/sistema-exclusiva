@@ -140,6 +140,11 @@ export function OnCall() {
   const [autoMode, setAutoMode] = useState(true)
   const lineSearch = filters.line_code?.trim()
 
+  // Envio ao CCO por TURNO: por padrao (modo "Proximas 2h" ligado) o texto traz
+  // so as trocas das linhas que comecam por volta de agora (~3h em torno). Com o
+  // modo desligado, envia o dia inteiro. Evita repetir manha/meio-dia/noite.
+  const sendWindowMinutes = autoMode && !lineSearch ? 180 : null
+
   const pendingFilters = useMemo(() => ({
     ...filters,
     status: lineSearch ? undefined : 'pendente',
@@ -576,10 +581,11 @@ export function OnCall() {
       const params = new URLSearchParams()
       if (filters.unit) params.set('unit', filters.unit)
       if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
+      if (sendWindowMinutes != null) params.set('window_minutes', String(sendWindowMinutes))
       const res = await client.get(`/swaps/whatsapp/text?${params}`)
       const text = res.data.text as string
       if (!text || res.data.total === 0) {
-        setActionError('Nenhuma troca registrada para enviar.')
+        setActionError(sendWindowMinutes != null ? 'Nenhuma troca deste horário para enviar.' : 'Nenhuma troca registrada para enviar.')
         return
       }
       // Nao depende de clipboard: abre o WhatsApp com o texto pre-preenchido.
@@ -595,10 +601,11 @@ export function OnCall() {
       const params = new URLSearchParams()
       if (filters.unit) params.set('unit', filters.unit)
       if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
+      if (sendWindowMinutes != null) params.set('window_minutes', String(sendWindowMinutes))
       const res = await client.get(`/swaps/whatsapp/text?${params}`)
       const text = res.data.text as string
       if (!text || res.data.total === 0) {
-        setActionError('Nenhuma troca registrada para copiar.')
+        setActionError(sendWindowMinutes != null ? 'Nenhuma troca deste horário para copiar.' : 'Nenhuma troca registrada para copiar.')
         return
       }
       const ok = await copyToClipboard(text)
@@ -1167,14 +1174,18 @@ export function OnCall() {
                 <ArrowLeftRight size={16} className="text-brand-600 dark:text-brand-400" />
                 Trocas registradas
               </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Copie o texto consolidado e envie no WhatsApp.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {sendWindowMinutes != null
+                  ? 'O envio traz só as trocas do turno atual (linhas por volta de agora).'
+                  : 'O envio traz todas as trocas do dia.'}
+              </p>
               {swapsList.swaps.length > 0 && (
                 <button
                   onClick={handleCopyAllSwaps}
                   className="mt-2 w-full flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all"
                 >
                   <MessageCircle size={12} />
-                  Copiar todas as trocas (WhatsApp)
+                  {sendWindowMinutes != null ? 'Copiar trocas do turno (WhatsApp)' : 'Copiar todas as trocas (WhatsApp)'}
                 </button>
               )}
             </div>

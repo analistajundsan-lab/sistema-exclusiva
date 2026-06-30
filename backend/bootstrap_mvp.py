@@ -108,6 +108,24 @@ def migrate_existing_sqlite() -> None:
         ensure_column("swaps", "driver_out", "driver_out VARCHAR(255)")
         ensure_column("swaps", "driver_in", "driver_in VARCHAR(255)")
         ensure_column("swaps", "whatsapp_text", "whatsapp_text VARCHAR(1000)")
+        ensure_column("swaps", "start_time", "start_time VARCHAR(5)")
+        ensure_column("swaps", "end_time", "end_time VARCHAR(5)")
+        # Backfill best-effort do horario nas trocas ja existentes (pega da
+        # schedule_line), para o envio por turno funcionar com o ja registrado.
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "UPDATE swaps SET "
+                        "start_time = (SELECT s.start_time FROM schedule_lines s "
+                        "WHERE s.id = swaps.schedule_line_id), "
+                        "end_time = (SELECT s.end_time FROM schedule_lines s "
+                        "WHERE s.id = swaps.schedule_line_id) "
+                        "WHERE start_time IS NULL AND schedule_line_id IS NOT NULL"
+                    )
+                )
+        except Exception:
+            pass
     if "maintenance_tickets" in tables:
         ensure_column(
             "maintenance_tickets", "email_sent", "email_sent BOOLEAN DEFAULT FALSE"
