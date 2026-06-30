@@ -417,9 +417,9 @@ def turn_by_similar_time(
     mais proximos no horario; empate -> turno do vizinho mais proximo.
     `refs` = lista de (direction_upper, start_min, turno)."""
     direction = (direction or "").upper()
-    cand = sorted(
-        (abs(m - start_min), turn) for d, m, turn in refs if d == direction
-    )[:k]
+    cand = sorted((abs(m - start_min), turn) for d, m, turn in refs if d == direction)[
+        :k
+    ]
     if not cand:
         return None
     counts = Counter(turn for _, turn in cand)
@@ -1340,10 +1340,14 @@ async def schedule_dashboard_turns(
         ref = TURN_REFERENCE.get(lc)
         sm = start_minutes(line.start_time)
         if (
-            ref and sm is not None and ref["turn"] in standard_turns
+            ref
+            and sm is not None
+            and ref["turn"] in standard_turns
             and ref["client"] not in FORCE_AVULSO_CLIENTS
         ):
-            turn_ref[line.unit].append(((line.direction or "").upper(), sm, ref["turn"]))
+            turn_ref[line.unit].append(
+                ((line.direction or "").upper(), sm, ref["turn"])
+            )
 
     for line in lines:
         line_code = normalize_line_code(line.line_code)
@@ -1368,9 +1372,13 @@ async def schedule_dashboard_turns(
         reference = TURN_REFERENCE.get(line_code)
         forced_client = FORCE_AVULSO_LINES.get(line_code)
         if forced_client:
-            reference = None  # linha vira card avulso c/ nome custom (ex.: SORTATION MARABRAZ)
+            reference = (
+                None  # linha vira card avulso c/ nome custom (ex.: SORTATION MARABRAZ)
+            )
         elif reference and reference["client"] in FORCE_AVULSO_CLIENTS:
-            forced_client = reference["client"]  # ex.: PLATLOG -> card avulso, fora dos turnos
+            forced_client = reference[
+                "client"
+            ]  # ex.: PLATLOG -> card avulso, fora dos turnos
             reference = None
         if reference:
             turn = reference["turn"]
@@ -1396,7 +1404,9 @@ async def schedule_dashboard_turns(
                     unit_data["turns"][ml_turn] = empty_direction_stats()
                 add_direction_stats(unit_data["turns"][ml_turn], line, schedule_date)
             else:
-                add_direction_stats(unit_data["client_cards"][client], line, schedule_date)
+                add_direction_stats(
+                    unit_data["client_cards"][client], line, schedule_date
+                )
             add_direction_stats(client_index[client], line, schedule_date)
 
         add_direction_stats(unit_data["total"], line, schedule_date)
