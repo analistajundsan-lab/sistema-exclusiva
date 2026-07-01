@@ -3,11 +3,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardCheck, AlertTriangle,
   Calendar, Shield, Users, LogOut, Sun, Moon,
-  User, ChevronRight, Bus, Search, ClipboardList, Download, Heart, UserCheck, type LucideIcon,
+  User, ChevronRight, Bus, Search, ClipboardList, Download, Heart, UserCheck, X, type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore } from '../store/theme'
+import { isIOS, isStandalone } from '../utils/push'
 
 interface NavItem {
   to: string
@@ -48,6 +49,12 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [installed, setInstalled] = useState(false)
+  // Banner "instale o app": o iPhone NUNCA dispara beforeinstallprompt e o
+  // Chrome/Android dispara so quando quer — entao, sem o evento, mostramos as
+  // instrucoes manuais. Dispensavel (fica guardado no aparelho).
+  const [installBannerDismissed, setInstallBannerDismissed] = useState(
+    () => localStorage.getItem('installBannerDismissed') === 'true'
+  )
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -65,6 +72,13 @@ export function Layout({ children }: { children: ReactNode }) {
     const { outcome } = await installPrompt.userChoice
     if (outcome === 'accepted') setInstallPrompt(null)
   }
+
+  const dismissInstallBanner = () => {
+    localStorage.setItem('installBannerDismissed', 'true')
+    setInstallBannerDismissed(true)
+  }
+
+  const showInstallBanner = !isStandalone() && !installed && !installBannerDismissed
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -208,6 +222,43 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
+
+        {/* Banner "instale o app" (mobile). Tres variantes: botao nativo
+            (quando o navegador disparou beforeinstallprompt), passo a passo do
+            iPhone (Safari nao tem prompt programatico) e passo a passo do
+            Android (quando o Chrome nao disparou o evento). */}
+        {showInstallBanner && (
+          <div className="md:hidden bg-brand-50 dark:bg-brand-900/20 border-b border-brand-200 dark:border-brand-800 px-4 py-3 flex items-start gap-2.5">
+            <Download size={17} className="text-brand-600 dark:text-brand-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-brand-800 dark:text-brand-300">Instale o app no seu celular</p>
+              {installPrompt ? (
+                <button
+                  onClick={handleInstall}
+                  className="mt-1.5 flex items-center gap-1.5 bg-brand-700 hover:bg-brand-800 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-all"
+                >
+                  <Download size={13} />
+                  Instalar agora
+                </button>
+              ) : isIOS() ? (
+                <p className="text-xs text-brand-700 dark:text-brand-400 mt-0.5">
+                  Toque em <strong>Compartilhar</strong> (quadrado com seta, na barra do Safari) e depois em <strong>"Adicionar à Tela de Início"</strong>. O app fica na tela inicial, como um aplicativo normal.
+                </p>
+              ) : (
+                <p className="text-xs text-brand-700 dark:text-brand-400 mt-0.5">
+                  Toque no menu <strong>⋮</strong> (canto superior do navegador) e depois em <strong>"Instalar app"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
+                </p>
+              )}
+            </div>
+            <button
+              onClick={dismissInstallBanner}
+              className="p-1 rounded-lg text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 shrink-0"
+              title="Dispensar"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* Top bar (desktop) */}
         <header className="hidden md:flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
