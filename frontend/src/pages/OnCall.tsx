@@ -231,6 +231,7 @@ export function OnCall() {
   const handleFilter = (event: React.FormEvent) => {
     event.preventDefault()
     pending.applyFilters(pendingFilters)
+    window.scrollTo({ top: 0 })
   }
 
   // Trava a unidade na garagem do plantonista (mesmo se o perfil carregar
@@ -687,11 +688,19 @@ export function OnCall() {
               onClick={() => {
                 const next = !autoMode
                 setAutoMode(next)
+                // Mesmo shape do pendingFilters (inclui hide_non_operating), senao o
+                // toggle busca com filtros diferentes da carga inicial.
+                const search = filters.line_code?.trim()
                 pending.applyFilters({
                   ...filters,
-                  line_code: filters.line_code?.trim() || undefined,
-                  ...(next && !filters.line_code?.trim() ? { start_in_minutes: '120' } : {}),
+                  status: search ? undefined : 'pendente',
+                  line_code: search || undefined,
+                  ...(next && !search ? { start_in_minutes: '120' } : {}),
+                  ...(search ? {} : { hide_non_operating: 'true' }),
                 })
+                // A lista pode encolher de ~100 para poucos cards; se o usuario
+                // estava rolado la embaixo, a tela visivel viraria um vazio branco.
+                window.scrollTo({ top: 0 })
               }}
               className={`relative inline-flex h-10 w-16 items-center rounded-xl text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 ${autoMode ? 'bg-brand-700 dark:bg-brand-600 border-brand-700' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600'} border`}
             >
