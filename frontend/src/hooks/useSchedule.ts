@@ -62,7 +62,9 @@ export interface ScheduleFilters {
   hide_non_operating?: string
 }
 
-const PAGE_SIZE = 100
+// 500 por pagina: uma garagem inteira cabe em uma carga (com 100, a lista de
+// pendentes truncava sem aviso). O OnCall ainda avisa se total > exibidas.
+const PAGE_SIZE = 500
 
 export function useSchedule(initialFilters: ScheduleFilters = {}) {
   const [lines, setLines] = useState<ScheduleLine[]>([])

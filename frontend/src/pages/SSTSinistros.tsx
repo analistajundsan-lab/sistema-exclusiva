@@ -10,6 +10,7 @@ import {
   SinistroStatus,
   updateSinistro,
 } from '../hooks/useSST'
+import { parseApiDate } from '../utils/datetime'
 import { useAuthStore } from '../store/auth'
 
 const STATUS_LABEL: Record<SinistroStatus, string> = {
@@ -496,7 +497,7 @@ export function SSTSinistros() {
               <ol className="space-y-3 max-h-80 overflow-y-auto">
                 {historico.map((h) => (
                   <li key={h.id} className="text-sm border-l-2 border-brand-200 pl-3 dark:border-brand-700">
-                    <p className="text-gray-500 text-xs">{new Date(h.created_at).toLocaleString('pt-BR')}</p>
+                    <p className="text-gray-500 text-xs">{parseApiDate(h.created_at).toLocaleString('pt-BR')}</p>
                     <p className="text-gray-700 dark:text-gray-300">
                       {h.descricao || `${h.campo}: ${h.valor_anterior} → ${h.valor_novo}`}
                     </p>

@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout'
 import { Incident, useIncidents } from '../hooks/useIncidents'
 import { useAuthStore } from '../store/auth'
 import api from '../api/client'
+import { parseApiDate } from '../utils/datetime'
 import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, ChevronDown, MessageCircle, Pencil, Trash2, Check, MapPin, Building2, User as UserIcon, Users as UsersIcon } from 'lucide-react'
 
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
@@ -176,7 +177,7 @@ export function Incidents() {
   const canEdit = (incident: Incident) => {
     if (hasFullAccess || role === 'admin') return true
     if (incident.created_by !== userId) return false
-    return Date.now() - new Date(incident.created_at).getTime() <= 2 * 60 * 60 * 1000
+    return Date.now() - parseApiDate(incident.created_at).getTime() <= 2 * 60 * 60 * 1000
   }
 
   const closeModal = () => {
@@ -410,7 +411,7 @@ export function Incidents() {
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
-                        {i.horario || new Date(i.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                        {i.horario || parseApiDate(i.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
@@ -478,7 +479,7 @@ export function Incidents() {
                           <div className="col-span-2 sm:col-span-3">
                             <Detail label="Descrição resumida" value={i.description} />
                           </div>
-                          <Detail label="Registrado às" value={new Date(i.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} />
+                          <Detail label="Registrado às" value={parseApiDate(i.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} />
                         </div>
                       </td>
                     </tr>

@@ -3,6 +3,21 @@ import { Layout } from '../components/Layout'
 import { SwapTable } from '../components/SwapTable'
 import { SwapForm } from '../components/SwapForm'
 import { useSwaps, Swap } from '../hooks/useSwaps'
+import { copyToClipboard } from '../utils/clipboard'
+
+// Texto de fallback quando a troca nao tem whatsapp_text pronto. Omite o
+// "carro substituto" em troca so de motorista (evita "undefined" na mensagem).
+function swapText(swap: Swap): string {
+  if (swap.whatsapp_text) return swap.whatsapp_text
+  return [
+    'Troca operacional confirmada',
+    '',
+    `Carro substituido: ${swap.vehicle_out}`,
+    ...(swap.vehicle_in ? [`Carro substituto: ${swap.vehicle_in}`] : []),
+    '',
+    `Linha(s): ${swap.lines_covered || '-'}`,
+  ].join('\n')
+}
 
 export function Swaps() {
   const {
@@ -13,6 +28,7 @@ export function Swaps() {
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [editing, setEditing] = useState<Swap | null>(null)
   const [search, setSearch] = useState({ vehicle_out: '', vehicle_in: '', unit: '' })
+  const [copiedId, setCopiedId] = useState<number | null>(null)
 
   const handleCreate = async (data: Parameters<typeof createSwap>[0]) => {
     await createSwap(data)
@@ -36,14 +52,15 @@ export function Swaps() {
   }
 
   const handleCopy = async (swap: Swap) => {
-    await navigator.clipboard?.writeText(
-      swap.whatsapp_text || `Troca operacional confirmada\n\nCarro substituido: ${swap.vehicle_out}\nCarro substituto: ${swap.vehicle_in}\n\nLinha(s): ${swap.lines_covered || '-'}`
-    )
+    const ok = await copyToClipboard(swapText(swap))
+    if (ok) {
+      setCopiedId(swap.id)
+      setTimeout(() => setCopiedId(null), 2000)
+    }
   }
 
   const handleWhatsApp = (swap: Swap) => {
-    const text = swap.whatsapp_text || `Troca operacional confirmada\n\nCarro substituido: ${swap.vehicle_out}\nCarro substituto: ${swap.vehicle_in}\n\nLinha(s): ${swap.lines_covered || '-'}`
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+    window.open(`https://wa.me/?text=${encodeURIComponent(swapText(swap))}`, '_blank', 'noopener,noreferrer')
   }
 
   const handleSearch = (e: React.FormEvent) => {
@@ -106,6 +123,7 @@ export function Swaps() {
             onDelete={handleDelete}
             onCopy={handleCopy}
             onWhatsApp={handleWhatsApp}
+            copiedId={copiedId}
           />
         </div>
       )}

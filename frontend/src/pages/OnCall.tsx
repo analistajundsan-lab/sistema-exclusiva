@@ -4,13 +4,16 @@ import { ScheduleFilters, ScheduleLine, useSchedule } from '../hooks/useSchedule
 import { useSwaps } from '../hooks/useSwaps'
 import { DEFAULT_OPERATION_DATE, currentOperationDate } from '../config/demo'
 import { useAuthStore } from '../store/auth'
-import client from '../api/client'
+import client, { apiErrorMessage } from '../api/client'
 import {
   CheckCircle2, ArrowLeftRight, X, MessageCircle, Clock,
   Bus, MapPin, User, ChevronRight, Filter, Bell, Pencil, RotateCcw, Ban,
 } from 'lucide-react'
 import { enablePush, currentPushState, pushSupported, isIOS, isStandalone, PushState } from '../utils/push'
 import { openScheduleStream } from '../utils/scheduleStream'
+import { copyToClipboard, openWhatsApp } from '../utils/clipboard'
+import { parseApiDate } from '../utils/datetime'
+import { plural, scheduleStatusLabel } from '../utils/format'
 
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
@@ -38,42 +41,6 @@ function lineToForm(line: ScheduleLine): EditForm {
   }
 }
 
-// Copia texto de forma robusta. No iOS o navigator.clipboard rejeita quando
-// chamado depois de um await (perde o "gesto do usuario"); por isso ha o
-// fallback com textarea + execCommand. Retorna true se conseguiu copiar.
-async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch {
-    // cai no fallback abaixo
-  }
-  try {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.setAttribute('readonly', '')
-    ta.style.position = 'fixed'
-    ta.style.top = '-1000px'
-    ta.style.opacity = '0'
-    document.body.appendChild(ta)
-    ta.select()
-    ta.setSelectionRange(0, text.length)
-    const ok = document.execCommand('copy')
-    document.body.removeChild(ta)
-    return ok
-  } catch {
-    return false
-  }
-}
-
-// Abre o WhatsApp com o texto pre-preenchido. Usa location.href (em vez de
-// window.open) porque no mobile o popup e bloqueado apos um await.
-function openWhatsApp(text: string) {
-  window.location.href = `https://wa.me/?text=${encodeURIComponent(text)}`
-}
-
 // Minutos ate o inicio da linha, no fuso de Brasilia. Calcula apenas para a
 // escala de HOJE; outras datas retornam null (sem urgencia de relogio).
 function minutesUntilStart(startTime?: string, scheduleDate?: string): number | null {
@@ -94,8 +61,14 @@ function minutesUntilStart(startTime?: string, scheduleDate?: string): number | 
 }
 
 // Cor por proximidade do inicio: verde > 30 min, laranja 20-30 min, vermelho
-// (circulado) < 20 min. Sem dado de tempo (outra data) fica neutro/verde.
+// pulsante entre -10 e 20 min. Linha que ja passou ha mais de 10 min fica
+// neutra (ja iniciou; o alarme visual nao ajuda mais). Sem dado de tempo
+// (outra data) fica neutro/verde.
 function getUrgency(mins: number | null): { card: string; badge: string } {
+  if (mins !== null && mins < -10) return {
+    card: 'border-gray-300 dark:border-gray-600',
+    badge: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
+  }
   if (mins !== null && mins < 20) return {
     card: 'border-red-400 dark:border-red-600 ring-2 ring-red-500/70 animate-pulse',
     badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
@@ -112,11 +85,29 @@ function getUrgency(mins: number | null): { card: string; badge: string } {
 
 function countdownLabel(mins: number | null): string | null {
   if (mins === null) return null
+  if (mins < -10) return 'já iniciou'
   if (mins <= 0) return 'iniciando agora'
   if (mins < 60) return `em ${mins} min`
   const h = Math.floor(mins / 60)
   const m = mins % 60
   return m ? `em ${h}h${String(m).padStart(2, '0')}` : `em ${h}h`
+}
+
+// Monta os filtros REALMENTE enviados a API a partir do formulario + toggle
+// "Proximas 2h". Fonte UNICA de shape: submit, toggle, Data, polling e SSE
+// passam por aqui — evita buscar com filtros diferentes da carga inicial
+// (fix 4088a3e) ou com texto ainda sendo digitado.
+function buildPendingFilters(filters: ScheduleFilters, autoMode: boolean): ScheduleFilters {
+  const search = filters.line_code?.trim()
+  return {
+    ...filters,
+    status: search ? undefined : 'pendente',
+    line_code: search || undefined,
+    ...(autoMode && !search ? { start_in_minutes: '120' } : {}),
+    // Na lista padrao, esconde as linhas marcadas "nao opera hoje". Na busca
+    // por linha elas aparecem (com indicador), para o plantonista poder desfazer.
+    ...(search ? {} : { hide_non_operating: 'true' }),
+  }
 }
 
 export function OnCall() {
@@ -138,25 +129,21 @@ export function OnCall() {
     status: 'pendente',
   })
   const [autoMode, setAutoMode] = useState(true)
-  const lineSearch = filters.line_code?.trim()
+
+  // Filtros APLICADOS: so mudam no submit do formulario, no toggle "Proximas
+  // 2h" e na troca de Data. Polling de versao, SSE e refetch pos-acao usam
+  // SEMPRE estes — nunca o texto ainda sendo digitado nos inputs (`filters`).
+  const [appliedFilters, setAppliedFilters] = useState<ScheduleFilters>(() => buildPendingFilters(filters, true))
+  // Busca por linha APLICADA (ja normalizada pelo buildPendingFilters).
+  const lineSearch = appliedFilters.line_code
 
   // Envio ao CCO por TURNO: por padrao (modo "Proximas 2h" ligado) o texto traz
   // so as trocas das linhas que comecam por volta de agora (~3h em torno). Com o
   // modo desligado, envia o dia inteiro. Evita repetir manha/meio-dia/noite.
   const sendWindowMinutes = autoMode && !lineSearch ? 180 : null
 
-  const pendingFilters = useMemo(() => ({
-    ...filters,
-    status: lineSearch ? undefined : 'pendente',
-    line_code: lineSearch || undefined,
-    ...(autoMode && !lineSearch ? { start_in_minutes: '120' } : {}),
-    // Na lista padrao, esconde as linhas marcadas "nao opera hoje". Na busca
-    // por linha elas aparecem (com indicador), para o plantonista poder desfazer.
-    ...(lineSearch ? {} : { hide_non_operating: 'true' }),
-  }), [filters, autoMode, lineSearch])
-
-  const pending = useSchedule(pendingFilters)
-  const swapsList = useSwaps({ unit: filters.unit, schedule_date: filters.schedule_date })
+  const pending = useSchedule(appliedFilters)
+  const swapsList = useSwaps({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date })
   const canManageLines = hasFullAccess || role === 'admin' || role === 'gerente' || role === 'supervisao' || role === 'supervisor'
   // "Nao operar" (por dia) e editar a linha: operadores da Confirmacao
   // (Trafego/Analista/Plantonista) alem de quem ja gerencia.
@@ -227,10 +214,19 @@ export function OnCall() {
   const [nonOpSelected, setNonOpSelected] = useState<number[]>([])
   const [nonOpLoading, setNonOpLoading] = useState(false)
   const [nonOpSaving, setNonOpSaving] = useState(false)
+  // "Voltar a operar" em voo (anti duplo-submit).
+  const [backToOperateId, setBackToOperateId] = useState<number | null>(null)
+
+  // Aplica os filtros do formulario: lista e painel de trocas mudam juntos.
+  const applyPendingFilters = (nextFilters: ScheduleFilters, nextAutoMode: boolean) => {
+    const next = buildPendingFilters(nextFilters, nextAutoMode)
+    setAppliedFilters(next)
+    pending.applyFilters(next)
+  }
 
   const handleFilter = (event: React.FormEvent) => {
     event.preventDefault()
-    pending.applyFilters(pendingFilters)
+    applyPendingFilters(filters, autoMode)
     window.scrollTo({ top: 0 })
   }
 
@@ -238,13 +234,15 @@ export function OnCall() {
   // depois do primeiro render ou se o filtro tiver outra unidade salva).
   useEffect(() => {
     if (!canChooseUnit && availableUnits.length > 0 && !availableUnits.includes(filters.unit || '')) {
-      setFilters(s => ({ ...s, unit: availableUnits[0] }))
+      const next = { ...filters, unit: availableUnits[0] }
+      setFilters(next)
+      applyPendingFilters(next, autoMode)
     }
   }, [canChooseUnit, availableUnits, filters.unit])
 
   useEffect(() => {
-    swapsList.applyFilters({ unit: filters.unit, schedule_date: filters.schedule_date })
-  }, [filters.unit, filters.schedule_date])
+    swapsList.applyFilters({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date })
+  }, [appliedFilters.unit, appliedFilters.schedule_date])
 
   // Tempo-real barato: a cada 2s checa a VERSAO da escala (um inteiro). So
   // recarrega o painel quando algo mudou de fato (por qualquer usuario) — uma
@@ -261,23 +259,23 @@ export function OnCall() {
       }
       if (v !== lastVersionRef.current) {
         lastVersionRef.current = v
-        pending.refetch(pendingFilters, 0, { silent: true })
-        swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0, { silent: true })
+        pending.refetch(appliedFilters, 0, { silent: true })
+        swapsList.fetchSwaps({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date }, 0, { silent: true })
       }
     }
     const interval = window.setInterval(tick, 2000)
     return () => window.clearInterval(interval)
-  }, [pendingFilters, filters.unit, filters.schedule_date])
+  }, [appliedFilters])
 
   // Tempo-real <1s via SSE (push direto do backend). Camada ADITIVA: se a
   // conexao cair, o polling de versao acima (~2s) cobre. O handler le sempre os
   // filtros mais recentes (ref), entao o stream nao reconecta a cada mudanca.
   const onStreamEventRef = useRef<(ev: { unit?: string | null; schedule_date?: string | null }) => void>(() => {})
   onStreamEventRef.current = (ev) => {
-    if (ev.unit && filters.unit && ev.unit !== filters.unit) return
-    if (ev.schedule_date && filters.schedule_date && ev.schedule_date !== filters.schedule_date) return
-    pending.refetch(pendingFilters, 0, { silent: true })
-    swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0, { silent: true })
+    if (ev.unit && appliedFilters.unit && ev.unit !== appliedFilters.unit) return
+    if (ev.schedule_date && appliedFilters.schedule_date && ev.schedule_date !== appliedFilters.schedule_date) return
+    pending.refetch(appliedFilters, 0, { silent: true })
+    swapsList.fetchSwaps({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date }, 0, { silent: true })
   }
   useEffect(() => {
     const close = openScheduleStream((ev) => onStreamEventRef.current(ev))
@@ -293,16 +291,24 @@ export function OnCall() {
   // vendo "hoje", rola para o novo dia. As linhas voltam a pendente (reset diario
   // que o cliente exige) para serem reconfirmadas. Se ele escolheu outra data no
   // filtro, respeita a escolha.
-  const schedDateRef = useRef(filters.schedule_date)
-  schedDateRef.current = filters.schedule_date
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
+  const autoModeRef = useRef(autoMode)
+  autoModeRef.current = autoMode
+  const applyRef = useRef(applyPendingFilters)
+  applyRef.current = applyPendingFilters
   const dayRef = useRef(currentOperationDate())
   useEffect(() => {
     const t = window.setInterval(() => {
       const d = currentOperationDate()
       if (d !== dayRef.current) {
-        const wasToday = schedDateRef.current === dayRef.current
+        const wasToday = filtersRef.current.schedule_date === dayRef.current
         dayRef.current = d
-        if (wasToday) setFilters(s => ({ ...s, schedule_date: d }))
+        if (wasToday) {
+          const next = { ...filtersRef.current, schedule_date: d }
+          setFilters(next)
+          applyRef.current(next, autoModeRef.current)
+        }
       }
     }, 30000)
     return () => window.clearInterval(t)
@@ -312,6 +318,7 @@ export function OnCall() {
   // (prefixo) que ainda vao comecar. Se houver mais de uma, abre o painel em
   // lote (pre-selecionadas); se for so esta, confirma direto (sem painel).
   const openConfirm = async (line: ScheduleLine) => {
+    if (confirmLoadingId !== null) return // evita duplo toque no PWA
     setActionError(null)
     setActionMessage(null)
     setConfirmLoadingId(line.id)
@@ -319,7 +326,7 @@ export function OnCall() {
     try {
       const res = await client.get<ScheduleLine[]>('/schedule/lines', {
         params: {
-          schedule_date: filters.schedule_date,
+          schedule_date: appliedFilters.schedule_date,
           unit: line.unit,
           prefix_code: line.prefix_code,
           limit: 500,
@@ -335,7 +342,7 @@ export function OnCall() {
         timeZone: 'America/Sao_Paulo',
         hour: '2-digit', minute: '2-digit', hour12: false,
       }).format(new Date())
-      const isToday = filters.schedule_date === spDate
+      const isToday = appliedFilters.schedule_date === spDate
       related = res.data.filter(item =>
         item.id !== line.id &&
         item.status === 'pendente' &&
@@ -361,11 +368,11 @@ export function OnCall() {
     // Carro com uma unica linha -> confirma direto, sem abrir painel.
     try {
       await client.post(`/schedule/lines/${line.id}/confirm`)
-      await pending.refetch(pendingFilters, 0, { fresh: true })
-      await swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0)
+      await pending.refetch(appliedFilters, 0, { fresh: true })
+      await swapsList.fetchSwaps({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date }, 0)
       setActionMessage('Linha confirmada.')
     } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Não foi possível confirmar a linha.')
+      setActionError(apiErrorMessage(e, 'Não foi possível confirmar a linha.'))
     } finally {
       setConfirmLoadingId(null)
     }
@@ -374,6 +381,7 @@ export function OnCall() {
   // Confirma a linha clicada + as demais linhas selecionadas do mesmo carro.
   // Todas as confirmadas somem do painel do dia.
   const handleConfirmMulti = async (line: ScheduleLine) => {
+    if (confirmSaving) return // evita duplo toque no PWA
     setConfirmSaving(true)
     setActionError(null)
     setActionMessage(null)
@@ -382,17 +390,28 @@ export function OnCall() {
         line,
         ...relatedLines.filter(item => selectedRelatedIds.includes(item.id)),
       ].filter(item => item.status !== 'confirmada')
+      // Confirma uma a uma, contabilizando sucessos e falhas para reportar
+      // resultado parcial (uma falha no meio nao "engole" as demais).
+      let confirmed = 0
+      const failures: string[] = []
       for (const item of toConfirm) {
-        await client.post(`/schedule/lines/${item.id}/confirm`)
+        try {
+          await client.post(`/schedule/lines/${item.id}/confirm`)
+          confirmed++
+        } catch (e: any) {
+          failures.push(`linha ${item.line_code}: ${apiErrorMessage(e, 'erro ao confirmar')}`)
+        }
       }
-      await pending.refetch(pendingFilters, 0, { fresh: true })
-      await swapsList.fetchSwaps({ unit: filters.unit, schedule_date: filters.schedule_date }, 0)
+      await pending.refetch(appliedFilters, 0, { fresh: true })
+      await swapsList.fetchSwaps({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date }, 0)
       setConfirmOpenId(null)
       setRelatedLines([])
       setSelectedRelatedIds([])
-      setActionMessage(`${toConfirm.length} linha(s) confirmada(s).`)
-    } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Não foi possível confirmar as linhas.')
+      if (failures.length === 0) {
+        setActionMessage(`${plural(confirmed, 'linha confirmada', 'linhas confirmadas')}.`)
+      } else {
+        setActionError(`${confirmed} de ${toConfirm.length} linhas confirmadas; falha na ${failures.join('; falha na ')}`)
+      }
     } finally {
       setConfirmSaving(false)
     }
@@ -411,7 +430,7 @@ export function OnCall() {
     try {
       const res = await client.get<ScheduleLine[]>('/schedule/lines', {
         params: {
-          schedule_date: filters.schedule_date,
+          schedule_date: appliedFilters.schedule_date,
           unit: line.unit,
           prefix_code: line.prefix_code,
           limit: 500,
@@ -429,7 +448,7 @@ export function OnCall() {
         timeZone: 'America/Sao_Paulo',
         hour: '2-digit', minute: '2-digit', hour12: false,
       }).format(new Date())
-      const isToday = filters.schedule_date === spDate
+      const isToday = appliedFilters.schedule_date === spDate
       setRelatedLines(
         res.data.filter(item =>
           item.id !== line.id &&
@@ -437,14 +456,15 @@ export function OnCall() {
           (!isToday || (item.start_time || '') >= spTime),
         ),
       )
-    } catch {
-      setActionError('Nao foi possivel carregar as outras linhas deste prefixo.')
+    } catch (e: any) {
+      setActionError(apiErrorMessage(e, 'Não foi possível carregar as outras linhas deste prefixo.'))
     } finally {
       setRelatedLoading(false)
     }
   }
 
   const handleCreateSwap = async (line: ScheduleLine) => {
+    if (swapSaving) return // evita duplo toque no PWA (trocas duplicadas)
     if (!swapVehicle.trim() && !swapDriver.trim()) return
     setSwapSaving(true)
     setActionError(null)
@@ -453,31 +473,46 @@ export function OnCall() {
         line,
         ...relatedLines.filter(item => selectedRelatedIds.includes(item.id)),
       ]
+      // Registra uma a uma, contabilizando sucessos e falhas para reportar
+      // resultado parcial (uma falha no meio nao "engole" as demais).
+      let registered = 0
+      const failures: string[] = []
       for (const item of linesToSwap) {
-        if (item.status !== 'confirmada') {
-          await pending.confirmLine(item.id)
+        try {
+          if (item.status !== 'confirmada') {
+            await pending.confirmLine(item.id)
+          }
+          await swapsList.createSwap({
+            schedule_line_id: item.id,
+            schedule_date: appliedFilters.schedule_date,
+            vehicle_out: item.prefix_code,
+            vehicle_in: swapVehicle.trim() || undefined,
+            driver_out: item.driver_name,
+            driver_in: swapDriver.trim() || undefined,
+            reason: swapReason || undefined,
+            lines_covered: `${item.direction} - ${item.line_code}`,
+          } as any)
+          registered++
+        } catch (e: any) {
+          failures.push(`linha ${item.line_code}: ${apiErrorMessage(e, 'erro ao registrar a troca')}`)
         }
-        await swapsList.createSwap({
-          schedule_line_id: item.id,
-          schedule_date: filters.schedule_date,
-          vehicle_out: item.prefix_code,
-          vehicle_in: swapVehicle.trim() || undefined,
-          driver_out: item.driver_name,
-          driver_in: swapDriver.trim() || undefined,
-          reason: swapReason || undefined,
-          lines_covered: `${item.direction} - ${item.line_code}`,
-        } as any)
       }
-      await pending.refetch(pendingFilters, 0, { fresh: true })
-      setSwapOpenId(null)
-      setSwapVehicle('')
-      setSwapDriver('')
-      setSwapReason('')
-      setRelatedLines([])
-      setSelectedRelatedIds([])
-      setActionMessage(`${linesToSwap.length} troca(s) registrada(s)! Copie o texto no painel lateral para enviar no WhatsApp.`)
-    } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Não foi possível registrar a troca.')
+      await pending.refetch(appliedFilters, 0, { fresh: true })
+      if (registered > 0) {
+        // Fecha o formulario mesmo com falha parcial, para o retry nao
+        // duplicar as trocas que ja entraram.
+        setSwapOpenId(null)
+        setSwapVehicle('')
+        setSwapDriver('')
+        setSwapReason('')
+        setRelatedLines([])
+        setSelectedRelatedIds([])
+      }
+      if (failures.length === 0) {
+        setActionMessage(`${plural(registered, 'troca registrada', 'trocas registradas')}! Copie o texto no painel lateral para enviar no WhatsApp.`)
+      } else {
+        setActionError(`${registered} de ${linesToSwap.length} trocas registradas; falha na ${failures.join('; falha na ')}`)
+      }
     } finally {
       setSwapSaving(false)
     }
@@ -490,10 +525,10 @@ export function OnCall() {
     setNonOpPair([])
     setNonOpSelected([])
     setActionError(null)
-    if (!filters.schedule_date) return
+    if (!appliedFilters.schedule_date) return
     setNonOpLoading(true)
     try {
-      const pair = await pending.fetchPair(line.id, filters.schedule_date)
+      const pair = await pending.fetchPair(line.id, appliedFilters.schedule_date)
       const operable = pair.filter(item => item.non_operating !== true)
       setNonOpPair(operable)
       setNonOpSelected(operable.map(item => item.id))
@@ -505,33 +540,38 @@ export function OnCall() {
   }
 
   const confirmNonOp = async () => {
-    if (!nonOpLine || !filters.schedule_date) return
+    if (!nonOpLine || !appliedFilters.schedule_date) return
+    if (nonOpSaving) return // evita duplo toque no PWA
     setNonOpSaving(true)
     setActionError(null)
     try {
-      await pending.setNonOperation(nonOpLine.id, filters.schedule_date, nonOpSelected)
-      await pending.refetch(pendingFilters, 0, { fresh: true })
+      await pending.setNonOperation(nonOpLine.id, appliedFilters.schedule_date, nonOpSelected)
+      await pending.refetch(appliedFilters, 0, { fresh: true })
       const extra = nonOpSelected.length ? ` (+${nonOpSelected.length} linha-par)` : ''
       setActionMessage(`Linha ${nonOpLine.line_code} marcada para não operar hoje${extra}.`)
       setNonOpLine(null)
       setNonOpPair([])
       setNonOpSelected([])
     } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Não foi possível marcar a linha.')
+      setActionError(apiErrorMessage(e, 'Não foi possível marcar a linha.'))
     } finally {
       setNonOpSaving(false)
     }
   }
 
   const handleBackToOperate = async (line: ScheduleLine) => {
-    if (!filters.schedule_date) return
+    if (!appliedFilters.schedule_date) return
+    if (backToOperateId !== null) return // evita duplo toque no PWA
+    setBackToOperateId(line.id)
     setActionError(null)
     try {
-      await pending.clearNonOperation(line.id, filters.schedule_date)
-      await pending.refetch(pendingFilters, 0, { fresh: true })
+      await pending.clearNonOperation(line.id, appliedFilters.schedule_date)
+      await pending.refetch(appliedFilters, 0, { fresh: true })
       setActionMessage(`Linha ${line.line_code} voltou a operar hoje.`)
     } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Não foi possível reverter.')
+      setActionError(apiErrorMessage(e, 'Não foi possível reverter.'))
+    } finally {
+      setBackToOperateId(null)
     }
   }
 
@@ -549,17 +589,18 @@ export function OnCall() {
 
   const saveEdit = async (line: ScheduleLine) => {
     if (!editForm) return
+    if (editSaving) return // evita duplo toque no PWA
     setEditSaving(true)
     setActionError(null)
     try {
       // Mantem o status atual (nao "vira" alterada nem some dos pendentes).
       await pending.updateLine(line.id, { ...editForm, status: line.status })
-      await pending.refetch(pendingFilters, 0, { fresh: true })
+      await pending.refetch(appliedFilters, 0, { fresh: true })
       setEditingId(null)
       setEditForm(null)
       setActionMessage(`Linha ${line.line_code} atualizada.`)
     } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Não foi possível salvar as alterações.')
+      setActionError(apiErrorMessage(e, 'Não foi possível salvar as alterações.'))
     } finally {
       setEditSaving(false)
     }
@@ -580,8 +621,8 @@ export function OnCall() {
     setActionError(null)
     try {
       const params = new URLSearchParams()
-      if (filters.unit) params.set('unit', filters.unit)
-      if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
+      if (appliedFilters.unit) params.set('unit', appliedFilters.unit)
+      if (appliedFilters.schedule_date) params.set('schedule_date', appliedFilters.schedule_date)
       if (sendWindowMinutes != null) params.set('window_minutes', String(sendWindowMinutes))
       const res = await client.get(`/swaps/whatsapp/text?${params}`)
       const text = res.data.text as string
@@ -591,8 +632,8 @@ export function OnCall() {
       }
       // Nao depende de clipboard: abre o WhatsApp com o texto pre-preenchido.
       openWhatsApp(text)
-    } catch {
-      setActionError('Erro ao gerar texto de trocas.')
+    } catch (e: any) {
+      setActionError(apiErrorMessage(e, 'Erro ao gerar texto de trocas.'))
     }
   }
 
@@ -600,8 +641,8 @@ export function OnCall() {
     setActionError(null)
     try {
       const params = new URLSearchParams()
-      if (filters.unit) params.set('unit', filters.unit)
-      if (filters.schedule_date) params.set('schedule_date', filters.schedule_date)
+      if (appliedFilters.unit) params.set('unit', appliedFilters.unit)
+      if (appliedFilters.schedule_date) params.set('schedule_date', appliedFilters.schedule_date)
       if (sendWindowMinutes != null) params.set('window_minutes', String(sendWindowMinutes))
       const res = await client.get(`/swaps/whatsapp/text?${params}`)
       const text = res.data.text as string
@@ -616,12 +657,22 @@ export function OnCall() {
         // Fallback mobile: se nao deu para copiar, abre o WhatsApp com o texto.
         openWhatsApp(text)
       }
-    } catch {
-      setActionError('Erro ao gerar texto de trocas.')
+    } catch (e: any) {
+      setActionError(apiErrorMessage(e, 'Erro ao gerar texto de trocas.'))
     }
   }
 
-  const allConfirmed = !lineSearch && !pending.loading && pending.lines.length === 0
+  // Fonte de verdade do DIA: o summary do /board (por unidade), que nao sofre
+  // o corte do toggle "Proximas 2h" nem da paginacao. O banner so celebra
+  // quando o dia inteiro esta sem pendentes — lista vazia pode ser apenas
+  // efeito do filtro de 2h ou de um erro de carregamento. O backend devolve o
+  // summary de TODAS as garagens do usuario; aqui recortamos a selecionada.
+  const daySummary = appliedFilters.unit
+    ? pending.summary.filter(s => s.unit === appliedFilters.unit)
+    : pending.summary
+  const summaryTotal = daySummary.reduce((acc, s) => acc + s.total, 0)
+  const summaryPending = daySummary.reduce((acc, s) => acc + s.pending, 0)
+  const allConfirmed = !lineSearch && !pending.loading && !pending.error && summaryTotal > 0 && summaryPending === 0
 
   return (
     <Layout>
@@ -647,7 +698,12 @@ export function OnCall() {
             <input
               type="date"
               value={filters.schedule_date || ''}
-              onChange={e => setFilters(s => ({ ...s, schedule_date: e.target.value }))}
+              onChange={e => {
+                // Data aplica na hora: lista e painel de trocas mudam juntos.
+                const next = { ...filters, schedule_date: e.target.value }
+                setFilters(next)
+                applyPendingFilters(next, autoMode)
+              }}
               className="mt-1.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-normal"
             />
           </label>
@@ -688,16 +744,9 @@ export function OnCall() {
               onClick={() => {
                 const next = !autoMode
                 setAutoMode(next)
-                // Mesmo shape do pendingFilters (inclui hide_non_operating), senao o
-                // toggle busca com filtros diferentes da carga inicial.
-                const search = filters.line_code?.trim()
-                pending.applyFilters({
-                  ...filters,
-                  status: search ? undefined : 'pendente',
-                  line_code: search || undefined,
-                  ...(next && !search ? { start_in_minutes: '120' } : {}),
-                  ...(search ? {} : { hide_non_operating: 'true' }),
-                })
+                // Mesmo shape da carga inicial (buildPendingFilters), senao o
+                // toggle busca com filtros diferentes (fix 4088a3e).
+                applyPendingFilters(filters, next)
                 // A lista pode encolher de ~100 para poucos cards; se o usuario
                 // estava rolado la embaixo, a tela visivel viraria um vazio branco.
                 window.scrollTo({ top: 0 })
@@ -765,7 +814,10 @@ export function OnCall() {
               <CheckCircle2 size={22} className="text-green-600 dark:text-green-400 shrink-0" />
               <div>
                 <p className="text-green-800 dark:text-green-300 font-semibold">Todas as linhas foram confirmadas!</p>
-                <p className="text-green-700 dark:text-green-400 text-sm">Envie o resumo de confirmação pelo WhatsApp.</p>
+                {/* O botao envia as TROCAS registradas (nao um resumo de confirmacao). */}
+                <p className="text-green-700 dark:text-green-400 text-sm">
+                  {sendWindowMinutes != null ? 'Envie as trocas do turno pelo WhatsApp.' : 'Envie as trocas do dia pelo WhatsApp.'}
+                </p>
               </div>
             </div>
             <button
@@ -795,12 +847,12 @@ export function OnCall() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500" />
                   </span>
                   <span className="rounded-full px-3 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300">
-                    {pending.total} {lineSearch ? 'resultado(s)' : 'pendentes'}
+                    {lineSearch ? plural(pending.total, 'resultado', 'resultados') : plural(pending.total, 'pendente', 'pendentes')}
                   </span>
                 </div>
               ) : (
                 <span className="rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                  {pending.total} {lineSearch ? 'resultado(s)' : 'pendentes'}
+                  {lineSearch ? plural(pending.total, 'resultado', 'resultados') : plural(pending.total, 'pendente', 'pendentes')}
                 </span>
               )}
             </div>
@@ -821,8 +873,15 @@ export function OnCall() {
                 </div>
               )}
 
+              {/* A pagina traz ate 500 linhas; acima disso avisa que ha mais. */}
+              {!pending.loading && pending.total > pending.lines.length && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+                  Mostrando {pending.lines.length} de {pending.total} linhas — use os filtros para refinar.
+                </p>
+              )}
+
               {pending.lines.map(line => {
-                const mins = minutesUntilStart(line.start_time, filters.schedule_date)
+                const mins = minutesUntilStart(line.start_time, appliedFilters.schedule_date)
                 const urgency = getUrgency(mins)
                 const countdown = countdownLabel(mins)
                 return (
@@ -852,6 +911,25 @@ export function OnCall() {
                       <span className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
                         <Ban size={13} />
                         Não opera hoje
+                      </span>
+                    )}
+                    {/* Status visivel no modo busca (a lista padrao so traz pendentes). */}
+                    {line.status === 'cancelada' && (
+                      <span className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                        <X size={13} />
+                        Cancelada
+                      </span>
+                    )}
+                    {line.status === 'confirmada' && (
+                      <span className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+                        <CheckCircle2 size={13} />
+                        Confirmada
+                      </span>
+                    )}
+                    {line.status === 'alterada' && (
+                      <span className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                        <ArrowLeftRight size={13} />
+                        Alterada
                       </span>
                     )}
                   </div>
@@ -983,7 +1061,7 @@ export function OnCall() {
                           Outras linhas deste carro
                         </p>
                         {relatedLoading && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Carregando sequencia...</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Carregando sequência...</p>
                         )}
                         {!relatedLoading && relatedLines.length === 0 && (
                           <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -1023,7 +1101,7 @@ export function OnCall() {
                           className="flex-1 flex items-center justify-center gap-1.5 bg-green-700 hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 whitespace-nowrap"
                         >
                           <CheckCircle2 size={15} />
-                          {confirmSaving ? 'Confirmando...' : `Confirmar ${1 + selectedRelatedIds.length} linha(s)`}
+                          {confirmSaving ? 'Confirmando...' : `Confirmar ${plural(1 + selectedRelatedIds.length, 'linha', 'linhas')}`}
                         </button>
                         <button
                           onClick={() => setConfirmOpenId(null)}
@@ -1038,15 +1116,16 @@ export function OnCall() {
                       {line.non_operating ? (
                         <button
                           onClick={() => handleBackToOperate(line)}
-                          className="flex-1 flex items-center justify-center gap-1.5 border-2 border-green-500 text-green-700 dark:text-green-400 dark:border-green-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-green-50 dark:hover:bg-green-900/20 transition-all"
+                          disabled={backToOperateId === line.id}
+                          className="flex-1 flex items-center justify-center gap-1.5 border-2 border-green-500 text-green-700 dark:text-green-400 dark:border-green-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-green-50 dark:hover:bg-green-900/20 transition-all disabled:opacity-60"
                           title="Desfazer: a linha volta a operar hoje"
                         >
                           <RotateCcw size={15} />
-                          Voltar a operar hoje
+                          {backToOperateId === line.id ? 'Revertendo...' : 'Voltar a operar hoje'}
                         </button>
                       ) : (
                         <>
-                          {line.status !== 'confirmada' && (
+                          {line.status !== 'confirmada' && line.status !== 'cancelada' && (
                             <button
                               onClick={() => openConfirm(line)}
                               disabled={confirmLoadingId === line.id}
@@ -1113,7 +1192,7 @@ export function OnCall() {
                           Outras linhas do prefixo {line.prefix_code}
                         </p>
                         {relatedLoading && (
-                          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Carregando sequencia...</p>
+                          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Carregando sequência...</p>
                         )}
                         {!relatedLoading && relatedLines.length === 0 && (
                           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -1141,7 +1220,7 @@ export function OnCall() {
                                 <span className="font-mono font-semibold">L - {item.line_code}</span>
                                 <span>{item.direction}</span>
                                 <span>{item.start_time} - {item.end_time}</span>
-                                <span className="text-gray-400 dark:text-gray-500">{item.status}</span>
+                                <span className="text-gray-400 dark:text-gray-500">{scheduleStatusLabel(item.status)}</span>
                               </label>
                             ))}
                           </div>
@@ -1240,7 +1319,7 @@ export function OnCall() {
                     )}
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1">
                       <Clock size={10} />
-                      {new Date(swap.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                      {parseApiDate(swap.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                     </p>
                   </div>
                   {swap.whatsapp_text && (
@@ -1289,7 +1368,7 @@ export function OnCall() {
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                   Confirme que esta linha <strong>não vai rodar apenas hoje</strong>
-                  {filters.schedule_date ? ` (${filters.schedule_date.split('-').reverse().join('/')})` : ''}.
+                  {appliedFilters.schedule_date ? ` (${appliedFilters.schedule_date.split('-').reverse().join('/')})` : ''}.
                   Ela sai do painel e volta sozinha como pendente no próximo dia.
                 </p>
 

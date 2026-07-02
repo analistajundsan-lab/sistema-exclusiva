@@ -159,7 +159,7 @@ export function Schedule() {
         if (!cancelled) setWhatsappText(res.text)
       })
       .catch(() => {
-        if (!cancelled) setWhatsappText('Nao foi possivel gerar o texto oficial no momento.')
+        if (!cancelled) setWhatsappText('Não foi possível gerar o texto oficial no momento.')
       })
       .finally(() => {
         if (!cancelled) setWhatsappLoading(false)
@@ -428,7 +428,7 @@ export function Schedule() {
                 checked={replace}
                 onChange={e => setReplace(e.target.checked)}
               />
-              Substituir reenvio do mesmo arquivo/vigencia
+              Substituir reenvio do mesmo arquivo/vigência
             </label>
             <button
               type="submit"
@@ -441,7 +441,7 @@ export function Schedule() {
                   ? 'Importando...'
                   : importPreview
                     ? `Confirmar — vale a partir de ${fmtBR(search.schedule_date)}`
-                    : 'Gerar previa'}
+                    : 'Gerar prévia'}
             </button>
           </form>
         )}
@@ -484,7 +484,7 @@ export function Schedule() {
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
               <div>
                 <h2 className="font-semibold text-brand-900 dark:text-gray-100">
-                  Previa da importacao
+                  Prévia da importação
                 </h2>
                 <p className="text-sm text-brand-800 dark:text-gray-300">
                   {importPreview.total} linhas encontradas na planilha.
@@ -585,7 +585,7 @@ export function Schedule() {
                     </th>
                     {canEdit && (
                       <th className="px-3 py-2 border dark:border-gray-600 text-gray-700 dark:text-gray-200">
-                        Acoes
+                        Ações
                       </th>
                     )}
                   </tr>
@@ -785,7 +785,7 @@ export function Schedule() {
             {/* Paginacao */}
             <div className="flex items-center justify-between px-4 py-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-600 dark:text-gray-400">
               <span>
-                Pagina {page + 1} de {Math.max(totalPages, 1)}
+                Página {page + 1} de {Math.max(totalPages, 1)}
               </span>
               <div className="flex gap-1">
                 <button
@@ -800,7 +800,7 @@ export function Schedule() {
                   onClick={() => setPage(page + 1)}
                   className="px-3 py-1 rounded border dark:border-gray-600 disabled:opacity-40 hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                 >
-                  Proxima
+                  Próxima
                 </button>
               </div>
             </div>

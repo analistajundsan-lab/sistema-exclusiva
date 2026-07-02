@@ -55,20 +55,23 @@ export function Dashboard() {
   const [refreshing, setRefreshing] = useState(false)
 
   const todayLabel = useMemo(() => {
+    // Formata direto da string ISO (sem new Date(y, m-1, d) local, que podia
+    // pular um dia em navegadores fora do fuso BRT). O dia da semana usa uma
+    // ancora UTC formatada em UTC — deterministico em qualquer fuso.
     const [year, month, day] = selectedDate.split('-').map(Number)
-    return new Date(year, month - 1, day).toLocaleDateString('pt-BR', {
+    const weekday = new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('pt-BR', {
       weekday: 'long',
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'America/Sao_Paulo',
+      timeZone: 'UTC',
     })
+    return `${weekday}, ${selectedDate.split('-').reverse().join('/')}`
   }, [selectedDate])
 
   const loadStats = useCallback(async () => {
     const [dash, inc, swp] = await Promise.all([
       api.get<DashboardTurns>('/schedule/dashboard-turns', { params: { schedule_date: selectedDate } }),
-      api.get('/incidents/count', { params: { today: selectedDate === today ? 'true' : undefined } }),
+      // Sempre filtra pela data selecionada (sem isso, data retroativa
+      // mostrava o total de ocorrencias de todos os tempos).
+      api.get('/incidents/count', { params: { incident_date: selectedDate } }),
       api.get('/swaps/count', { params: { schedule_date: selectedDate } }),
     ])
     setDashboard(dash.data)
@@ -76,7 +79,7 @@ export function Dashboard() {
       ocorrencias_hoje: inc.data.total,
       trocas_hoje: swp.data.total,
     })
-  }, [selectedDate, today])
+  }, [selectedDate])
 
   useEffect(() => {
     setLoading(true)

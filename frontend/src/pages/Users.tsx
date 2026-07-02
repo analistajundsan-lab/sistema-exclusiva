@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import api from '../api/client'
 import { formatCpf } from '../utils/cpf'
+import { parseApiDate } from '../utils/datetime'
 import { Users as UsersIcon, Plus } from 'lucide-react'
 
 interface User {
@@ -278,7 +279,7 @@ export function Users() {
                       </span>
                     </td>
                     <td className="px-4 py-2 border dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(u.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+                      {parseApiDate(u.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                     </td>
                     <td className="px-4 py-2 border dark:border-gray-600">
                       <div className="flex flex-col gap-1">

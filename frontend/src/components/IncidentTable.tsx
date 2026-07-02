@@ -1,4 +1,5 @@
 ﻿import { Incident, IncidentStatus } from '../hooks/useIncidents'
+import { parseApiDate } from '../utils/datetime'
 
 interface Props {
   incidents: Incident[]
@@ -56,7 +57,7 @@ export function IncidentTable({ incidents, total, page, totalPages, onPageChange
                 </td>
                 <td className="px-4 py-2 border truncate max-w-xs text-gray-600">{i.description || '—'}</td>
                 <td className="px-4 py-2 border text-xs text-gray-500">
-                  {new Date(i.created_at).toLocaleString('pt-BR')}
+                  {parseApiDate(i.created_at).toLocaleString('pt-BR')}
                 </td>
                 <td className="px-4 py-2 border">
                   <div className="flex gap-2">

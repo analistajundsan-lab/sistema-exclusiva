@@ -8,6 +8,7 @@ import {
   listLiberacoes,
   updateLiberacao,
 } from '../hooks/useSST'
+import { parseApiDate } from '../utils/datetime'
 import { useAuthStore } from '../store/auth'
 
 const RESULTADO_LABEL: Record<LiberacaoStatus, string> = {
@@ -195,7 +196,7 @@ export function SSTLiberacao() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500">
-                    {new Date(r.created_at).toLocaleDateString('pt-BR')}
+                    {parseApiDate(r.created_at).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="px-4 py-3">
                     <button onClick={() => openEdit(r)} className="text-xs text-brand-600 hover:underline dark:text-brand-400">

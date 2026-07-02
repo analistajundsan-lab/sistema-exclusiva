@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { AuditFilters, useAudit } from '../hooks/useAudit'
 import api from '../api/client'
+import { parseApiDate } from '../utils/datetime'
 
 const resources = ['', 'schedule', 'schedule_line', 'swap', 'incident', 'user']
 const actions = ['', 'IMPORT', 'CONFIRM', 'CREATE', 'UPDATE', 'DELETE', 'REGISTER']
@@ -131,7 +132,7 @@ export function Audit() {
                 {logs.map(log => (
                   <tr key={log.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${log.deleted_at ? 'opacity-60' : ''}`}>
                     <td className="px-3 py-2 border border-gray-200 dark:border-gray-700 whitespace-nowrap text-gray-800 dark:text-gray-200">
-                      {new Date(log.created_at).toLocaleString('pt-BR')}
+                      {parseApiDate(log.created_at).toLocaleString('pt-BR')}
                     </td>
                     <td className="px-3 py-2 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">{log.user_id}</td>
                     <td className="px-3 py-2 border border-gray-200 dark:border-gray-700 font-semibold text-gray-800 dark:text-gray-200">{log.action}</td>

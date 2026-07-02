@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, ClipboardList, ShieldCheck, UserCheck } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { getSSTView, SafetySubmission, SafetyTicket } from '../hooks/useSafety'
+import { parseApiDate } from '../utils/datetime'
 
 const STATUS_COLOR: Record<string, string> = {
   ok: 'bg-green-100 text-green-700',
@@ -171,7 +172,7 @@ export function SSTChecklistView() {
                         </div>
                         <p className="mt-0.5 text-xs text-gray-500">
                           Ticket #{ticket.id} ·{' '}
-                          {new Date(ticket.created_at).toLocaleString('pt-BR')}
+                          {parseApiDate(ticket.created_at).toLocaleString('pt-BR')}
                         </p>
                         {ticket.sst_approved_at && (
                           <p className="text-xs text-green-600 dark:text-green-400">

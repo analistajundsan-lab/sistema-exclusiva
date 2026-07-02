@@ -6,6 +6,8 @@ import {
   CheckCircle2, ClipboardList,
 } from 'lucide-react'
 import api from '../api/client'
+import { fmtDateTimeBR } from '../utils/datetime'
+import { scheduleStatusLabel } from '../utils/format'
 
 interface SwapResult {
   id: number
@@ -125,15 +127,8 @@ export function Consulta() {
     }
   }
 
-  const fmt = (dateStr: string) =>
-    new Date(dateStr).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Sao_Paulo',
-    })
+  // Interpreta o UTC naive do backend corretamente (sem +3h) e formata em BRT.
+  const fmt = fmtDateTimeBR
 
   const incidentTypeColor: Record<string, string> = {
     Avaria: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
@@ -153,7 +148,7 @@ export function Consulta() {
             Consulta
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Pesquise escala, confirmacoes, trocas, ocorrencias e vistoria por data, prefixo, linha ou motorista.
+            Pesquise escala, confirmações, trocas, ocorrências e vistoria por data, prefixo, linha ou motorista.
           </p>
         </div>
 
@@ -217,7 +212,7 @@ export function Consulta() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <ResultSection
               icon={<CheckCircle2 size={16} className="text-green-600 dark:text-green-400" />}
-              title={`Escala e confirmacoes (${scheduleLines.length})`}
+              title={`Escala e confirmações (${scheduleLines.length})`}
               empty="Nenhuma linha encontrada."
             >
               {scheduleLines.map(line => (
@@ -227,7 +222,7 @@ export function Consulta() {
                       <span className="font-mono bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded text-xs">L - {line.line_code}</span>
                       <span className="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs">Prefixo {line.prefix_code}</span>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${line.status === 'confirmada' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
-                        {line.status}
+                        {scheduleStatusLabel(line.status)}
                       </span>
                     </div>
                     <span className="text-xs text-gray-400 dark:text-gray-500">{line.schedule_date}</span>
@@ -268,8 +263,8 @@ export function Consulta() {
 
             <ResultSection
               icon={<AlertTriangle size={16} className="text-red-500" />}
-              title={`Ocorrencias (${incidents.length})`}
-              empty="Nenhuma ocorrencia encontrada."
+              title={`Ocorrências (${incidents.length})`}
+              empty="Nenhuma ocorrência encontrada."
             >
               {incidents.map(inc => (
                 <div key={inc.id} className="px-5 py-3.5 hover:bg-gray-50/70 dark:hover:bg-gray-700/30 transition-colors">
@@ -280,8 +275,8 @@ export function Consulta() {
                       </span>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${incidentTypeColor[inc.incident_type] || incidentTypeColor.Outro}`}>
                         {inc.incident_type}
-                        {inc.victim_status === 'com_vitimas' && ' · Com vitimas'}
-                        {inc.victim_status === 'sem_vitimas' && ' · Sem vitimas'}
+                        {inc.victim_status === 'com_vitimas' && ' · Com vítimas'}
+                        {inc.victim_status === 'sem_vitimas' && ' · Sem vítimas'}
                       </span>
                     </div>
                     <span className="text-xs text-gray-400 dark:text-gray-500">{fmt(inc.created_at)}</span>

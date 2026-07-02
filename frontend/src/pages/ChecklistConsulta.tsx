@@ -8,6 +8,8 @@ import {
   Camera, FileText, Wifi, CheckCircle2, AlertTriangle, Bus, Pencil, Trash2, Download, Building2,
 } from 'lucide-react'
 
+import { parseApiDate } from '../utils/datetime'
+
 const ALL_UNITS = ['Caieiras', 'Jundiai', 'Santana de Parnaiba']
 
 function hasPendency(c: ChecklistData): 'red' | 'amber' | 'ok' {
@@ -121,7 +123,7 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
   onDelete: () => void
 }) {
   const status = hasPendency(c)
-  const date = new Date(c.created_at).toLocaleString('pt-BR', {
+  const date = parseApiDate(c.created_at).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
   })
 
