@@ -784,9 +784,19 @@ def test_schedule_whatsapp_text_by_unit(admin_token):
     data = response.json()
     assert data["unit"] == "Caieiras"
     assert data["total"] == 1
-    assert "ALTERACOES REALIZADAS NA ESCALA" in data["text"]
+    # Sem only_changes o texto lista a escala inteira: o cabecalho nao pode
+    # anunciar "alteracoes" (enganava o grupo do WhatsApp).
+    assert "ESCALA DO DIA" in data["text"]
+    assert "ALTERACOES REALIZADAS NA ESCALA" not in data["text"]
     assert "Linha 7368" in data["text"]
     assert "Prefixo 1580" in data["text"]
+
+    only_changes = client.get(
+        "/schedule/whatsapp?schedule_date=2026-04-13&unit=Caieiras&only_changes=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert only_changes.status_code == 200
+    assert "ALTERACOES REALIZADAS NA ESCALA" in only_changes.json()["text"]
 
 
 def test_download_xlsx_with_auth_header_after_schedule_change(admin_token):
@@ -1008,3 +1018,332 @@ def test_swap_confirms_a_pending_schedule_line(admin_token, operator_token):
         headers={"Authorization": f"Bearer {operator_token}"},
     ).json()
     assert any(item["id"] == line_id for item in confirmed)
+
+
+# --- Regressoes da auditoria de 2026-07-02 (reset diario, PATCH, dedup) ---
+
+
+def today_brt_iso() -> str:
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()
+
+
+def import_schedule(admin_token, schedule_date: str = "2026-04-13") -> None:
+    client.post(
+        f"/schedule/import?schedule_date={schedule_date}&replace=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={
+            "file": (
+                "escala.xlsx",
+                build_schedule_file(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+
+def force_confirmed_yesterday(line_id: int) -> None:
+    """Simula linha confirmada ONTEM (status cru CONFIRMADA no banco)."""
+    from models import ScheduleLineStatus
+
+    db = TestingSessionLocal()
+    try:
+        line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
+        line.status = ScheduleLineStatus.CONFIRMADA
+        line.confirmed_at = datetime.utcnow() - timedelta(days=1)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_board_summary_applies_daily_reset(admin_token, operator_token):
+    """Linha confirmada ontem conta como PENDENTE hoje tambem no summary.
+
+    O resumo agregava o status cru do banco e, de manha, contradizia a lista
+    (lista pendente x card '1 confirmada')."""
+    import_schedule(admin_token)
+    today = today_brt_iso()
+    line_id = client.get(
+        f"/schedule/board?schedule_date={today}",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()["lines"][0]["id"]
+
+    force_confirmed_yesterday(line_id)
+
+    board = client.get(
+        f"/schedule/board?schedule_date={today}&fresh=1",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()
+    line = next(item for item in board["lines"] if item["id"] == line_id)
+    assert line["status"] == "pendente"
+    summary = next(item for item in board["summary"] if item["unit"] == "Caieiras")
+    assert summary["pending"] == 1
+    assert summary["confirmed"] == 0
+
+    standalone = client.get(
+        f"/schedule/summary?schedule_date={today}",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()
+    item = next(entry for entry in standalone if entry["unit"] == "Caieiras")
+    assert item["pending"] == 1
+    assert item["confirmed"] == 0
+
+    # Depois de confirmar HOJE, lista e resumo continuam de acordo.
+    client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    board = client.get(
+        f"/schedule/board?schedule_date={today}&fresh=1",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()
+    summary = next(item for item in board["summary"] if item["unit"] == "Caieiras")
+    assert summary["confirmed"] == 1
+    assert summary["pending"] == 0
+
+
+def test_patch_status_confirmada_stamps_confirmation(admin_token):
+    """Confirmar via PATCH mantem as invariantes do /confirm (carimbo de hoje);
+    sem confirmed_at a linha nunca resetaria a meia-noite."""
+    import_schedule(admin_token)
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()[0]["id"]
+
+    patched = client.patch(
+        f"/schedule/lines/{line_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"status": "confirmada"},
+    )
+    assert patched.status_code == 200
+    data = patched.json()
+    assert data["status"] == "confirmada"
+    assert data["confirmed_at"] is not None
+    assert data["confirmed_by"] is not None
+
+
+def test_patch_reopen_confirmed_line_requires_undo_role(admin_token, operator_token):
+    """Voltar linha confirmada para pendente via PATCH nao pode burlar o RBAC
+    do undo-confirm (Admin/Supervisor)."""
+    plantonista_token = create_token("333.444.555-66", UserRole.PLANTONISTA)
+    import_schedule(admin_token)
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()[0]["id"]
+    client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+
+    denied = client.patch(
+        f"/schedule/lines/{line_id}",
+        headers={"Authorization": f"Bearer {plantonista_token}"},
+        json={"status": "pendente"},
+    )
+    assert denied.status_code == 403
+
+    allowed = client.patch(
+        f"/schedule/lines/{line_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"status": "pendente"},
+    )
+    assert allowed.status_code == 200
+    data = allowed.json()
+    assert data["status"] == "pendente"
+    assert data["confirmed_at"] is None
+    assert data["confirmed_by"] is None
+
+
+def test_confirm_keeps_first_author_when_reconfirmed_today(admin_token, operator_token):
+    """Segundo usuario confirmando a mesma linha hoje e no-op: nao sobrescreve
+    o autor nem duplica a trilha de auditoria."""
+    plantonista_token = create_token("444.555.666-77", UserRole.PLANTONISTA)
+    import_schedule(admin_token)
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()[0]["id"]
+
+    first = client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    second = client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {plantonista_token}"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["confirmed_by"] == first.json()["confirmed_by"]
+
+
+def test_confirm_blocked_for_non_operating_today(admin_token, operator_token):
+    import_schedule(admin_token)
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()[0]["id"]
+    marked = client.post(
+        f"/schedule/lines/{line_id}/non-operation",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"operation_date": today_brt_iso(), "also_line_ids": []},
+    )
+    assert marked.status_code == 200
+
+    response = client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_confirm_blocked_for_deactivated_line(admin_token, operator_token):
+    import_schedule(admin_token)
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()[0]["id"]
+    client.post(
+        f"/schedule/lines/{line_id}/deactivate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    response = client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    assert response.status_code == 422
+
+
+def test_sst_roles_cannot_confirm_or_swap(admin_token, operator_token):
+    tst_token = create_token("555.666.777-88", UserRole.TECNICO_SEGURANCA)
+    import_schedule(admin_token)
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()[0]["id"]
+
+    confirm = client.post(
+        f"/schedule/lines/{line_id}/confirm",
+        headers={"Authorization": f"Bearer {tst_token}"},
+    )
+    assert confirm.status_code == 403
+
+    swap = client.post(
+        "/swaps/",
+        headers={"Authorization": f"Bearer {tst_token}"},
+        json={"schedule_line_id": line_id, "vehicle_in": "1590"},
+    )
+    assert swap.status_code == 403
+
+
+def test_version_bumps_when_non_operation_is_cleared(admin_token, operator_token):
+    """Desfazer o 'nao opera' precisa bumpar a versao (e o SSE): o delete em
+    bulk nao passava pelo listener e as telas dos outros ficavam presas."""
+    import_schedule(admin_token)
+    today = today_brt_iso()
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()[0]["id"]
+    client.post(
+        f"/schedule/lines/{line_id}/non-operation",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"operation_date": today, "also_line_ids": []},
+    )
+
+    v0 = client.get(
+        "/schedule/version",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()["v"]
+    cleared = client.delete(
+        f"/schedule/lines/{line_id}/non-operation?operation_date={today}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert cleared.status_code == 204
+    v1 = client.get(
+        "/schedule/version",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()["v"]
+    assert v1 > v0
+
+
+def test_swap_identical_resubmit_returns_existing(admin_token, operator_token):
+    """Duplo-submit do PWA nao pode duplicar a troca (auditoria de producao
+    achou trocas identicas criadas em dobro segundos depois)."""
+    from models import Swap
+
+    import_schedule(admin_token)
+    line_id = client.get(
+        "/schedule/lines?schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ).json()[0]["id"]
+    payload = {"schedule_line_id": line_id, "vehicle_in": "1590"}
+
+    first = client.post(
+        "/swaps/",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json=payload,
+    )
+    second = client.post(
+        "/swaps/",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json=payload,
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["id"] == first.json()["id"]
+    assert db_count(Swap) == 1
+
+
+def test_push_scan_uses_effective_schedule(admin_token, monkeypatch):
+    """O scan do push precisa achar a escala pela VIGENCIA (nao por
+    schedule_date == hoje, que nunca casava) e respeitar o dedup por dia."""
+    import pytest as _pytest
+
+    import push_service
+    from config import settings
+    from models import PushSentLine, PushSubscription
+
+    brt = ZoneInfo("America/Sao_Paulo")
+    now = datetime.now(brt)
+    start = now + timedelta(minutes=5)
+    if start.date() != now.date():
+        _pytest.skip("janela de push cruza a meia-noite BRT")
+
+    import_schedule(admin_token)
+    db = TestingSessionLocal()
+    try:
+        line = db.query(ScheduleLine).first()
+        line.start_time = start.strftime("%H:%M")
+        db.add(
+            PushSubscription(
+                user_id=1,
+                unit=line.unit,
+                endpoint="https://push.example/sub-1",
+                p256dh="key",
+                auth="auth",
+            )
+        )
+        db.commit()
+
+        sent_payloads = []
+        monkeypatch.setattr(settings, "VAPID_PUBLIC_KEY", "pub")
+        monkeypatch.setattr(settings, "VAPID_PRIVATE_KEY", "priv")
+        monkeypatch.setattr(settings, "PUSH_LEAD_MINUTES", 20)
+        monkeypatch.setattr(
+            push_service,
+            "_send",
+            lambda sub, payload: sent_payloads.append(payload) or True,
+        )
+
+        assert push_service.scan_and_notify(db) == 1
+        assert len(sent_payloads) == 1
+        assert db.query(PushSentLine).count() == 1
+        # Segunda varredura do mesmo dia nao reenvia (dedup por linha/dia).
+        assert push_service.scan_and_notify(db) == 0
+    finally:
+        db.close()

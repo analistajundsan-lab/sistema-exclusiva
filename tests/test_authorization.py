@@ -137,7 +137,9 @@ def test_user_without_unit_cannot_access_or_create_unit_scoped_incidents():
     )
     assert created.status_code == 201
 
-    scoped_list = client.get("/incidents/", headers={"Authorization": f"Bearer {no_unit}"})
+    scoped_list = client.get(
+        "/incidents/", headers={"Authorization": f"Bearer {no_unit}"}
+    )
     assert scoped_list.status_code == 200
     assert scoped_list.json() == []
 

@@ -150,7 +150,9 @@ def test_deactivate_reactivate_hides_and_restores(admin_token):
         f"/schedule/lines?schedule_date={DATE}&include_inactive=true",
         headers=auth(admin_token),
     ).json()
-    assert any(l["id"] == entrada["id"] and l["is_active"] is False for l in with_inactive)
+    assert any(
+        l["id"] == entrada["id"] and l["is_active"] is False for l in with_inactive
+    )
 
     # Reativa -> volta
     resp = client.post(

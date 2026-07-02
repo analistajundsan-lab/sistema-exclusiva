@@ -89,6 +89,7 @@ async def count_incidents(
     line: Optional[str] = None,
     status: Optional[IncidentStatus] = None,
     today: bool = Query(False),
+    incident_date: Optional[date_type] = None,
     unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -105,7 +106,14 @@ async def count_incidents(
         query = query.filter(Incident.line.ilike(f"%{line}%"))
     if status:
         query = query.filter(Incident.status == status)
-    if today:
+    # incident_date permite ao dashboard contar o dia certo tambem em datas
+    # retroativas (antes, sem `today`, o count devolvia o acumulado historico).
+    if incident_date:
+        start_utc, end_utc = brt_day_utc_window(incident_date)
+        query = query.filter(
+            Incident.created_at >= start_utc, Incident.created_at < end_utc
+        )
+    elif today:
         start_utc, end_utc = brt_day_utc_window(today_brt())
         query = query.filter(
             Incident.created_at >= start_utc, Incident.created_at < end_utc

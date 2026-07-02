@@ -22,6 +22,12 @@ from typing import Any, Optional
 _store: dict[str, tuple[float, Any]] = {}
 _lock = Lock()
 
+# Teto de entradas por worker. Como a VERSAO da escala entra na chave do board,
+# chaves de versoes passadas nunca sao relidas (so expirariam se lidas) e o dict
+# cresceria sem limite em dia de uso intenso. No teto: varre expiradas e, se
+# ainda passar, descarta as mais antigas (ordem de insercao do dict).
+_MAX_ENTRIES = 256
+
 
 def cache_get(key: str) -> Optional[Any]:
     now = time.monotonic()
@@ -37,8 +43,14 @@ def cache_get(key: str) -> Optional[Any]:
 
 
 def cache_set(key: str, value: Any, ttl_seconds: float) -> None:
+    now = time.monotonic()
     with _lock:
-        _store[key] = (time.monotonic() + ttl_seconds, value)
+        if len(_store) >= _MAX_ENTRIES:
+            for stale in [k for k, (exp, _) in _store.items() if exp < now]:
+                _store.pop(stale, None)
+            while len(_store) >= _MAX_ENTRIES:
+                _store.pop(next(iter(_store)))
+        _store[key] = (now + ttl_seconds, value)
 
 
 def cache_clear_prefix(prefix: str) -> None:

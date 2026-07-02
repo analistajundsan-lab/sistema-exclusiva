@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from zoneinfo import ZoneInfo
 
@@ -16,6 +16,7 @@ from models import (
     AuditLog,
     ScheduleLine,
     ScheduleLineStatus,
+    ScheduleNonOperation,
     Swap,
     User,
     UserRole,
@@ -116,7 +117,19 @@ async def count_swaps(
 async def create_swap(
     body: SwapCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # Troca e operacao de Trafego/Analista/Admin (+ legados); cargos SST nao
+    # registram troca. Escopo de garagem via ensure_unit_access na linha.
+    current_user: User = Depends(
+        require_role(
+            UserRole.ADMIN,
+            UserRole.GERENTE,
+            UserRole.SUPERVISAO,
+            UserRole.SUPERVISOR,
+            UserRole.ANALISTA,
+            UserRole.PLANTONISTA,
+            UserRole.OPERATOR,
+        )
+    ),
 ):
     vehicle_out = clean_optional(body.vehicle_out)
     vehicle_in = clean_optional(body.vehicle_in)
@@ -136,6 +149,7 @@ async def create_swap(
             "driver_in": driver_in,
         }
     )
+    schedule_line = None
     if body.schedule_line_id:
         schedule_line = (
             db.query(ScheduleLine)
@@ -152,14 +166,25 @@ async def create_swap(
                 status_code=422,
                 detail="Linha cancelada nao pode ser trocada/confirmada",
             )
-        # A TROCA CONFIRMA A LINHA PARA O DIA: o carro previsto teve uma ocorrencia
-        # e outro vai rodar, entao a linha esta confirmada (com a nova info de
-        # carro/motorista). Carimba a confirmacao de HOJE para a linha entrar nas
-        # "Confirmadas" do dashboard. Recarimba mesmo se ja estava confirmada (ex.:
-        # confirmada ontem) para contar no dia da troca. UTC naive deterministico.
-        schedule_line.status = ScheduleLineStatus.CONFIRMADA
-        schedule_line.confirmed_by = current_user.id
-        schedule_line.confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if schedule_line.is_active is False:
+            raise HTTPException(
+                status_code=422,
+                detail="Linha desativada nao pode ser trocada/confirmada",
+            )
+        today_brt = datetime.now(BRASILIA_TZ).date()
+        non_op_today = (
+            db.query(ScheduleNonOperation)
+            .filter(
+                ScheduleNonOperation.schedule_line_id == schedule_line.id,
+                ScheduleNonOperation.operation_date == today_brt,
+            )
+            .first()
+        )
+        if non_op_today:
+            raise HTTPException(
+                status_code=422,
+                detail="Linha marcada como 'nao opera hoje' nao pode ser trocada",
+            )
         data["schedule_date"] = body.schedule_date or schedule_line.schedule_date
         data["unit"] = schedule_line.unit
         data["client_name"] = schedule_line.client_name
@@ -181,6 +206,42 @@ async def create_swap(
     data["whatsapp_text"] = build_swap_whatsapp_text(
         data.get("vehicle_in"), data.get("driver_in"), data.get("lines_covered")
     )
+
+    # Idempotencia anti duplo-submit: o PWA reenvia o mesmo POST (duplo toque,
+    # retry de rede, segundo usuario que nao viu a tela atualizar) — auditoria
+    # de producao achou trocas identicas criadas em dobro segundos depois.
+    # Troca identica recente => devolve a existente em vez de duplicar.
+    dedup_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        minutes=10
+    )
+    duplicate = (
+        db.query(Swap)
+        .filter(
+            Swap.created_at >= dedup_cutoff,
+            Swap.schedule_line_id == body.schedule_line_id,
+            Swap.schedule_date == data.get("schedule_date"),
+            Swap.unit == data.get("unit"),
+            Swap.vehicle_out == data.get("vehicle_out"),
+            Swap.vehicle_in == data.get("vehicle_in"),
+            Swap.driver_out == data.get("driver_out"),
+            Swap.driver_in == data.get("driver_in"),
+        )
+        .order_by(Swap.id.desc())
+        .first()
+    )
+    if duplicate:
+        return duplicate
+
+    if schedule_line is not None:
+        # A TROCA CONFIRMA A LINHA PARA O DIA: o carro previsto teve uma ocorrencia
+        # e outro vai rodar, entao a linha esta confirmada (com a nova info de
+        # carro/motorista). Carimba a confirmacao de HOJE para a linha entrar nas
+        # "Confirmadas" do dashboard. Recarimba mesmo se ja estava confirmada (ex.:
+        # confirmada ontem) para contar no dia da troca. UTC naive deterministico.
+        schedule_line.status = ScheduleLineStatus.CONFIRMADA
+        schedule_line.confirmed_by = current_user.id
+        schedule_line.confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
     swap = Swap(**data, created_by=current_user.id)
     db.add(swap)
     db.flush()

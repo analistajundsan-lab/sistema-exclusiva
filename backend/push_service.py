@@ -9,7 +9,7 @@ multiplos workers do uvicorn.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from pywebpush import webpush, WebPushException
@@ -67,26 +67,57 @@ def scan_and_notify(db) -> int:
     now_min = now.hour * 60 + now.minute
     lead = settings.PUSH_LEAD_MINUTES
 
-    # Limpeza leve do historico de envios antigos (> 2 dias).
+    # Limpeza do historico de envios de DIAS ANTERIORES (corte 00:00 BRT).
+    # Com o modelo de vigencia a MESMA linha (mesmo id) roda todo dia; se o
+    # registro de ontem ficasse (limpeza antiga era "> 2 dias"), o dedup por
+    # PK bloquearia o push de hoje. A janela de envio e sempre do proprio dia.
+    day_start_utc = (
+        datetime(today.year, today.month, today.day, tzinfo=BRT)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
     try:
-        db.query(PushSentLine).filter(
-            PushSentLine.sent_at < datetime.utcnow() - timedelta(days=2)
-        ).delete(synchronize_session=False)
+        db.query(PushSentLine).filter(PushSentLine.sent_at < day_start_utc).delete(
+            synchronize_session=False
+        )
         db.commit()
     except Exception:
         db.rollback()
 
-    lines = (
-        db.query(ScheduleLine)
-        .filter(
-            ScheduleLine.schedule_date == today,
-            ScheduleLine.status == ScheduleLineStatus.PENDENTE,
-        )
-        .all()
+    # Import tardio para nao carregar o modulo de rotas no import deste servico.
+    from routes_schedule import (
+        latest_import_ids_for_date,
+        non_operating_ids_for_date,
+        status_for_operation_date,
     )
+
+    # A escala vive por VIGENCIA: schedule_date das linhas e a data do import
+    # (dias atras), nunca "hoje". Filtrar por schedule_date == today fazia o
+    # push NUNCA disparar. Usa o mesmo escopo de vigencia do /board.
+    query = db.query(ScheduleLine).filter(
+        ScheduleLine.status.in_(
+            [ScheduleLineStatus.PENDENTE, ScheduleLineStatus.CONFIRMADA]
+        ),
+        ScheduleLine.is_active.isnot(False),
+    )
+    active_import_ids = latest_import_ids_for_date(db, today)
+    if active_import_ids:
+        query = query.filter(ScheduleLine.import_id.in_(active_import_ids))
+    else:
+        # Compatibilidade com escalas antigas gravadas antes do versionamento.
+        query = query.filter(ScheduleLine.schedule_date == today)
+    lines = query.all()
+    nonop_ids = non_operating_ids_for_date(db, today)
 
     sent = 0
     for line in lines:
+        # So avisa quem esta PENDENTE para o dia de operacao: linha confirmada
+        # ontem conta como pendente hoje (reset diario 00:00 BRT); linha que
+        # nao opera hoje nao recebe aviso.
+        if line.id in nonop_ids:
+            continue
+        if status_for_operation_date(line, today) != ScheduleLineStatus.PENDENTE:
+            continue
         try:
             sh, sm = (int(x) for x in line.start_time.split(":"))
         except Exception:

@@ -193,22 +193,32 @@ def test_score_preditivo(admin_headers):
 def test_comparativo(admin_headers):
     db = TestingSessionLocal()
     # Unidade Caieiras: 3 sinistros + 2 veiculos ativos
-    db.add(SafetyVehicle(prefix="C-1", unit="Caieiras", active=True, public_token="tokC1"))
-    db.add(SafetyVehicle(prefix="C-2", unit="Caieiras", active=True, public_token="tokC2"))
+    db.add(
+        SafetyVehicle(prefix="C-1", unit="Caieiras", active=True, public_token="tokC1")
+    )
+    db.add(
+        SafetyVehicle(prefix="C-2", unit="Caieiras", active=True, public_token="tokC2")
+    )
     db.add(_sinistro(unit="Caieiras", prefixo="C-1", data_ocorrencia=date.today()))
     db.add(
         _sinistro(
-            unit="Caieiras", prefixo="C-1", data_ocorrencia=date.today() - timedelta(days=20)
+            unit="Caieiras",
+            prefixo="C-1",
+            data_ocorrencia=date.today() - timedelta(days=20),
         )
     )
     db.add(
         _sinistro(
-            unit="Caieiras", prefixo="C-2", data_ocorrencia=date.today() - timedelta(days=40)
+            unit="Caieiras",
+            prefixo="C-2",
+            data_ocorrencia=date.today() - timedelta(days=40),
         )
     )
     # Unidade Franco da Rocha: 1 sinistro + 1 veiculo ativo
     db.add(
-        SafetyVehicle(prefix="F-1", unit="Franco da Rocha", active=True, public_token="tokF1")
+        SafetyVehicle(
+            prefix="F-1", unit="Franco da Rocha", active=True, public_token="tokF1"
+        )
     )
     db.add(
         _sinistro(

@@ -19,7 +19,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from sqlalchemy import case, func
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from auth import (
@@ -518,6 +519,53 @@ def public_direction_stats(bucket: dict) -> dict:
     return data
 
 
+def build_unit_summary(rows, operation_date: Optional[date] = None) -> list[dict]:
+    """Agrega contagens por unidade aplicando status_for_operation_date.
+
+    O resumo precisa bater com a lista: contar o status cru do banco mostraria
+    de manha, como "confirmadas", linhas confirmadas ONTEM (que a lista ja
+    exibe como pendentes por causa do reset diario das 00:00 BRT)."""
+    buckets: dict[str, dict] = {}
+    for row in rows:
+        bucket = buckets.setdefault(
+            row.unit,
+            {
+                "unit": row.unit,
+                "total": 0,
+                "entrada": 0,
+                "saida": 0,
+                "pending": 0,
+                "confirmed": 0,
+                "changed": 0,
+                "cancelled": 0,
+            },
+        )
+        bucket["total"] += 1
+        direction = (row.direction or "").upper()
+        if direction == "ENTRADA":
+            bucket["entrada"] += 1
+        elif direction == "SAIDA":
+            bucket["saida"] += 1
+        effective = status_for_operation_date(row, operation_date)
+        if effective == ScheduleLineStatus.PENDENTE:
+            bucket["pending"] += 1
+        elif effective == ScheduleLineStatus.CONFIRMADA:
+            bucket["confirmed"] += 1
+        elif effective == ScheduleLineStatus.ALTERADA:
+            bucket["changed"] += 1
+        elif effective == ScheduleLineStatus.CANCELADA:
+            bucket["cancelled"] += 1
+    return [buckets[unit] for unit in sorted(buckets)]
+
+
+SUMMARY_ROW_COLUMNS = (
+    ScheduleLine.unit,
+    ScheduleLine.direction,
+    ScheduleLine.status,
+    ScheduleLine.confirmed_at,
+)
+
+
 @router.post(
     "/import",
     response_model=ScheduleImportResponse,
@@ -735,13 +783,38 @@ async def update_schedule_line(
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
     ensure_unit_access(current_user, line.unit)
 
-    changes = []
+    old_status = line.status
     update_data = body.model_dump(exclude_unset=True)
+    new_status = update_data.get("status")
+
+    # Mudar status via PATCH precisa manter as invariantes dos endpoints
+    # dedicados (/confirm e /undo-confirm); sem isso, uma linha "confirmada"
+    # sem confirmed_at nunca resetaria a meia-noite, e qualquer editor
+    # reabriria confirmacao burlando o RBAC do undo.
+    if new_status is not None and new_status != old_status:
+        if old_status == ScheduleLineStatus.CONFIRMADA and not (
+            getattr(current_user, "has_full_access", False)
+            or current_user.role in (UserRole.ADMIN, UserRole.SUPERVISOR)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Reabrir linha confirmada exige Admin/Supervisor (Desfazer confirmacao)",
+            )
+
+    changes = []
     for field, value in update_data.items():
         old = getattr(line, field)
         if old != value:
             changes.append(f"{field}: {old} -> {value}")
             setattr(line, field, value)
+
+    if new_status is not None and new_status != old_status:
+        if new_status == ScheduleLineStatus.CONFIRMADA:
+            line.confirmed_by = current_user.id
+            line.confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        else:
+            line.confirmed_by = None
+            line.confirmed_at = None
 
     if changes and "status" not in update_data:
         line.status = ScheduleLineStatus.ALTERADA
@@ -765,7 +838,19 @@ async def update_schedule_line(
 async def confirm_schedule_line(
     line_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # Confirmacao e da operacao (Trafego/Analista/Admin + legados); cargos SST
+    # (TST/Engenheiro) nao confirmam escala. Escopo de garagem via ensure_unit_access.
+    current_user: User = Depends(
+        require_role(
+            UserRole.ADMIN,
+            UserRole.GERENTE,
+            UserRole.SUPERVISAO,
+            UserRole.SUPERVISOR,
+            UserRole.ANALISTA,
+            UserRole.PLANTONISTA,
+            UserRole.OPERATOR,
+        )
+    ),
 ):
     line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
     if not line:
@@ -775,6 +860,26 @@ async def confirm_schedule_line(
         raise HTTPException(
             status_code=422, detail="Linha cancelada nao pode ser confirmada"
         )
+    if line.is_active is False:
+        raise HTTPException(
+            status_code=422, detail="Linha desativada nao pode ser confirmada"
+        )
+    today_brt = datetime.now(BRASILIA_TZ).date()
+    if line.id in non_operating_ids_for_date(db, today_brt):
+        raise HTTPException(
+            status_code=422,
+            detail="Linha marcada como 'nao opera hoje' nao pode ser confirmada",
+        )
+    # Ja confirmada HOJE: no-op idempotente. Evita sobrescrever o autor da
+    # confirmacao e poluir a auditoria com CONFIRMs duplicados (duplo toque/
+    # segundo usuario que ainda nao viu a tela atualizar). Linha confirmada SEM
+    # confirmed_at (dado legado) nao entra no no-op: reconfirma para ganhar o
+    # carimbo e voltar a resetar a meia-noite.
+    if (
+        line.confirmed_at is not None
+        and status_for_operation_date(line, today_brt) == ScheduleLineStatus.CONFIRMADA
+    ):
+        return line
 
     line.status = ScheduleLineStatus.CONFIRMADA
     line.confirmed_by = current_user.id
@@ -1001,15 +1106,23 @@ async def set_schedule_non_operation(
             .first()
         )
         if not exists:
-            db.add(
-                ScheduleNonOperation(
-                    schedule_line_id=target_id,
-                    operation_date=body.operation_date,
-                    unit=target.unit,
-                    line_code=target.line_code,
-                    created_by=current_user.id,
-                )
-            )
+            # Savepoint: dois cliques simultaneos passam ambos no check acima;
+            # o unique uq_nonop_line_date segura o segundo no banco e o
+            # IntegrityError vira sucesso idempotente (nao um 500 na tela).
+            try:
+                with db.begin_nested():
+                    db.add(
+                        ScheduleNonOperation(
+                            schedule_line_id=target_id,
+                            operation_date=body.operation_date,
+                            unit=target.unit,
+                            line_code=target.line_code,
+                            created_by=current_user.id,
+                        )
+                    )
+                    db.flush()
+            except IntegrityError:
+                pass
         marked.append(target_id)
 
     db.add(
@@ -1047,10 +1160,19 @@ async def clear_schedule_non_operation(
         raise HTTPException(status_code=404, detail="Linha de escala nao encontrada")
     ensure_unit_access(current_user, line.unit)
 
-    db.query(ScheduleNonOperation).filter(
-        ScheduleNonOperation.schedule_line_id == line_id,
-        ScheduleNonOperation.operation_date == operation_date,
-    ).delete()
+    # delete() em bulk NAO passa por session.deleted, entao o listener de
+    # versao/SSE (models._track_schedule_changes) nao dispara e as telas dos
+    # outros usuarios ficam presas no estado antigo. Deleta objeto a objeto.
+    removals = (
+        db.query(ScheduleNonOperation)
+        .filter(
+            ScheduleNonOperation.schedule_line_id == line_id,
+            ScheduleNonOperation.operation_date == operation_date,
+        )
+        .all()
+    )
+    for removal in removals:
+        db.delete(removal)
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -1076,42 +1198,11 @@ async def schedule_summary(
         db, query, schedule_date, include_inactive=False, hide_non_operating=True
     )
 
-    rows = (
-        query.with_entities(
-            ScheduleLine.unit,
-            func.count(ScheduleLine.id),
-            func.sum(case((ScheduleLine.direction == "ENTRADA", 1), else_=0)),
-            func.sum(case((ScheduleLine.direction == "SAIDA", 1), else_=0)),
-            func.sum(
-                case((ScheduleLine.status == ScheduleLineStatus.PENDENTE, 1), else_=0)
-            ),
-            func.sum(
-                case((ScheduleLine.status == ScheduleLineStatus.CONFIRMADA, 1), else_=0)
-            ),
-            func.sum(
-                case((ScheduleLine.status == ScheduleLineStatus.ALTERADA, 1), else_=0)
-            ),
-            func.sum(
-                case((ScheduleLine.status == ScheduleLineStatus.CANCELADA, 1), else_=0)
-            ),
-        )
-        .group_by(ScheduleLine.unit)
-        .order_by(ScheduleLine.unit)
-        .all()
-    )
-
+    # Agrega em Python (nao em SQL) para aplicar o reset diario das 00:00 BRT
+    # (status_for_operation_date) — o volume por dia e pequeno (centenas).
+    rows = query.with_entities(*SUMMARY_ROW_COLUMNS).all()
     return [
-        ScheduleSummaryItem(
-            unit=row[0],
-            total=row[1] or 0,
-            entrada=row[2] or 0,
-            saida=row[3] or 0,
-            pending=row[4] or 0,
-            confirmed=row[5] or 0,
-            changed=row[6] or 0,
-            cancelled=row[7] or 0,
-        )
-        for row in rows
+        ScheduleSummaryItem(**item) for item in build_unit_summary(rows, schedule_date)
     ]
 
 
@@ -1215,42 +1306,10 @@ async def schedule_board(
         include_inactive=False,
         hide_non_operating=True,
     )
-    summary_rows = (
-        summary_query.with_entities(
-            ScheduleLine.unit,
-            func.count(ScheduleLine.id),
-            func.sum(case((ScheduleLine.direction == "ENTRADA", 1), else_=0)),
-            func.sum(case((ScheduleLine.direction == "SAIDA", 1), else_=0)),
-            func.sum(
-                case((ScheduleLine.status == ScheduleLineStatus.PENDENTE, 1), else_=0)
-            ),
-            func.sum(
-                case((ScheduleLine.status == ScheduleLineStatus.CONFIRMADA, 1), else_=0)
-            ),
-            func.sum(
-                case((ScheduleLine.status == ScheduleLineStatus.ALTERADA, 1), else_=0)
-            ),
-            func.sum(
-                case((ScheduleLine.status == ScheduleLineStatus.CANCELADA, 1), else_=0)
-            ),
-        )
-        .group_by(ScheduleLine.unit)
-        .order_by(ScheduleLine.unit)
-        .all()
-    )
-    summary_payload = [
-        {
-            "unit": row[0],
-            "total": row[1] or 0,
-            "entrada": row[2] or 0,
-            "saida": row[3] or 0,
-            "pending": row[4] or 0,
-            "confirmed": row[5] or 0,
-            "changed": row[6] or 0,
-            "cancelled": row[7] or 0,
-        }
-        for row in summary_rows
-    ]
+    # Mesma mascara de reset diario da lista acima: o card de resumo nao pode
+    # contradizer os cards de linha (ex.: 06:00 com tudo "confirmado" de ontem).
+    summary_rows = summary_query.with_entities(*SUMMARY_ROW_COLUMNS).all()
+    summary_payload = build_unit_summary(summary_rows, schedule_date)
 
     payload = jsonable_encoder(
         {"lines": lines_payload, "total": total, "summary": summary_payload}
@@ -1479,13 +1538,24 @@ async def schedule_whatsapp_text(
         )
 
     lines = query.order_by(ScheduleLine.start_time, ScheduleLine.line_code).all()
-    header = [
-        "ALTERACOES REALIZADAS NA ESCALA",
-        f"Entram em vigor a partir do dia: {schedule_date.strftime('%d/%m/%Y')}",
-        "",
-        f"Unidade: {unit}",
-        "",
-    ]
+    # Cabecalho honesto com o conteudo: sem only_changes o texto lista a escala
+    # INTEIRA — anunciar como "alteracoes" fazia o grupo entender que tudo mudou.
+    if only_changes:
+        header = [
+            "ALTERACOES REALIZADAS NA ESCALA",
+            f"Entram em vigor a partir do dia: {schedule_date.strftime('%d/%m/%Y')}",
+            "",
+            f"Unidade: {unit}",
+            "",
+        ]
+    else:
+        header = [
+            "ESCALA DO DIA",
+            f"Dia: {schedule_date.strftime('%d/%m/%Y')}",
+            "",
+            f"Unidade: {unit}",
+            "",
+        ]
 
     body = [
         f"- {line.start_time} as {line.end_time} | Linha {line.line_code} | {line.direction} | "
