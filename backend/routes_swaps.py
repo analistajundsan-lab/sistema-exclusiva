@@ -497,7 +497,7 @@ async def update_swap(
             detail="Informe o prefixo substituto ou o motorista substituto",
         )
     swap.whatsapp_text = build_swap_whatsapp_text(
-        swap.vehicle_in, swap.driver_in, swap.lines_covered
+        swap.vehicle_out, swap.vehicle_in, swap.driver_in, swap.lines_covered
     )
     ensure_unit_access(current_user, swap.unit)
     db.add(
