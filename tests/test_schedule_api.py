@@ -926,8 +926,9 @@ def test_swap_can_be_created_from_confirmed_schedule_line(admin_token, operator_
     assert data["unit"] == "Caieiras"
     # Horario denormalizado da linha (usado no envio ao CCO por turno).
     assert data["start_time"] == first_line["start_time"]
-    assert "PREFIXO 1590" in data["whatsapp_text"]
-    assert "ATENDERA AS LINHAS" in data["whatsapp_text"]
+    # Texto compacto: prefixo que atende (substituto) + linha 'E 7368'.
+    assert "1590 - ATENDERA AS LINHAS" in data["whatsapp_text"]
+    assert "E 7368" in data["whatsapp_text"]
 
     by_vehicle_out = client.get(
         "/swaps/?vehicle=1580",
@@ -983,7 +984,9 @@ def test_swap_can_change_only_driver_from_confirmed_schedule_line(
     assert data["vehicle_in"] is None
     assert data["driver_out"] == line["driver_name"]
     assert data["driver_in"] == "MOTORISTA RESERVA"
-    assert "MOTORISTA MOTORISTA RESERVA" in data["whatsapp_text"]
+    # Troca so de motorista: mantem o prefixo e destaca o motorista.
+    assert "1580" in data["whatsapp_text"]
+    assert "MOT MOTORISTA RESERVA" in data["whatsapp_text"]
 
 
 def test_swap_confirms_a_pending_schedule_line(admin_token, operator_token):
@@ -1347,3 +1350,113 @@ def test_push_scan_uses_effective_schedule(admin_token, monkeypatch):
         assert push_service.scan_and_notify(db) == 0
     finally:
         db.close()
+
+
+# --- Texto de trocas ao CCO: agrupado por prefixo, compacto, em ordem ---
+
+
+def _seed_line(db, **kw):
+    from models import ScheduleLineStatus
+
+    defaults = dict(
+        schedule_date=date(2026, 4, 13),
+        unit="Caieiras",
+        prefix_code="3380",
+        driver_name="MOT",
+        client_name="M LIVRE",
+        end_time="23:59",
+        status=ScheduleLineStatus.CONFIRMADA,
+        is_active=True,
+        created_by=1,
+    )
+    defaults.update(kw)
+    line = ScheduleLine(**defaults)
+    db.add(line)
+    db.flush()
+    return line
+
+
+def _seed_swap(db, line, vehicle_in=None, driver_in=None):
+    from models import Swap
+
+    swap = Swap(
+        schedule_line_id=line.id,
+        schedule_date=line.schedule_date,
+        unit=line.unit,
+        vehicle_out=line.prefix_code,
+        vehicle_in=vehicle_in,
+        driver_in=driver_in,
+        start_time=line.start_time,
+        end_time=line.end_time,
+        lines_covered=f"{line.direction} - {line.line_code}",
+        created_by=1,
+    )
+    db.add(swap)
+    db.flush()
+    return swap
+
+
+def test_swaps_text_groups_all_lines_of_prefix_in_schedule_order(admin_token):
+    """Exemplo do Vinicius: prefixo 3380 atende 4 linhas. Mesmo registradas fora
+    de ordem, saem juntas no mesmo texto, na sequencia da programacao."""
+    db = TestingSessionLocal()
+    try:
+        l1 = _seed_line(db, line_code="4521", direction="SAIDA", start_time="13:45")
+        l2 = _seed_line(db, line_code="5926", direction="SAIDA", start_time="15:50")
+        l3 = _seed_line(db, line_code="7462", direction="ENTRADA", start_time="20:11")
+        l4 = _seed_line(db, line_code="7412", direction="SAIDA", start_time="22:45")
+        for line in (l3, l1, l4, l2):  # fora de ordem de proposito
+            _seed_swap(db, line)
+        db.commit()
+    finally:
+        db.close()
+
+    res = client.get(
+        "/swaps/whatsapp/text?unit=Caieiras&schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert res.status_code == 200
+    text = res.json()["text"]
+    assert "3380 - ATENDERA AS LINHAS : S 4521 - S 5926 - E 7462 - S 7412" in text
+
+
+def test_swaps_text_uses_substitute_prefix_and_excludes_pending(admin_token):
+    """Exemplo do Vinicius: 3400 substituido por 2300; so 7360 e 7431 trocadas.
+    O texto sai sob 2300; a 7416 (sem troca) fica de fora."""
+    db = TestingSessionLocal()
+    try:
+        a = _seed_line(
+            db,
+            prefix_code="3400",
+            line_code="7360",
+            direction="SAIDA",
+            start_time="08:00",
+        )
+        b = _seed_line(
+            db,
+            prefix_code="3400",
+            line_code="7431",
+            direction="ENTRADA",
+            start_time="09:00",
+        )
+        _seed_line(
+            db,
+            prefix_code="3400",
+            line_code="7416",
+            direction="SAIDA",
+            start_time="10:00",
+        )
+        _seed_swap(db, a, vehicle_in="2300")
+        _seed_swap(db, b, vehicle_in="2300")
+        db.commit()
+    finally:
+        db.close()
+
+    res = client.get(
+        "/swaps/whatsapp/text?unit=Caieiras&schedule_date=2026-04-13",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert res.status_code == 200
+    text = res.json()["text"]
+    assert "2300 - ATENDERA AS LINHAS : S 7360 - E 7431" in text
+    assert "7416" not in text

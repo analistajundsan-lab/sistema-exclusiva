@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from zoneinfo import ZoneInfo
@@ -66,6 +67,55 @@ def format_lines_covered(direction: str, line_code: str) -> str:
     return f"{abbr}/{line_code}" if line_code else abbr
 
 
+def normalize_covered_text(text: Optional[str]) -> str:
+    """Compacta o texto de linhas cobertas para o formato do CCO:
+    'SAIDA - 4521' -> 'S 4521'; 'E/2228 - S/2265' -> 'E 2228 - S 2265'.
+    Mantem o ' - ' que SEPARA linhas distintas (so colapsa 'S - 4521')."""
+    t = (text or "").strip()
+    if not t:
+        return ""
+    t = re.sub(r"\bENTRADA\b", "E", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bSA[IÍ]DA\b", "S", t, flags=re.IGNORECASE)
+    t = t.replace("/", " ")
+    t = re.sub(r"\s*-\s*(?=\d)", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def covered_token(direction: Optional[str], line_code: Optional[str]) -> str:
+    """Uma linha coberta no formato compacto: 'S 4521' / 'E 7462'."""
+    abbr = direction_abbrev(direction or "")
+    return f"{abbr} {line_code}".strip() if line_code else abbr
+
+
+def swap_attend_label(swap) -> str:
+    """Prefixo que VAI ATENDER as linhas da troca: o substituto quando houve
+    troca de carro; senao o proprio prefixo (so confirmou). Troca so de
+    motorista mantem o prefixo e destaca o motorista."""
+    prefix = (swap.vehicle_in or swap.vehicle_out or "").strip()
+    if swap.driver_in and not swap.vehicle_in:
+        return (
+            f"{prefix} (MOT {swap.driver_in})".strip()
+            if prefix
+            else f"MOT {swap.driver_in}"
+        )
+    return prefix or "TROCA OPERACIONAL"
+
+
+def swap_covered_tokens(swap, line_by_id: dict) -> list[tuple[str, str]]:
+    """(start_time, 'S 4521') das linhas cobertas por uma troca. Fonte
+    autoritativa: a ScheduleLine vinculada (direcao/codigo/horario atuais);
+    fallback: o lines_covered denormalizado (trocas manuais/legadas)."""
+    line = line_by_id.get(swap.schedule_line_id) if swap.schedule_line_id else None
+    if line is not None and line.line_code:
+        start = swap.start_time or line.start_time or ""
+        return [(start, covered_token(line.direction, line.line_code))]
+    normalized = normalize_covered_text(swap.lines_covered)
+    if not normalized:
+        return []
+    return [(swap.start_time or "", normalized)]
+
+
 def clean_optional(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -74,16 +124,20 @@ def clean_optional(value: Optional[str]) -> Optional[str]:
 
 
 def build_swap_whatsapp_text(
-    vehicle_in: Optional[str], driver_in: Optional[str], lines_covered: Optional[str]
+    vehicle_out: Optional[str],
+    vehicle_in: Optional[str],
+    driver_in: Optional[str],
+    lines_covered: Optional[str],
 ) -> str:
-    lines = lines_covered or "linha nao informada"
-    parts = []
-    if vehicle_in:
-        parts.append(f"PREFIXO {vehicle_in}")
-    if driver_in:
-        parts.append(f"MOTORISTA {driver_in}")
-    title = " - ".join(parts) if parts else "TROCA OPERACIONAL"
-    return f"{title} - ATENDERA AS LINHAS : {lines}"
+    """Texto compacto de UMA troca (card 'Copiar texto WhatsApp'):
+    '3380 - ATENDERA AS LINHAS : S 4521'. Prefixo = substituto ou o proprio."""
+    prefix = (vehicle_in or vehicle_out or "").strip()
+    if driver_in and not vehicle_in:
+        label = f"{prefix} (MOT {driver_in})".strip() if prefix else f"MOT {driver_in}"
+    else:
+        label = prefix or "TROCA OPERACIONAL"
+    lines = normalize_covered_text(lines_covered) or "linha nao informada"
+    return f"{label} - ATENDERA AS LINHAS : {lines}"
 
 
 @router.get("/count", response_model=CountResponse)
@@ -204,7 +258,10 @@ async def create_swap(
             detail="Informe o prefixo substituto ou o motorista substituto",
         )
     data["whatsapp_text"] = build_swap_whatsapp_text(
-        data.get("vehicle_in"), data.get("driver_in"), data.get("lines_covered")
+        data.get("vehicle_out"),
+        data.get("vehicle_in"),
+        data.get("driver_in"),
+        data.get("lines_covered"),
     )
 
     # Idempotencia anti duplo-submit: o PWA reenvia o mesmo POST (duplo toque,
@@ -342,17 +399,36 @@ async def swaps_whatsapp_text(
             ),
         }
 
-    # Agrupa linhas por prefixo e/ou motorista substituto.
-    groups: dict[str, list[str]] = {}
+    # Direcao/codigo/horario autoritativos das linhas trocadas (via ScheduleLine).
+    line_ids = {s.schedule_line_id for s in swaps if s.schedule_line_id}
+    line_by_id: dict[int, ScheduleLine] = {}
+    if line_ids:
+        for ln in db.query(ScheduleLine).filter(ScheduleLine.id.in_(line_ids)).all():
+            line_by_id[ln.id] = ln
+
+    # Agrupa por prefixo que VAI ATENDER (substituto, ou o proprio quando so
+    # confirmou). TODAS as linhas trocadas daquele prefixo entram no MESMO texto,
+    # na sequencia da programacao (start_time) — independente da ordem em que
+    # foram registradas. Linha ainda pendente (sem troca) simplesmente nao entra.
+    groups: dict[str, list[tuple[str, str]]] = {}
     for swap in swaps:
-        labels = []
-        if swap.vehicle_in:
-            labels.append(f"PREFIXO {swap.vehicle_in}")
-        if swap.driver_in:
-            labels.append(f"MOTORISTA {swap.driver_in}")
-        key = " - ".join(labels) if labels else "TROCA OPERACIONAL"
-        line = swap.lines_covered or "linha nao informada"
-        groups.setdefault(key, []).append(line)
+        label = swap_attend_label(swap)
+        for start, token in swap_covered_tokens(swap, line_by_id):
+            groups.setdefault(label, []).append((start, token))
+
+    body_lines: list[str] = []
+    # Prefixos na ordem do primeiro horario de cada um (leitura em sequencia).
+    for label in sorted(
+        groups,
+        key=lambda lbl: (min((s for s, _ in groups[lbl] if s), default="~"), lbl),
+    ):
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for _, token in sorted(groups[label], key=lambda t: (t[0] or "~", t[1])):
+            if token not in seen:
+                seen.add(token)
+                ordered.append(token)
+        body_lines.append(f"{label} - ATENDERA AS LINHAS : {' - '.join(ordered)}")
 
     date_label = (
         schedule_date.strftime("%d/%m/%Y")
@@ -363,11 +439,9 @@ async def swaps_whatsapp_text(
             else ""
         )
     )
-    header = f"TROCAS NA ESCALA DIA {date_label}"
-    body_lines = [
-        f"{label} - ATENDERA AS LINHAS : {' - '.join(lines)}"
-        for label, lines in groups.items()
-    ]
+    header = (
+        f"TROCAS OPERACIONAIS - {date_label}" if date_label else "TROCAS OPERACIONAIS"
+    )
     text = header + "\n\n" + "\n".join(body_lines)
 
     return {"total": len(swaps), "text": text}
