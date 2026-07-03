@@ -172,20 +172,16 @@ class TestLogging:
         metrics = client.get("/metrics")
         assert b"db_query_duration_seconds" in metrics.content
 
-    # ── Gap 3: audit_logging_middleware ─────────────────────────────────────
+    # ── Gap 3: middleware de timing e auth nos endpoints ─────────────────────
 
-    def test_audit_middleware_unauthenticated(self):
-        """Cobre middleware.py branch sem Authorization header (user_id = None)."""
+    def test_response_time_header_unauthenticated(self):
+        """Requisição sem Authorization recebe o header X-Response-Time (main.py)."""
         response = client.get("/health")
         assert response.status_code == 200
-        # middleware.py linha 62 adiciona X-Response-Time-Ms
-        assert (
-            "X-Response-Time-Ms" in response.headers
-            or "X-Response-Time" in response.headers
-        )
+        assert "X-Response-Time" in response.headers
 
-    def test_audit_middleware_post_body_capture(self, auth_token):
-        """Cobre middleware.py branch POST body capture (linhas 30-34)."""
+    def test_post_with_body_authenticated(self, auth_token):
+        """POST autenticado com body JSON atravessa a cadeia de middlewares."""
         response = client.post(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
@@ -193,23 +189,19 @@ class TestLogging:
         )
         assert response.status_code == 201
 
-    def test_audit_middleware_authenticated_get(self, auth_token):
-        """Cobre middleware.py branch Bearer token válido (linhas 18-26)."""
+    def test_response_time_header_authenticated_get(self, auth_token):
+        """GET autenticado também recebe o header X-Response-Time."""
         response = client.get(
             "/incidents/",
             headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert response.status_code == 200
-        assert (
-            "X-Response-Time-Ms" in response.headers
-            or "X-Response-Time" in response.headers
-        )
+        assert "X-Response-Time" in response.headers
 
-    def test_audit_middleware_invalid_bearer(self):
-        """Cobre middleware.py branch Bearer com token inválido (except pass, linha 25-26)."""
+    def test_invalid_bearer_returns_401(self):
+        """Bearer inválido retorna 401 limpo, sem derrubar os middlewares."""
         response = client.get(
             "/incidents/",
             headers={"Authorization": "Bearer token-invalido-qualquer"},
         )
-        # Deve retornar 401 (auth falhou), mas o middleware não crasha
         assert response.status_code == 401
