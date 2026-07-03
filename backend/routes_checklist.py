@@ -369,7 +369,7 @@ def _to_response(c: VehicleChecklist) -> ChecklistResponse:
 
 
 @router.post("/", response_model=ChecklistResponse, status_code=status.HTTP_201_CREATED)
-async def create_checklist(
+def create_checklist(
     body: ChecklistCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -407,7 +407,7 @@ async def create_checklist(
 
 
 @router.get("/garagens", response_model=List[str])
-async def list_garagens(
+def list_garagens(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -423,7 +423,7 @@ async def list_garagens(
 
 
 @router.get("/exists-today")
-async def checklist_exists_today(
+def checklist_exists_today(
     prefixo: str = Query(..., min_length=1),
     garagem: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -437,7 +437,7 @@ async def checklist_exists_today(
 
 
 @router.get("/", response_model=List[ChecklistResponse])
-async def list_checklists(
+def list_checklists(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     prefixo: Optional[str] = None,
@@ -458,7 +458,7 @@ async def list_checklists(
 
 
 @router.get("/download")
-async def download_checklist_report(
+def download_checklist_report(
     prefixo: Optional[str] = None,
     garagem: Optional[str] = None,
     tipo: Optional[str] = None,
@@ -489,7 +489,7 @@ async def download_checklist_report(
 
 
 @router.get("/{checklist_id}", response_model=ChecklistResponse)
-async def get_checklist(
+def get_checklist(
     checklist_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -502,7 +502,7 @@ async def get_checklist(
 
 
 @router.patch("/{checklist_id}", response_model=ChecklistResponse)
-async def update_checklist(
+def update_checklist(
     checklist_id: int,
     body: ChecklistUpdate,
     db: Session = Depends(get_db),
@@ -542,7 +542,7 @@ async def update_checklist(
 
 
 @router.delete("/{checklist_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_checklist(
+def delete_checklist(
     checklist_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

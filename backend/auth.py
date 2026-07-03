@@ -220,7 +220,7 @@ def apply_user_unit_scope(query, unit_column, user: User):
     return query.filter(unit_column.in_(allowed_units))
 
 
-async def get_current_user(
+def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
@@ -261,7 +261,7 @@ async def get_current_user(
 def require_role(*roles: UserRole):
     """Retorna função de dependência que exige um dos papéis listados."""
 
-    async def dependency(current_user: User = Depends(get_current_user)) -> User:
+    def dependency(current_user: User = Depends(get_current_user)) -> User:
         if getattr(current_user, "has_full_access", False):
             return current_user
         if current_user.role not in roles:

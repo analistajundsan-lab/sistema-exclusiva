@@ -88,7 +88,7 @@ def _nivel_reincidencia(total: int) -> str:
 
 
 @router.get("/alertas")
-async def sst_alertas(
+def sst_alertas(
     unit: Optional[str] = None,
     dias: int = Query(90, ge=7, le=730),
     db: Session = Depends(get_db),
@@ -174,7 +174,7 @@ async def sst_alertas(
 
 
 @router.get("/score-preditivo")
-async def sst_score_preditivo(
+def sst_score_preditivo(
     unit: Optional[str] = None,
     dias: int = Query(180, ge=30, le=730),
     db: Session = Depends(get_db),
@@ -270,7 +270,7 @@ async def sst_score_preditivo(
 
 
 @router.get("/comparativo")
-async def sst_comparativo(
+def sst_comparativo(
     meses: int = Query(6, ge=2, le=24),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -350,11 +350,11 @@ async def sst_comparativo(
 # ── Exportacao executiva (XLSX / PDF) ─────────────────────────────────────────
 
 
-async def _dashboard_data(db, current_user, unit, date_start, date_end) -> dict:
+def _dashboard_data(db, current_user, unit, date_start, date_end) -> dict:
     """Reaproveita exatamente o calculo do dashboard-v2 (sem duplicar regra)."""
     from routes_sst import sst_dashboard_v2
 
-    return await sst_dashboard_v2(
+    return sst_dashboard_v2(
         unit=unit,
         date_start=date_start,
         date_end=date_end,
@@ -372,7 +372,7 @@ def _period_label(data: dict) -> str:
 
 
 @router.get("/export.xlsx")
-async def export_xlsx(
+def export_xlsx(
     unit: Optional[str] = None,
     date_start: Optional[date_type] = None,
     date_end: Optional[date_type] = None,
@@ -382,7 +382,7 @@ async def export_xlsx(
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
 
-    data = await _dashboard_data(db, current_user, unit, date_start, date_end)
+    data = _dashboard_data(db, current_user, unit, date_start, date_end)
     s = data["summary"]
 
     wb = Workbook()
@@ -470,7 +470,7 @@ async def export_xlsx(
 
 
 @router.get("/export.pdf")
-async def export_pdf(
+def export_pdf(
     unit: Optional[str] = None,
     date_start: Optional[date_type] = None,
     date_end: Optional[date_type] = None,
@@ -489,7 +489,7 @@ async def export_pdf(
     )
     from reportlab.lib.styles import getSampleStyleSheet
 
-    data = await _dashboard_data(db, current_user, unit, date_start, date_end)
+    data = _dashboard_data(db, current_user, unit, date_start, date_end)
     s = data["summary"]
 
     buf = io.BytesIO()

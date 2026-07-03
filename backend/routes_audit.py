@@ -30,7 +30,7 @@ def apply_filters(
 
 
 @router.get("/logs/count", response_model=CountResponse)
-async def count_audit_logs(
+def count_audit_logs(
     resource: Optional[str] = None,
     resource_id: Optional[int] = None,
     action: Optional[str] = None,
@@ -49,7 +49,7 @@ async def count_audit_logs(
 
 
 @router.get("/logs", response_model=List[AuditLogResponse])
-async def list_audit_logs(
+def list_audit_logs(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     resource: Optional[str] = None,
@@ -70,7 +70,7 @@ async def list_audit_logs(
 
 
 @router.delete("/logs/{log_id}")
-async def delete_audit_log(
+def delete_audit_log(
     log_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
@@ -97,7 +97,7 @@ async def delete_audit_log(
 
 
 @router.post("/logs/{log_id}/restore")
-async def restore_audit_log(
+def restore_audit_log(
     log_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),

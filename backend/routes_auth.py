@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Header, Request, Response
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -236,9 +237,14 @@ async def login(
                 detail="Muitas tentativas de login. Tente novamente em 1 minuto.",
             )
 
-        user, needs_rehash = find_user_by_cpf(db, request.cpf)
+        # Busca por CPF e bcrypt sao pesados: rodam no threadpool para nao
+        # segurar o event loop (o login e async por causa do rate_limit).
+        user, needs_rehash = await run_in_threadpool(find_user_by_cpf, db, request.cpf)
 
-        if not user or not verify_password(request.password, user.password_hash):
+        password_ok = bool(user) and await run_in_threadpool(
+            verify_password, request.password, user.password_hash
+        )
+        if not user or not password_ok:
             await auth_metrics(False)
             # Auditoria de falha sem dados sensiveis (sem CPF/senha).
             db.add(
@@ -311,7 +317,7 @@ async def login(
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(current_user: User = Depends(get_current_user)):
+def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
@@ -365,7 +371,7 @@ async def register(request: UserCreate, req: Request, db: Session = Depends(get_
 
 
 @router.post("/users", response_model=UserResponse)
-async def create_user_by_admin(
+def create_user_by_admin(
     request: UserCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
@@ -428,7 +434,7 @@ async def create_user_by_admin(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(
+def refresh(
     req: Request,
     response: Response,
     authorization: str | None = Header(None),
@@ -487,7 +493,7 @@ async def refresh(
 
 
 @router.post("/logout")
-async def logout(
+def logout(
     req: Request,
     response: Response,
     authorization: str | None = Header(None),
@@ -533,7 +539,7 @@ async def logout(
 
 
 @router.post("/mfa/verify", response_model=TokenResponse)
-async def mfa_verify(
+def mfa_verify(
     body: MfaVerifyRequest,
     req: Request,
     response: Response,
@@ -588,7 +594,7 @@ async def mfa_verify(
 
 
 @router.post("/mfa/setup", response_model=MfaSetupResponse)
-async def mfa_setup(
+def mfa_setup(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -610,7 +616,7 @@ async def mfa_setup(
 
 
 @router.post("/mfa/enable")
-async def mfa_enable(
+def mfa_enable(
     body: MfaEnableRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -642,7 +648,7 @@ async def mfa_enable(
 
 
 @router.post("/mfa/disable")
-async def mfa_disable(
+def mfa_disable(
     body: MfaDisableRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -752,9 +758,7 @@ async def request_password_reset(
 
 
 @router.post("/password-reset")
-async def reset_password(
-    body: PasswordReset, req: Request, db: Session = Depends(get_db)
-):
+def reset_password(body: PasswordReset, req: Request, db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc)
     token_hash = hash_reset_token(body.token)
 
@@ -805,7 +809,7 @@ async def reset_password(
 
 
 @router.post("/change-password")
-async def change_password(
+def change_password(
     body: PasswordChange,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -834,7 +838,7 @@ async def change_password(
 
 
 @router.patch("/profile", response_model=UserResponse)
-async def update_profile(
+def update_profile(
     body: UserProfileUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -861,7 +865,7 @@ async def update_profile(
 
 
 @router.get("/users", response_model=List[UserResponse])
-async def list_users(
+def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
@@ -870,7 +874,7 @@ async def list_users(
 
 
 @router.patch("/users/{user_id}/toggle", response_model=UserResponse)
-async def toggle_user(
+def toggle_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
@@ -901,7 +905,7 @@ async def toggle_user(
 
 
 @router.patch("/users/{user_id}/role", response_model=UserResponse)
-async def change_role(
+def change_role(
     user_id: int,
     role: UserRole,
     db: Session = Depends(get_db),
@@ -926,7 +930,7 @@ async def change_role(
 
 
 @router.patch("/users/{user_id}/history-permission", response_model=UserResponse)
-async def change_history_permission(
+def change_history_permission(
     user_id: int,
     can_delete_history: bool,
     db: Session = Depends(get_db),
@@ -957,7 +961,7 @@ async def change_history_permission(
 
 
 @router.patch("/users/{user_id}", response_model=UserResponse)
-async def admin_update_user(
+def admin_update_user(
     user_id: int,
     body: UserAdminUpdate,
     db: Session = Depends(get_db),
@@ -1022,7 +1026,7 @@ async def admin_update_user(
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(
+def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),

@@ -160,7 +160,7 @@ def _submission_status(
 @router.get(
     "/public/checklists/{vehicle_token}", response_model=PublicSafetyChecklistResponse
 )
-async def public_checklist(vehicle_token: str, db: Session = Depends(get_db)):
+def public_checklist(vehicle_token: str, db: Session = Depends(get_db)):
     vehicle = (
         db.query(SafetyVehicle)
         .filter(
@@ -316,7 +316,7 @@ async def create_public_submission(
 
 
 @router.get("/safety/vehicles", response_model=list[SafetyVehicleResponse])
-async def list_safety_vehicles(
+def list_safety_vehicles(
     unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -331,7 +331,7 @@ async def list_safety_vehicles(
 
 
 @router.get("/safety/dashboard", response_model=SafetyDashboardResponse)
-async def safety_dashboard(
+def safety_dashboard(
     unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -395,7 +395,7 @@ async def safety_dashboard(
 
 
 @router.get("/safety/submissions", response_model=list[SafetySubmissionListItem])
-async def list_safety_submissions(
+def list_safety_submissions(
     status_filter: Optional[str] = Query(None, alias="status"),
     unit: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -429,7 +429,7 @@ async def list_safety_submissions(
 
 
 @router.get("/safety/maintenance", response_model=list[SafetyTicketListItem])
-async def list_safety_tickets(
+def list_safety_tickets(
     unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -451,7 +451,7 @@ async def list_safety_tickets(
 
 
 @router.patch("/safety/maintenance/{ticket_id}", response_model=SafetyTicketListItem)
-async def update_safety_ticket(
+def update_safety_ticket(
     ticket_id: int,
     body: SafetyTicketUpdate,
     db: Session = Depends(get_db),
@@ -480,7 +480,7 @@ async def update_safety_ticket(
 @router.post(
     "/safety/maintenance/{ticket_id}/approve-sst", response_model=SafetyTicketListItem
 )
-async def approve_ticket_for_sst(
+def approve_ticket_for_sst(
     ticket_id: int,
     body: SSTApprovalRequest,
     db: Session = Depends(get_db),
@@ -551,7 +551,7 @@ async def approve_ticket_for_sst(
 
 
 @router.get("/safety/sst-view", response_model=dict)
-async def sst_view(
+def sst_view(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -607,7 +607,7 @@ async def sst_view(
 
 
 @router.get("/safety/submissions/export")
-async def export_safety_submissions(
+def export_safety_submissions(
     format: str = Query("csv", pattern="^(csv|xlsx)$"),
     unit: Optional[str] = None,
     db: Session = Depends(get_db),

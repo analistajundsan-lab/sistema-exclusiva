@@ -127,7 +127,7 @@ def _log_sinistro_history(
 
 
 @router.get("/dashboard", response_model=SSTDashboardResponse)
-async def sst_dashboard(
+def sst_dashboard(
     unit: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -290,7 +290,7 @@ def _top(counter: dict, key_name: str, limit: int = 5) -> list[dict]:
 
 
 @router.get("/dashboard-v2")
-async def sst_dashboard_v2(
+def sst_dashboard_v2(
     unit: Optional[str] = None,
     date_start: Optional[date_type] = None,
     date_end: Optional[date_type] = None,
@@ -646,7 +646,7 @@ async def sst_dashboard_v2(
 
 
 @router.post("/sinistros", status_code=status.HTTP_201_CREATED)
-async def create_sinistro(
+def create_sinistro(
     body: SinistroCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -682,7 +682,7 @@ async def create_sinistro(
 
 
 @router.get("/sinistros", response_model=List[SinistroResponse])
-async def list_sinistros(
+def list_sinistros(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     unit: Optional[str] = None,
@@ -720,7 +720,7 @@ async def list_sinistros(
 
 
 @router.get("/sinistros/{sinistro_id}")
-async def get_sinistro(
+def get_sinistro(
     sinistro_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -735,7 +735,7 @@ async def get_sinistro(
 
 
 @router.put("/sinistros/{sinistro_id}")
-async def update_sinistro(
+def update_sinistro(
     sinistro_id: int,
     body: SinistroUpdate,
     db: Session = Depends(get_db),
@@ -783,7 +783,7 @@ async def update_sinistro(
     "/sinistros/{sinistro_id}/historico",
     response_model=List[SinistroHistoricoResponse],
 )
-async def sinistro_historico(
+def sinistro_historico(
     sinistro_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -807,7 +807,7 @@ async def sinistro_historico(
 
 
 @router.post("/ocorrencias/{incident_id}/encaminhar")
-async def encaminhar_para_sst(
+def encaminhar_para_sst(
     incident_id: int,
     body: SSTForwardRequest,
     db: Session = Depends(get_db),
@@ -842,7 +842,7 @@ async def encaminhar_para_sst(
 
 
 @router.get("/ocorrencias")
-async def list_sst_ocorrencias(
+def list_sst_ocorrencias(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     priority: Optional[str] = None,
@@ -885,7 +885,7 @@ async def list_sst_ocorrencias(
 
 
 @router.post("/liberacoes", status_code=status.HTTP_201_CREATED)
-async def create_liberacao(
+def create_liberacao(
     body: LiberacaoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -916,7 +916,7 @@ async def create_liberacao(
 
 
 @router.get("/liberacoes")
-async def list_liberacoes(
+def list_liberacoes(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     unit: Optional[str] = None,
@@ -942,7 +942,7 @@ async def list_liberacoes(
 
 
 @router.get("/liberacoes/{lib_id}")
-async def get_liberacao(
+def get_liberacao(
     lib_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -957,7 +957,7 @@ async def get_liberacao(
 
 
 @router.put("/liberacoes/{lib_id}")
-async def update_liberacao(
+def update_liberacao(
     lib_id: int,
     body: LiberacaoUpdate,
     db: Session = Depends(get_db),
@@ -996,7 +996,7 @@ async def update_liberacao(
 
 
 @router.post("/saude", status_code=status.HTTP_201_CREATED)
-async def create_saude(
+def create_saude(
     body: SaudeCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -1026,7 +1026,7 @@ async def create_saude(
 
 
 @router.get("/saude")
-async def list_saude(
+def list_saude(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     unit: Optional[str] = None,
@@ -1052,7 +1052,7 @@ async def list_saude(
 
 
 @router.get("/saude/{saude_id}")
-async def get_saude(
+def get_saude(
     saude_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(*SST_ROLES)),
@@ -1071,7 +1071,7 @@ async def get_saude(
 
 
 @router.put("/saude/{saude_id}")
-async def update_saude(
+def update_saude(
     saude_id: int,
     body: SaudeUpdate,
     db: Session = Depends(get_db),

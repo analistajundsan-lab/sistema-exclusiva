@@ -201,7 +201,7 @@ async def health():
 
 
 @app.get("/ready")
-async def ready():
+def ready():
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))

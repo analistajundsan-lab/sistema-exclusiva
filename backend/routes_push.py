@@ -21,13 +21,13 @@ def _user_unit(user: User) -> str | None:
 
 
 @router.get("/vapid-public-key")
-async def vapid_public_key():
+def vapid_public_key():
     """Chave publica para o navegador se inscrever. Vazia = push desligado."""
     return {"key": settings.VAPID_PUBLIC_KEY}
 
 
 @router.post("/subscribe")
-async def subscribe(
+def subscribe(
     body: PushSubscriptionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -60,7 +60,7 @@ async def subscribe(
 
 
 @router.post("/unsubscribe")
-async def unsubscribe(
+def unsubscribe(
     body: PushUnsubscribe,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

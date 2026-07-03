@@ -141,7 +141,7 @@ def build_swap_whatsapp_text(
 
 
 @router.get("/count", response_model=CountResponse)
-async def count_swaps(
+def count_swaps(
     vehicle: Optional[str] = None,
     vehicle_out: Optional[str] = None,
     vehicle_in: Optional[str] = None,
@@ -168,7 +168,7 @@ async def count_swaps(
 
 
 @router.post("/", response_model=SwapResponse, status_code=status.HTTP_201_CREATED)
-async def create_swap(
+def create_swap(
     body: SwapCreate,
     db: Session = Depends(get_db),
     # Troca e operacao de Trafego/Analista/Admin (+ legados); cargos SST nao
@@ -316,7 +316,7 @@ async def create_swap(
 
 
 @router.get("/", response_model=List[SwapResponse])
-async def list_swaps(
+def list_swaps(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     vehicle: Optional[str] = None,
@@ -362,7 +362,7 @@ async def list_swaps(
 
 
 @router.get("/whatsapp/text")
-async def swaps_whatsapp_text(
+def swaps_whatsapp_text(
     unit: Optional[str] = None,
     schedule_date: Optional[date] = None,
     window_minutes: Optional[int] = Query(None, ge=1, le=720),
@@ -448,7 +448,7 @@ async def swaps_whatsapp_text(
 
 
 @router.get("/{swap_id}", response_model=SwapResponse)
-async def get_swap(
+def get_swap(
     swap_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -463,7 +463,7 @@ async def get_swap(
 
 
 @router.put("/{swap_id}", response_model=SwapResponse)
-async def update_swap(
+def update_swap(
     swap_id: int,
     body: SwapUpdate,
     db: Session = Depends(get_db),
@@ -514,7 +514,7 @@ async def update_swap(
 
 
 @router.delete("/{swap_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_swap(
+def delete_swap(
     swap_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.SUPERVISOR, UserRole.ADMIN)),

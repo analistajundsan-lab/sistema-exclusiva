@@ -83,7 +83,7 @@ def can_edit_incident(user: User, incident: Incident) -> bool:
 
 
 @router.get("/count", response_model=CountResponse)
-async def count_incidents(
+def count_incidents(
     prefix_code: Optional[str] = None,
     incident_type: Optional[str] = None,
     line: Optional[str] = None,
@@ -122,7 +122,7 @@ async def count_incidents(
 
 
 @router.post("/", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
-async def create_incident(
+def create_incident(
     body: IncidentCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -181,7 +181,7 @@ async def lookup_cep(
 
 
 @router.get("/", response_model=List[IncidentResponse])
-async def list_incidents(
+def list_incidents(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     prefix_code: Optional[str] = None,
@@ -224,7 +224,7 @@ async def list_incidents(
 
 
 @router.get("/{incident_id}/whatsapp/text")
-async def incident_whatsapp_text(
+def incident_whatsapp_text(
     incident_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -239,7 +239,7 @@ async def incident_whatsapp_text(
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)
-async def get_incident(
+def get_incident(
     incident_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -254,7 +254,7 @@ async def get_incident(
 
 
 @router.put("/{incident_id}", response_model=IncidentResponse)
-async def update_incident(
+def update_incident(
     incident_id: int,
     body: IncidentUpdate,
     db: Session = Depends(get_db),
@@ -287,7 +287,7 @@ async def update_incident(
 
 
 @router.delete("/{incident_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_incident(
+def delete_incident(
     incident_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

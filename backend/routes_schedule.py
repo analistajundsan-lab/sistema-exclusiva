@@ -661,7 +661,7 @@ async def import_schedule(
 
 
 @router.get("/lines/count", response_model=CountResponse)
-async def count_schedule_lines(
+def count_schedule_lines(
     schedule_date: Optional[date] = None,
     unit: Optional[str] = None,
     client_name: Optional[str] = None,
@@ -709,7 +709,7 @@ async def count_schedule_lines(
 
 
 @router.get("/lines", response_model=List[ScheduleLineResponse])
-async def list_schedule_lines(
+def list_schedule_lines(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     schedule_date: Optional[date] = None,
@@ -761,7 +761,7 @@ async def list_schedule_lines(
 
 
 @router.patch("/lines/{line_id}", response_model=ScheduleLineResponse)
-async def update_schedule_line(
+def update_schedule_line(
     line_id: int,
     body: ScheduleLineUpdate,
     db: Session = Depends(get_db),
@@ -835,7 +835,7 @@ async def update_schedule_line(
 
 
 @router.post("/lines/{line_id}/confirm", response_model=ScheduleLineResponse)
-async def confirm_schedule_line(
+def confirm_schedule_line(
     line_id: int,
     db: Session = Depends(get_db),
     # Confirmacao e da operacao (Trafego/Analista/Admin + legados); cargos SST
@@ -904,7 +904,7 @@ async def confirm_schedule_line(
 
 
 @router.post("/lines/{line_id}/undo-confirm", response_model=ScheduleLineResponse)
-async def undo_confirm_schedule_line(
+def undo_confirm_schedule_line(
     line_id: int,
     body: ScheduleLineStatusChange | None = None,
     db: Session = Depends(get_db),
@@ -938,7 +938,7 @@ async def undo_confirm_schedule_line(
 
 
 @router.post("/lines/{line_id}/cancel", response_model=ScheduleLineResponse)
-async def cancel_schedule_line(
+def cancel_schedule_line(
     line_id: int,
     body: ScheduleLineStatusChange | None = None,
     db: Session = Depends(get_db),
@@ -980,7 +980,7 @@ async def cancel_schedule_line(
 
 
 @router.post("/lines/{line_id}/deactivate", response_model=ScheduleLineResponse)
-async def deactivate_schedule_line(
+def deactivate_schedule_line(
     line_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
@@ -1008,7 +1008,7 @@ async def deactivate_schedule_line(
 
 
 @router.post("/lines/{line_id}/reactivate", response_model=ScheduleLineResponse)
-async def reactivate_schedule_line(
+def reactivate_schedule_line(
     line_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
@@ -1035,7 +1035,7 @@ async def reactivate_schedule_line(
 
 
 @router.get("/lines/{line_id}/pair", response_model=List[ScheduleLineResponse])
-async def schedule_line_pair(
+def schedule_line_pair(
     line_id: int,
     operation_date: date,
     db: Session = Depends(get_db),
@@ -1068,7 +1068,7 @@ async def schedule_line_pair(
 
 
 @router.post("/lines/{line_id}/non-operation")
-async def set_schedule_non_operation(
+def set_schedule_non_operation(
     line_id: int,
     body: ScheduleNonOperationCreate,
     db: Session = Depends(get_db),
@@ -1139,7 +1139,7 @@ async def set_schedule_non_operation(
 
 
 @router.delete("/lines/{line_id}/non-operation", status_code=status.HTTP_204_NO_CONTENT)
-async def clear_schedule_non_operation(
+def clear_schedule_non_operation(
     line_id: int,
     operation_date: date,
     db: Session = Depends(get_db),
@@ -1186,7 +1186,7 @@ async def clear_schedule_non_operation(
 
 
 @router.get("/summary", response_model=List[ScheduleSummaryItem])
-async def schedule_summary(
+def schedule_summary(
     schedule_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1207,7 +1207,7 @@ async def schedule_summary(
 
 
 @router.get("/board")
-async def schedule_board(
+def schedule_board(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     schedule_date: Optional[date] = None,
@@ -1368,7 +1368,7 @@ async def schedule_events(
 
 
 @router.get("/dashboard-turns")
-async def schedule_dashboard_turns(
+def schedule_dashboard_turns(
     schedule_date: date,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1516,7 +1516,7 @@ async def schedule_dashboard_turns(
 
 
 @router.get("/whatsapp", response_model=ScheduleWhatsappResponse)
-async def schedule_whatsapp_text(
+def schedule_whatsapp_text(
     schedule_date: date,
     unit: str,
     only_changes: bool = False,
@@ -1574,7 +1574,7 @@ async def schedule_whatsapp_text(
 
 
 @router.delete("/lines/{line_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_schedule_line(
+def delete_schedule_line(
     line_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
@@ -1597,7 +1597,7 @@ async def delete_schedule_line(
 
 
 @router.get("/download")
-async def download_schedule(
+def download_schedule(
     schedule_date: date,
     unit: Optional[str] = None,
     db: Session = Depends(get_db),
