@@ -57,9 +57,41 @@ PGBIN="/c/Program Files/PostgreSQL/18/bin"
 Depois de restaurar, confira a contagem de linhas contra o arquivo `_counts.txt`
 correspondente (ou contra a produção) antes de apontar a aplicação.
 
-## Retenção sugerida
+## Backup automático (GitHub Actions)
 
-- Manter o snapshot de cada migração/mudança estrutural relevante.
-- Backup periódico manual antes de operações de risco (migração, limpeza em massa).
-- Um backup automatizado (cron/rotina) ainda **não** está configurado — é uma
-  melhoria futura recomendada.
+Workflow: `.github/workflows/db-backup.yml`. Roda **todo dia às 03:00 BRT**
+(06:00 UTC) e também sob demanda (aba **Actions → DB Backup (Neon) → Run
+workflow**).
+
+O que ele faz: `pg_dump` do banco de produção → valida que veio dado →
+**criptografa com AES256** → sobe como **artifact** (retenção **30 dias**).
+
+Secrets do repositório (GitHub → Settings → Secrets and variables → Actions):
+- `BACKUP_DATABASE_URL` — connection string (host **direto**, não pooler) do Neon.
+- `BACKUP_PASSPHRASE` — senha usada para criptografar. **Guarde-a no gerenciador
+  de senhas**: sem ela o backup é irrecuperável.
+
+### Como baixar e restaurar um backup automático
+
+1. Aba **Actions** → abra a execução desejada → baixe o artifact `neon_backup_*.dump.gpg`.
+2. Descriptografe e restaure:
+
+```bash
+PGBIN="/c/Program Files/PostgreSQL/18/bin"
+# descriptografa (vai pedir/receber a BACKUP_PASSPHRASE)
+gpg --batch --yes --passphrase "<BACKUP_PASSPHRASE>" \
+    -o neon_backup.dump -d neon_backup_XXXXXXXX.dump.gpg
+# restaura num destino vazio (NEWCONN = connection-string do destino)
+"$PGBIN/pg_restore" -d "$NEWCONN" --no-owner --no-privileges --schema=public neon_backup.dump
+```
+
+> Se a senha do banco for rotacionada, atualize o secret `BACKUP_DATABASE_URL`
+> (senão o job passa a falhar na conexão).
+
+## Retenção
+
+- **Automático:** diário, criptografado, 30 dias de retenção (GitHub Actions).
+- **Manual:** snapshot antes de cada migração/mudança estrutural ou operação de
+  risco (fica em `backups/db/`).
+- Recuperação de curtíssimo prazo: o Neon Free ainda mantém **PITR de ~6h**
+  (restauração a um ponto no tempo) além destes dumps.

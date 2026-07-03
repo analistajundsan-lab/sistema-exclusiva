@@ -1,0 +1,59 @@
+name: DB Backup (Neon)
+
+# Backup automatico diario do banco de producao (Neon / São Paulo).
+# O dump é CRIPTOGRAFADO (AES256) antes de virar artifact — inutil sem a
+# passphrase (secret BACKUP_PASSPHRASE). Ver docs/BACKUPS.md para restaurar.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'      # 06:00 UTC = 03:00 BRT (madrugada, baixo movimento)
+  workflow_dispatch: {}        # permite rodar manualmente pela aba Actions
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Instalar PostgreSQL client 17
+        run: |
+          set -euo pipefail
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
+      - name: Dump + validação + criptografia
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          STAMP="$(date -u +%Y%m%d_%H%M%S)"
+          FILE="neon_backup_${STAMP}.dump"
+          # dump em formato custom (comprimido)
+          pg_dump "$DATABASE_URL" -Fc --no-owner --no-privileges -f "$FILE"
+          # guarda-corpo: falha o job se o dump vier sem tabelas de dados
+          N="$(pg_restore -l "$FILE" | grep -c 'TABLE DATA' || true)"
+          echo "Tabelas com dados no dump: $N"
+          test "$N" -gt 0
+          # criptografa (AES256) e descarta o dump em claro
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+              --passphrase "$PASSPHRASE" -o "${FILE}.gpg" "$FILE"
+          rm -f "$FILE"
+          echo "ARTIFACT=${FILE}.gpg" >> "$GITHUB_ENV"
+
+      - name: Upload do backup criptografado
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: ${{ env.ARTIFACT }}
+          retention-days: 30
+          if-no-files-found: error
