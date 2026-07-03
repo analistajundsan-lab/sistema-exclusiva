@@ -1,6 +1,6 @@
 import hashlib
 import re
-from datetime import date, datetime
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +20,7 @@ from models import (
     get_db,
 )
 from auth import hash_password
+from routes_incidents import brt_day_utc_window, today_brt
 
 TEST_DB = "sqlite:///./test_sst_dash.db"
 engine = create_engine(TEST_DB, connect_args={"check_same_thread": False})
@@ -45,6 +46,13 @@ def setup_teardown():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+def _utc_midday_today_brt() -> datetime:
+    """Meio-dia BRT de hoje como UTC naive — utcnow() entre 00:00 e 03:00 BRT
+    cai no dia BRT seguinte e o dashboard contaria 0 checklists 'hoje'."""
+    start_utc, _ = brt_day_utc_window(today_brt())
+    return start_utc + timedelta(hours=12)
 
 
 def _hash_cpf(cpf: str) -> str:
@@ -85,7 +93,7 @@ def _seed(db):
             driver_name="Motorista A",
             driver_registration="M-001",
             overall_status=SafetySubmissionStatus.OK,
-            submitted_at=datetime.utcnow(),
+            submitted_at=_utc_midday_today_brt(),
             declaration_accepted=True,
         )
     )
@@ -93,7 +101,7 @@ def _seed(db):
         Sinistro(
             unit="Caieiras",
             tipo_sinistro="Colisao",
-            data_ocorrencia=date.today(),
+            data_ocorrencia=today_brt(),
             hora_ocorrencia="14:30",
             condutor_nome="Motorista A",
             prefixo="9001",
@@ -138,7 +146,7 @@ def test_dashboard_v2_fase2_fields(admin_headers):
     payload = {
         "unit": "Caieiras",
         "tipo_sinistro": "Colisao",
-        "data_ocorrencia": date.today().isoformat(),
+        "data_ocorrencia": today_brt().isoformat(),
         "hora_ocorrencia": "08:00",
         "gravidade": "4",
         "probabilidade": "3",

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from io import BytesIO
 import hashlib
@@ -1052,7 +1052,9 @@ def force_confirmed_yesterday(line_id: int) -> None:
     try:
         line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
         line.status = ScheduleLineStatus.CONFIRMADA
-        line.confirmed_at = datetime.utcnow() - timedelta(days=1)
+        line.confirmed_at = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        ) - timedelta(days=1)
         db.commit()
     finally:
         db.close()
