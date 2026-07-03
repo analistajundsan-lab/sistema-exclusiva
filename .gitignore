@@ -24,6 +24,12 @@ env/
 *.sqlite
 *.sqlite3
 
+# Backups de banco (dumps do Neon) — NUNCA versionar: contem dados sensiveis
+# (usuarios, hashes, etc.). Ficam em backups/db/ localmente. Ver docs/BACKUPS.md.
+backups/
+*.dump
+*.sql.gz
+
 # Pytest
 .pytest_cache/
 .coverage
