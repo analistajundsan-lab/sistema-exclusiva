@@ -126,6 +126,40 @@ def test_dashboard_quick_wins(admin_headers):
     assert d["checklists_pendentes"] == 0  # 1 veiculo, 1 com checklist hoje
 
 
+def test_dashboard_counts_late_night_checklist_as_today(admin_headers):
+    """Checklist das 23:00 BRT ja tem data UTC do dia seguinte, mas continua
+    contando no 'hoje' do dashboard (janela BRT, nao func.date UTC)."""
+    db = TestingSessionLocal()
+    v = SafetyVehicle(
+        prefix="9002", unit="Caieiras", active=True, public_token="tok9002"
+    )
+    db.add(v)
+    db.flush()
+    _, end_utc = brt_day_utc_window(today_brt())
+    db.add(
+        DriverChecklistSubmission(
+            vehicle_id=v.id,
+            template_id=1,
+            driver_name="Motorista Noite",
+            driver_registration="M-002",
+            overall_status=SafetySubmissionStatus.OK,
+            submitted_at=end_utc - timedelta(hours=1),  # 23:00 BRT de hoje
+            declaration_accepted=True,
+        )
+    )
+    db.commit()
+    db.close()
+
+    d = client.get("/sst/dashboard", headers=admin_headers).json()
+    assert d["checklists_hoje"] == 1
+    assert d["checklists_pendentes"] == 0
+
+    v2 = client.get("/sst/dashboard-v2", headers=admin_headers).json()
+    assert v2["summary"]["checklist_compliance_pct"] == 100
+    serie = {p["dia"]: p["total"] for p in v2["trends"]["checklists_por_dia"]}
+    assert serie[today_brt().isoformat()] == 1
+
+
 def test_dashboard_v2_structure(admin_headers):
     db = TestingSessionLocal()
     _seed(db)

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, date as date_type, timedelta
+from datetime import datetime, date as date_type, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import List, Optional
 
@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import apply_user_unit_scope, get_current_user, require_role
+from routes_incidents import brt_day_utc_window
 from models import (
     AuditLog,
     DriverChecklistSubmission,
@@ -189,14 +190,23 @@ def sst_dashboard(
             q = q.filter(SafetyVehicle.unit == unit)
         return q
 
+    # submitted_at e UTC naive; comparar func.date() com a data BRT faz o
+    # checklist da noite (21h-00h BRT) cair no "amanha" — filtra pela janela BRT.
+    hoje_ini_utc, hoje_fim_utc = brt_day_utc_window(today)
     checklists_hoje = (
         _scoped_checklist_query()
-        .filter(func.date(DriverChecklistSubmission.submitted_at) == today)
+        .filter(
+            DriverChecklistSubmission.submitted_at >= hoje_ini_utc,
+            DriverChecklistSubmission.submitted_at < hoje_fim_utc,
+        )
         .count()
     )
     veiculos_com_checklist_hoje = (
         _scoped_checklist_query()
-        .filter(func.date(DriverChecklistSubmission.submitted_at) == today)
+        .filter(
+            DriverChecklistSubmission.submitted_at >= hoje_ini_utc,
+            DriverChecklistSubmission.submitted_at < hoje_fim_utc,
+        )
         .with_entities(DriverChecklistSubmission.vehicle_id)
         .distinct()
         .count()
@@ -447,9 +457,15 @@ def sst_dashboard_v2(
             q = q.filter(SafetyVehicle.unit == unit)
         return q
 
+    # submitted_at e UTC naive; "hoje" e a serie diaria usam a janela/data BRT
+    # para o checklist da noite (21h-00h BRT) nao escorregar para o dia seguinte.
+    hoje_ini_utc, hoje_fim_utc = brt_day_utc_window(today)
     veic_chk_hoje = (
         _chk_q()
-        .filter(func.date(DriverChecklistSubmission.submitted_at) == today)
+        .filter(
+            DriverChecklistSubmission.submitted_at >= hoje_ini_utc,
+            DriverChecklistSubmission.submitted_at < hoje_fim_utc,
+        )
         .with_entities(DriverChecklistSubmission.vehicle_id)
         .distinct()
         .count()
@@ -458,11 +474,12 @@ def sst_dashboard_v2(
         round(veic_chk_hoje / total_veiculos * 100) if total_veiculos else 0
     )
 
+    serie_ini_utc, _ = brt_day_utc_window(today - timedelta(days=13))
     chk_rows = (
         _chk_q()
         .filter(
-            func.date(DriverChecklistSubmission.submitted_at)
-            >= today - timedelta(days=13)
+            DriverChecklistSubmission.submitted_at >= serie_ini_utc,
+            DriverChecklistSubmission.submitted_at < hoje_fim_utc,
         )
         .with_entities(
             DriverChecklistSubmission.submitted_at,
@@ -477,7 +494,12 @@ def sst_dashboard_v2(
     for submitted_at, ov in chk_rows:
         if submitted_at is None:
             continue
-        d = submitted_at.date().isoformat()
+        d = (
+            submitted_at.replace(tzinfo=timezone.utc)
+            .astimezone(BRASILIA_TZ)
+            .date()
+            .isoformat()
+        )
         if d in checklists_por_dia:
             checklists_por_dia[d] += 1
         key = getattr(ov, "value", str(ov))
