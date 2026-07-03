@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { Layout } from '../components/Layout'
 import { Incident, useIncidents } from '../hooks/useIncidents'
+import { useVisibleInterval } from '../hooks/useVisibleInterval'
 import { useAuthStore } from '../store/auth'
 import api from '../api/client'
 import { parseApiDate } from '../utils/datetime'
@@ -158,12 +159,10 @@ export function Incidents() {
     return parts.join('\n')
   }
 
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      fetchIncidents(filters, page * 20, true)
-    }, 8000)
-    return () => window.clearInterval(interval)
-  }, [fetchIncidents, filters, page])
+  // So atualiza com a aba visivel (economiza requests -> banco pode suspender).
+  useVisibleInterval(() => {
+    fetchIncidents(filters, page * 20, true)
+  }, 8000)
 
   const sendWhatsApp = (text: string, kind: 'personal' | 'business' = 'personal') => {
     const encoded = encodeURIComponent(text)

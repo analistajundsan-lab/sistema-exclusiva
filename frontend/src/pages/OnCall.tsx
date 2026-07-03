@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { ScheduleFilters, ScheduleLine, useSchedule } from '../hooks/useSchedule'
 import { useSwaps } from '../hooks/useSwaps'
+import { useVisibleInterval } from '../hooks/useVisibleInterval'
 import { DEFAULT_OPERATION_DATE, currentOperationDate } from '../config/demo'
 import { useAuthStore } from '../store/auth'
 import client, { apiErrorMessage } from '../api/client'
@@ -249,23 +250,21 @@ export function OnCall() {
   // confirmacao/troca alheia aparece em ~2s, sem baixar a escala a cada ciclo.
   // A atualizacao e silenciosa (sem spinner; so re-renderiza se os dados mudarem).
   const lastVersionRef = useRef<number | null>(null)
-  useEffect(() => {
-    const tick = async () => {
-      const v = await pending.fetchVersion()
-      if (v == null) return
-      if (lastVersionRef.current === null) {
-        lastVersionRef.current = v
-        return
-      }
-      if (v !== lastVersionRef.current) {
-        lastVersionRef.current = v
-        pending.refetch(appliedFilters, 0, { silent: true })
-        swapsList.fetchSwaps({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date }, 0, { silent: true })
-      }
+  // So roda com a aba visivel (useVisibleInterval): aba oculta = sem poll, o
+  // banco pode suspender. Ao voltar, atualiza na hora.
+  useVisibleInterval(async () => {
+    const v = await pending.fetchVersion()
+    if (v == null) return
+    if (lastVersionRef.current === null) {
+      lastVersionRef.current = v
+      return
     }
-    const interval = window.setInterval(tick, 2000)
-    return () => window.clearInterval(interval)
-  }, [appliedFilters])
+    if (v !== lastVersionRef.current) {
+      lastVersionRef.current = v
+      pending.refetch(appliedFilters, 0, { silent: true })
+      swapsList.fetchSwaps({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date }, 0, { silent: true })
+    }
+  }, 2000)
 
   // Tempo-real <1s via SSE (push direto do backend). Camada ADITIVA: se a
   // conexao cair, o polling de versao acima (~2s) cobre. O handler le sempre os

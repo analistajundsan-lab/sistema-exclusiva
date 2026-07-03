@@ -3,6 +3,7 @@ import { Layout } from '../components/Layout'
 import { dedupedGet } from '../api/client'
 import { currentOperationDate } from '../config/demo'
 import { openScheduleStream } from '../utils/scheduleStream'
+import { useVisibleInterval } from '../hooks/useVisibleInterval'
 import { AlertTriangle, ArrowLeftRight, Building2, RefreshCw, TrendingUp } from 'lucide-react'
 
 interface DirectionStats {
@@ -89,11 +90,11 @@ export function Dashboard() {
     loadStats()
       .catch(() => setDashboard(null))
       .finally(() => setLoading(false))
-    const interval = window.setInterval(() => {
-      loadStats().catch(() => setDashboard(null))
-    }, 8000)
-    return () => window.clearInterval(interval)
   }, [loadStats])
+  // Atualiza a cada 8s so com a aba visivel (economiza requests -> banco pode suspender).
+  useVisibleInterval(() => {
+    loadStats().catch(() => setDashboard(null))
+  }, 8000)
 
   // Virada de dia (00:00 BRT): se o dia BRT mudou e o operador esta vendo "hoje",
   // o painel passa a mostrar o novo dia — zerando os dados do dia anterior.
