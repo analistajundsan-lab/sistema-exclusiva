@@ -28,7 +28,9 @@ jobs:
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
-          pg_dump --version
+          # o runner ja traz o client 16; garante que o 17 tenha precedencia
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/17/bin/pg_dump --version
 
       - name: Dump + validação + criptografia
         env:
