@@ -44,6 +44,9 @@ def _send(sub: PushSubscription, payload: dict) -> bool:
             vapid_private_key=settings.VAPID_PRIVATE_KEY,
             vapid_claims={"sub": settings.VAPID_SUBJECT},
             ttl=600,
+            # Sem timeout o requests espera para sempre: um endpoint de push
+            # pendurado congelava o ciclo inteiro do agendador.
+            timeout=10,
         )
         return True
     except WebPushException as exc:

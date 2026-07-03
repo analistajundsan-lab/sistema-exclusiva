@@ -19,6 +19,7 @@ from routes_push import router as push_router
 from rate_limit import init_redis
 from metrics_middleware import metrics_middleware
 from prometheus_client import make_asgi_app
+from starlette.concurrency import run_in_threadpool
 import asyncio
 
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -168,17 +169,25 @@ async def startup():
         logger.error("Falha ao iniciar agendador de push: %s", e)
 
 
-async def push_scheduler_loop():
+def _push_scan_cycle():
+    """Um ciclo do agendador (banco + envio HTTP sincrono do pywebpush)."""
     from push_service import scan_and_notify
 
+    db = SessionLocal()
+    try:
+        scan_and_notify(db)
+    finally:
+        db.close()
+
+
+async def push_scheduler_loop():
     while True:
         await asyncio.sleep(60)
         try:
-            db = SessionLocal()
-            try:
-                scan_and_notify(db)
-            finally:
-                db.close()
+            # No threadpool: o ciclo faz queries sincronas e HTTP sincrono
+            # (pywebpush/requests) — rodando no event loop ele congelava o
+            # processo inteiro (inclusive /health) durante os envios.
+            await run_in_threadpool(_push_scan_cycle)
         except Exception as e:
             logger.error("Agendador de push: erro no ciclo: %s", e)
 
