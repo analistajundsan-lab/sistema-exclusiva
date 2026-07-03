@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { demoAdapter } from './demo'
 
 const api = axios.create({
@@ -21,10 +21,35 @@ api.interceptors.request.use(cfg => {
   return cfg
 })
 
+// Mesmo conjunto de chaves do logout() (store/auth.ts) — antes limpava so 3 e
+// deixava userId/userName/hasFullAccess/mustChangePassword etc. orfaos no
+// localStorage apos sessao expirada.
+const AUTH_KEYS = [
+  'token',
+  'refreshToken',
+  'role',
+  'userId',
+  'userName',
+  'displayName',
+  'photoUrl',
+  'userUnit',
+  'userUnits',
+  'hasFullAccess',
+  'mustChangePassword',
+] as const
+
 function clearAuth() {
-  localStorage.removeItem('token')
-  localStorage.removeItem('refreshToken')
-  localStorage.removeItem('role')
+  for (const key of AUTH_KEYS) localStorage.removeItem(key)
+}
+
+// Fluxo padrao de sessao expirada: limpa credenciais e volta para o login.
+// Exportado para outras camadas (ex.: stream SSE) reutilizarem o mesmo
+// comportamento sem duplicar logica.
+export function handleSessionExpired() {
+  clearAuth()
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login'
+  }
 }
 
 export function apiErrorMessage(err: any, fallback: string): string {
@@ -67,14 +92,27 @@ export async function revokeSession(): Promise<void> {
 }
 
 // O refresh token vive em cookie HttpOnly; o navegador o envia automaticamente.
+// Timeout curto: se o /auth/refresh engasgar, as requisicoes aguardando a
+// Promise compartilhada falham rapido em vez de pendurar a tela em
+// "Carregando dados..." para sempre.
 async function doRefresh(): Promise<string> {
   const res = await axios.post(
     `${api.defaults.baseURL}/auth/refresh`,
     null,
-    { withCredentials: true },
+    { withCredentials: true, timeout: 10000 },
   )
   localStorage.setItem('token', res.data.access_token)
   return res.data.access_token
+}
+
+// Endpoints de autenticacao: um 401 aqui significa "credencial/codigo errado",
+// nao "sessao expirada" — nunca tentar refresh nem redirecionar; o erro precisa
+// propagar para o useAuth exibir a mensagem (ex.: "CPF ou senha invalidos").
+const AUTH_EXEMPT_PATHS = ['/auth/login', '/auth/mfa/verify', '/auth/refresh']
+
+function isAuthExempt(url: string | undefined): boolean {
+  if (!url) return false
+  return AUTH_EXEMPT_PATHS.some(path => url.includes(path))
 }
 
 api.interceptors.response.use(
@@ -98,7 +136,7 @@ api.interceptors.response.use(
       return Promise.reject(err)
     }
 
-    if (err.response?.status === 401 && !original?._retry) {
+    if (err.response?.status === 401 && !original?._retry && !isAuthExempt(original?.url)) {
       original._retry = true
 
       // Deduplicate: se outra requisição já iniciou o refresh, aguarda a mesma Promise
@@ -111,8 +149,7 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${newToken}`
         return api(original)
       } catch {
-        clearAuth()
-        window.location.href = '/login'
+        handleSessionExpired()
         return Promise.reject(err)
       }
     }
@@ -120,5 +157,28 @@ api.interceptors.response.use(
     return Promise.reject(err)
   },
 )
+
+// ── Dedupe de GETs idênticos em voo ─────────────────────────────────────────
+// O dashboard dispara o mesmo GET por varias fontes concorrentes (intervalo de
+// polling, push SSE, botao Atualizar). Enquanto uma requisicao identica ainda
+// esta pendente, reutiliza a MESMA Promise em vez de abrir outra conexao —
+// sem mudar a semantica dos dados (todos os chamadores recebem a resposta
+// fresca da rede).
+const inflightGets = new Map<string, Promise<AxiosResponse<unknown>>>()
+
+export function dedupedGet<T = unknown>(
+  url: string,
+  config?: AxiosRequestConfig,
+): Promise<AxiosResponse<T>> {
+  const key = `${url}::${JSON.stringify(config?.params ?? null)}`
+  const existing = inflightGets.get(key)
+  if (existing) return existing as Promise<AxiosResponse<T>>
+
+  const promise = api.get<T>(url, config).finally(() => {
+    inflightGets.delete(key)
+  })
+  inflightGets.set(key, promise as Promise<AxiosResponse<unknown>>)
+  return promise
+}
 
 export default api

@@ -6,6 +6,8 @@
 // buffering de streams (testado), entao o SSE nao chega. A CSP do front libera
 // connect-src para este host.
 
+import { handleSessionExpired } from '../api/client'
+
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 // Em dev a API ja e absoluta (localhost:8000) e serve SSE direto. Em prod a API
 // e o proxy "/api" (buffering) — entao vamos direto no Fly.
@@ -32,6 +34,14 @@ export function openScheduleStream(onChange: (ev: ScheduleEvent) => void): () =>
         signal: controller.signal,
         cache: 'no-store',
       })
+      if (res.status === 401 || res.status === 403) {
+        // Token morto/sem permissao: reconectar nao resolve — pararia de
+        // martelar o backend com retries infinitos. Encerra o stream e dispara
+        // o fluxo padrao de sessao expirada (limpa credenciais + /login).
+        closed = true
+        handleSessionExpired()
+        return
+      }
       if (!res.ok || !res.body) throw new Error(`SSE ${res.status}`)
       attempt = 0
       const reader = res.body.getReader()

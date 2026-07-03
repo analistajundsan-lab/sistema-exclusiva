@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "postbuild": "node scripts/stamp-sw.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "lint": "eslint src",

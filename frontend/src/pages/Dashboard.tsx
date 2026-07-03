@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Layout } from '../components/Layout'
-import api from '../api/client'
+import { dedupedGet } from '../api/client'
 import { currentOperationDate } from '../config/demo'
 import { openScheduleStream } from '../utils/scheduleStream'
 import { AlertTriangle, ArrowLeftRight, Building2, RefreshCw, TrendingUp } from 'lucide-react'
@@ -67,12 +67,15 @@ export function Dashboard() {
   }, [selectedDate])
 
   const loadStats = useCallback(async () => {
+    // dedupedGet: polling (8s), push SSE e botao Atualizar podem coincidir e
+    // disparavam 2-3 GETs identicos simultaneos; enquanto um estiver em voo,
+    // os demais reutilizam a mesma Promise.
     const [dash, inc, swp] = await Promise.all([
-      api.get<DashboardTurns>('/schedule/dashboard-turns', { params: { schedule_date: selectedDate } }),
+      dedupedGet<DashboardTurns>('/schedule/dashboard-turns', { params: { schedule_date: selectedDate } }),
       // Sempre filtra pela data selecionada (sem isso, data retroativa
       // mostrava o total de ocorrencias de todos os tempos).
-      api.get('/incidents/count', { params: { incident_date: selectedDate } }),
-      api.get('/swaps/count', { params: { schedule_date: selectedDate } }),
+      dedupedGet<{ total: number }>('/incidents/count', { params: { incident_date: selectedDate } }),
+      dedupedGet<{ total: number }>('/swaps/count', { params: { schedule_date: selectedDate } }),
     ])
     setDashboard(dash.data)
     setDayStats({
@@ -126,7 +129,11 @@ export function Dashboard() {
 
   const handleRefresh = async () => {
     setRefreshing(true)
-    await loadStats().finally(() => setRefreshing(false))
+    // Mesmo tratamento de erro do load normal: sem o catch, uma falha aqui
+    // virava rejeicao nao tratada e o botao nao dava nenhum feedback.
+    await loadStats()
+      .catch(() => setDashboard(null))
+      .finally(() => setRefreshing(false))
   }
 
   return (

@@ -1,4 +1,7 @@
-const CACHE_NAME = "sistema-exclusiva-v12";
+// A versao base e trocada automaticamente a cada deploy pelo passo "postbuild"
+// (scripts/stamp-sw.mjs), que estampa um identificador unico no dist/sw.js.
+// Nao remova nem reformate esta linha — o script a localiza por regex.
+const CACHE_NAME = "sistema-exclusiva-v13";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/logo-bus.svg"];
 
 self.addEventListener("install", event => {
@@ -65,22 +68,38 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
 
   // Nunca interceptar chamadas de API — deixa passar direto para a rede
+  // (network-only: resposta autenticada JAMAIS entra no Cache Storage).
+  // Em producao a API e servida sob /api/... (rewrite do vercel.json); em dev
+  // local os paths chegam sem o prefixo — normalizamos antes de testar.
+  const apiPath = url.pathname.startsWith("/api/")
+    ? url.pathname.slice(4) // remove o prefixo "/api"
+    : url.pathname;
   if (
     url.hostname !== self.location.hostname ||
-    url.pathname.startsWith("/auth/") ||
-    url.pathname.startsWith("/schedule/") ||
-    url.pathname.startsWith("/swaps/") ||
-    url.pathname.startsWith("/incidents/") ||
-    url.pathname.startsWith("/users/") ||
-    url.pathname.startsWith("/health")
+    url.pathname.startsWith("/api/") ||
+    apiPath.startsWith("/auth/") ||
+    apiPath.startsWith("/schedule/") ||
+    apiPath.startsWith("/swaps/") ||
+    apiPath.startsWith("/incidents/") ||
+    apiPath.startsWith("/users/") ||
+    apiPath.startsWith("/health")
   ) {
     return;
   }
 
-  // Para o HTML do app: sempre rede primeiro, cache como fallback
+  // Para o HTML do app: sempre rede primeiro, cache como fallback.
+  // Quando a rede responde, atualiza a copia cacheada do "/" — assim o fallback
+  // offline acompanha o deploy em vez de ficar preso ao index do install (que
+  // apontava para bundles ja purgados e causava tela branca).
   if (request.headers.get("accept")?.includes("text/html")) {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/"))
+      fetch(request).then(response => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put("/", copy));
+        }
+        return response;
+      }).catch(() => caches.match("/"))
     );
     return;
   }
