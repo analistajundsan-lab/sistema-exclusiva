@@ -1462,3 +1462,76 @@ def test_swaps_text_uses_substitute_prefix_and_excludes_pending(admin_token):
     text = res.json()["text"]
     assert "2300 - ATENDERA AS LINHAS : S 7360 - E 7431" in text
     assert "7416" not in text
+
+
+def test_swap_card_text_includes_all_lines_of_the_substitute(admin_token):
+    """Reclamacao do John/Marcio: trocando o MESMO carro numa Entrada e numa
+    Saida, o card 'Copiar texto WhatsApp' saia so com uma das linhas. O texto
+    de CADA troca deve trazer a sequencia completa do carro substituto."""
+    db = TestingSessionLocal()
+    try:
+        e = _seed_line(db, line_code="2228", direction="ENTRADA", start_time="05:40")
+        s = _seed_line(db, line_code="2265", direction="SAIDA", start_time="17:20")
+        db.commit()
+        line_ids = [e.id, s.id]
+    finally:
+        db.close()
+
+    for line_id in line_ids:
+        res = client.post(
+            "/swaps/",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"schedule_line_id": line_id, "vehicle_in": "4522"},
+        )
+        assert res.status_code == 201
+
+    swaps = client.get(
+        "/swaps/?vehicle_in=4522",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()
+    assert len(swaps) == 2
+    for swap in swaps:
+        assert swap["whatsapp_text"] == "4522 - ATENDERA AS LINHAS : E 2228 - S 2265"
+
+
+def test_swaps_text_window_keeps_whole_car_group(admin_token):
+    """Envio por turno: o carro com alguma linha no turno atual sai com TODAS
+    as linhas trocadas do dia (nao pela metade); carro sem linha no turno
+    continua de fora."""
+    now_brt = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    near = (now_brt + timedelta(minutes=30)).strftime("%H:%M")
+    far = (now_brt + timedelta(minutes=300)).strftime("%H:%M")
+    db = TestingSessionLocal()
+    try:
+        a1 = _seed_line(db, line_code="7360", direction="ENTRADA", start_time=near)
+        a2 = _seed_line(db, line_code="7431", direction="SAIDA", start_time=far)
+        b1 = _seed_line(
+            db,
+            prefix_code="3400",
+            line_code="7416",
+            direction="SAIDA",
+            start_time=far,
+        )
+        _seed_swap(db, a1, vehicle_in="2300")
+        _seed_swap(db, a2, vehicle_in="2300")
+        _seed_swap(db, b1, vehicle_in="2400")
+        db.commit()
+    finally:
+        db.close()
+
+    res = client.get(
+        "/swaps/whatsapp/text?unit=Caieiras&schedule_date=2026-04-13"
+        "&window_minutes=60",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    text = data["text"]
+    # O 2300 tem a linha "near" no turno -> entra com as DUAS linhas.
+    assert "2300 - ATENDERA AS LINHAS" in text
+    assert "7360" in text
+    assert "7431" in text
+    # O 2400 so tem linha fora do turno -> fica fora por inteiro.
+    assert "2400" not in text
+    assert "7416" not in text
+    assert data["total"] == 2
