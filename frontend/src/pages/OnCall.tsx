@@ -341,7 +341,9 @@ export function OnCall() {
         params: {
           schedule_date: appliedFilters.schedule_date,
           unit: line.unit,
-          prefix_code: line.prefix_code,
+          // Match exato: prefix_code (parcial) fazia o carro "3" puxar as
+          // linhas do 2230/2730 e confirmar em lote os carros errados.
+          prefix_code_exact: line.prefix_code,
           limit: 500,
         },
       })
@@ -358,6 +360,7 @@ export function OnCall() {
       const isToday = appliedFilters.schedule_date === spDate
       related = res.data.filter(item =>
         item.id !== line.id &&
+        item.prefix_code === line.prefix_code &&
         item.status === 'pendente' &&
         item.non_operating !== true &&
         (!isToday || (item.start_time || '') >= spTime),
@@ -445,7 +448,8 @@ export function OnCall() {
         params: {
           schedule_date: appliedFilters.schedule_date,
           unit: line.unit,
-          prefix_code: line.prefix_code,
+          // Match exato (ver openConfirm): prefixo curto casava com outros carros.
+          prefix_code_exact: line.prefix_code,
           limit: 500,
         },
       })
@@ -465,6 +469,7 @@ export function OnCall() {
       setRelatedLines(
         res.data.filter(item =>
           item.id !== line.id &&
+          item.prefix_code === line.prefix_code &&
           item.status !== 'cancelada' &&
           (!isToday || (item.start_time || '') >= spTime),
         ),
