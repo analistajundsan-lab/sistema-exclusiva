@@ -1464,6 +1464,34 @@ def test_swaps_text_uses_substitute_prefix_and_excludes_pending(admin_token):
     assert "7416" not in text
 
 
+def test_lines_prefix_code_exact_does_not_match_partial(admin_token):
+    """Caso real de Jundiai: o carro '3' (GARDNER) com prefix_code parcial
+    (ilike) puxava as linhas do 2230/2730 para o painel 'outras linhas deste
+    carro' — e a confirmacao em lote confirmava carros ERRADOS. O filtro
+    prefix_code_exact so pode devolver o proprio prefixo."""
+    db = TestingSessionLocal()
+    try:
+        _seed_line(db, prefix_code="3", line_code="01", direction="ENTRADA", start_time="05:30")
+        _seed_line(db, prefix_code="2230", line_code="7403", direction="ENTRADA", start_time="03:35")
+        _seed_line(db, prefix_code="2730", line_code="7912", direction="ENTRADA", start_time="04:10")
+        db.commit()
+    finally:
+        db.close()
+
+    partial = client.get(
+        "/schedule/lines?schedule_date=2026-04-13&prefix_code=3",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()
+    assert {item["prefix_code"] for item in partial} == {"3", "2230", "2730"}
+
+    exact = client.get(
+        "/schedule/lines?schedule_date=2026-04-13&prefix_code_exact=3",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ).json()
+    assert {item["prefix_code"] for item in exact} == {"3"}
+    assert len(exact) == 1
+
+
 def test_swap_card_text_includes_all_lines_of_the_substitute(admin_token):
     """Reclamacao do John/Marcio: trocando o MESMO carro numa Entrada e numa
     Saida, o card 'Copiar texto WhatsApp' saia so com uma das linhas. O texto

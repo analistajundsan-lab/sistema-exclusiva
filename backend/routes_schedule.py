@@ -718,6 +718,7 @@ def list_schedule_lines(
     line_code: Optional[str] = None,
     driver_name: Optional[str] = None,
     prefix_code: Optional[str] = None,
+    prefix_code_exact: Optional[str] = None,
     status: Optional[ScheduleLineStatus] = None,
     start_in_minutes: Optional[int] = Query(None, ge=1, le=1440),
     include_inactive: bool = False,
@@ -735,6 +736,12 @@ def list_schedule_lines(
         prefix_code,
         None if schedule_date and status else status,
     )
+    # Match EXATO de prefixo (carro): o ilike parcial acima serve para busca,
+    # mas nos paineis "outras linhas deste carro" (confirmar/trocar em lote) um
+    # carro de prefixo curto (ex.: "3" da GARDNER em Jundiai) casava com 2230,
+    # 2730 etc. e agrupava linhas de carros ERRADOS.
+    if prefix_code_exact:
+        query = query.filter(ScheduleLine.prefix_code == prefix_code_exact)
     query = apply_schedule_date_scope(db, query, schedule_date)
     query = apply_user_unit_scope(query, ScheduleLine.unit, current_user)
     query = apply_operation_visibility(
