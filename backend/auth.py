@@ -4,7 +4,7 @@ from jose import JWTError, jwt
 import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 from config import settings
 from models import User, UserRole, UserSession, get_db
 
@@ -243,7 +243,32 @@ def get_current_user(
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
-    user = db.query(User).filter(User.id == user_id).first()
+    # load_only: get_current_user roda em TODA requisicao (o polling de ~2s de
+    # cada aparelho bate aqui). Carregar a linha inteira de users trazia colunas
+    # pesadas/desnecessarias do Neon a cada request — em especial photo_url (foto
+    # de perfil em base64). Traz so o que auth/authz usa; colunas pesadas (foto,
+    # hash de senha, segredo MFA, timestamps) ficam deferidas e so carregam se
+    # realmente acessadas (raro). Corta drasticamente a transferencia do banco.
+    user = (
+        db.query(User)
+        .options(
+            load_only(
+                User.id,
+                User.cpf_hash,
+                User.email,
+                User.name,
+                User.role,
+                User.is_active,
+                User.is_super_admin,
+                User.must_change_password,
+                User.unit,
+                User.units,
+                User.display_name,
+            )
+        )
+        .filter(User.id == user_id)
+        .first()
+    )
 
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
