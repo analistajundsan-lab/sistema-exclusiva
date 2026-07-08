@@ -140,6 +140,46 @@ def build_swap_whatsapp_text(
     return f"{label} - ATENDERA AS LINHAS : {lines}"
 
 
+def rebuild_group_whatsapp_text(
+    db: Session,
+    schedule_date: Optional[date],
+    unit: Optional[str],
+    label: str,
+) -> None:
+    """Reescreve o whatsapp_text de TODAS as trocas do mesmo prefixo que vai
+    atender (mesma data/unidade) com o texto AGRUPADO: o card 'Copiar texto
+    WhatsApp' de qualquer troca do carro leva a sequencia completa de linhas
+    (ex.: Entrada E Saida), nao apenas a linha daquela troca."""
+    if not label:
+        return
+    candidates = (
+        db.query(Swap)
+        .filter(Swap.schedule_date == schedule_date, Swap.unit == unit)
+        .all()
+    )
+    group = [s for s in candidates if swap_attend_label(s) == label]
+    if not group:
+        return
+    line_ids = {s.schedule_line_id for s in group if s.schedule_line_id}
+    line_by_id: dict[int, ScheduleLine] = {}
+    if line_ids:
+        for ln in db.query(ScheduleLine).filter(ScheduleLine.id.in_(line_ids)).all():
+            line_by_id[ln.id] = ln
+    entries: list[tuple[str, str]] = []
+    for s in group:
+        entries.extend(swap_covered_tokens(s, line_by_id))
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for _, token in sorted(entries, key=lambda t: (t[0] or "~", t[1])):
+        if token not in seen:
+            seen.add(token)
+            ordered.append(token)
+    lines_text = " - ".join(ordered) if ordered else "linha nao informada"
+    text = f"{label} - ATENDERA AS LINHAS : {lines_text}"
+    for s in group:
+        s.whatsapp_text = text
+
+
 @router.get("/count", response_model=CountResponse)
 def count_swaps(
     vehicle: Optional[str] = None,
@@ -302,6 +342,12 @@ def create_swap(
     swap = Swap(**data, created_by=current_user.id)
     db.add(swap)
     db.flush()
+    # O texto individual acima cobre so a linha desta troca; reagrupa com as
+    # demais trocas do mesmo carro (Entrada + Saida etc.) para o card do painel
+    # copiar a sequencia completa.
+    rebuild_group_whatsapp_text(
+        db, swap.schedule_date, swap.unit, swap_attend_label(swap)
+    )
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -378,17 +424,6 @@ def swaps_whatsapp_text(
         query = query.filter(Swap.schedule_date == schedule_date)
     swaps = query.all()
 
-    # Envio por TURNO: so as trocas das linhas que comecam por volta de agora
-    # (janela centrada de +/- window_minutes). Evita repetir os turnos ja
-    # enviados (manha/meio-dia/noite). Sem window_minutes = dia inteiro (legado).
-    if window_minutes is not None:
-        now_brt = datetime.now(BRASILIA_TZ)
-        swaps = [
-            s
-            for s in swaps
-            if start_within_window(s.start_time, now_brt, window_minutes)
-        ]
-
     if not swaps:
         return {
             "total": 0,
@@ -411,10 +446,33 @@ def swaps_whatsapp_text(
     # na sequencia da programacao (start_time) — independente da ordem em que
     # foram registradas. Linha ainda pendente (sem troca) simplesmente nao entra.
     groups: dict[str, list[tuple[str, str]]] = {}
+    group_swaps: dict[str, list[Swap]] = {}
     for swap in swaps:
         label = swap_attend_label(swap)
+        group_swaps.setdefault(label, []).append(swap)
         for start, token in swap_covered_tokens(swap, line_by_id):
             groups.setdefault(label, []).append((start, token))
+
+    # Envio por TURNO: entram os CARROS com alguma linha comecando por volta de
+    # agora (janela de +/- window_minutes) — e cada carro selecionado sai com
+    # TODAS as suas linhas trocadas do dia. Antes o corte era linha a linha e um
+    # carro trocado na Entrada (manha) e na Saida (tarde) aparecia pela metade.
+    # Sem window_minutes = dia inteiro (legado).
+    total = len(swaps)
+    if window_minutes is not None:
+        now_brt = datetime.now(BRASILIA_TZ)
+        selected = {
+            label
+            for label, members in group_swaps.items()
+            if any(
+                start_within_window(s.start_time, now_brt, window_minutes)
+                for s in members
+            )
+        }
+        groups = {label: toks for label, toks in groups.items() if label in selected}
+        total = sum(len(group_swaps[label]) for label in selected)
+        if not groups:
+            return {"total": 0, "text": "Nenhuma troca deste horario."}
 
     body_lines: list[str] = []
     # Prefixos na ordem do primeiro horario de cada um (leitura em sequencia).
@@ -444,7 +502,7 @@ def swaps_whatsapp_text(
     )
     text = header + "\n\n" + "\n".join(body_lines)
 
-    return {"total": len(swaps), "text": text}
+    return {"total": total, "text": text}
 
 
 @router.get("/{swap_id}", response_model=SwapResponse)
@@ -485,6 +543,9 @@ def update_swap(
         raise HTTPException(
             status_code=422, detail="Os prefixos SAI e ENTRA não podem ser iguais"
         )
+    # Grupo ANTES da edicao: se o substituto/data/unidade mudar, o texto
+    # agrupado do carro antigo precisa ser refeito sem esta troca.
+    old_group = (swap.schedule_date, swap.unit, swap_attend_label(swap))
     update_data = body.model_dump(exclude_unset=True)
     for key in ["vehicle_out", "vehicle_in", "driver_out", "driver_in"]:
         if key in update_data:
@@ -496,9 +557,10 @@ def update_swap(
             status_code=422,
             detail="Informe o prefixo substituto ou o motorista substituto",
         )
-    swap.whatsapp_text = build_swap_whatsapp_text(
-        swap.vehicle_out, swap.vehicle_in, swap.driver_in, swap.lines_covered
-    )
+    new_group = (swap.schedule_date, swap.unit, swap_attend_label(swap))
+    rebuild_group_whatsapp_text(db, *new_group)
+    if old_group != new_group:
+        rebuild_group_whatsapp_text(db, *old_group)
     ensure_unit_access(current_user, swap.unit)
     db.add(
         AuditLog(
@@ -525,6 +587,7 @@ def delete_swap(
             status_code=status.HTTP_404_NOT_FOUND, detail="Troca não encontrada"
         )
     ensure_unit_access(current_user, swap.unit)
+    group = (swap.schedule_date, swap.unit, swap_attend_label(swap))
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -534,4 +597,7 @@ def delete_swap(
         )
     )
     db.delete(swap)
+    db.flush()
+    # Texto agrupado das trocas restantes do carro perde a linha apagada.
+    rebuild_group_whatsapp_text(db, *group)
     db.commit()

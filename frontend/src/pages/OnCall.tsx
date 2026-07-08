@@ -286,6 +286,20 @@ export function OnCall() {
     return () => window.clearInterval(t)
   }, [])
 
+  // Tela branca (scroll preso): quando a lista encolhe — confirmacao propria,
+  // confirmacao de um colega chegando via SSE/polling silencioso ou o corte
+  // das "Proximas 2h" avancando — o operador rolado la embaixo ficava com o
+  // viewport abaixo do conteudo (tudo branco, parecendo travado). Depois de
+  // cada mudanca na lista, reencaixa o scroll no fim do conteudo novo; quem
+  // esta no topo nao percebe nada.
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() => {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      if (window.scrollY > max) window.scrollTo({ top: Math.max(0, max) })
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [pending.lines])
+
   // Virada de dia (00:00 BRT): se o plantonista deixou o painel aberto e estava
   // vendo "hoje", rola para o novo dia. As linhas voltam a pendente (reset diario
   // que o cliente exige) para serem reconfirmadas. Se ele escolheu outra data no
