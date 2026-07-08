@@ -91,10 +91,11 @@ export function Dashboard() {
       .catch(() => setDashboard(null))
       .finally(() => setLoading(false))
   }, [loadStats])
-  // Atualiza a cada 8s so com a aba visivel (economiza requests -> banco pode suspender).
+  // Atualiza a cada 15s so com a aba visivel (economiza requests/transferencia
+  // do banco — dashboard e visao de fundo, nao precisa de 8s).
   useVisibleInterval(() => {
     loadStats().catch(() => setDashboard(null))
-  }, 8000)
+  }, 15000)
 
   // Virada de dia (00:00 BRT): se o dia BRT mudou e o operador esta vendo "hoje",
   // o painel passa a mostrar o novo dia — zerando os dados do dia anterior.

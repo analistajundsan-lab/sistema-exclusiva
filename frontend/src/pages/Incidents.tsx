@@ -159,10 +159,10 @@ export function Incidents() {
     return parts.join('\n')
   }
 
-  // So atualiza com a aba visivel (economiza requests -> banco pode suspender).
+  // So atualiza com a aba visivel; 15s (economiza requests/transferencia do banco).
   useVisibleInterval(() => {
     fetchIncidents(filters, page * 20, true)
-  }, 8000)
+  }, 15000)
 
   const sendWhatsApp = (text: string, kind: 'personal' | 'business' = 'personal') => {
     const encoded = encodeURIComponent(text)
