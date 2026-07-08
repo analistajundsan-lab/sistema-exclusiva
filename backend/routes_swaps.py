@@ -443,15 +443,26 @@ def swaps_whatsapp_text(
         query = query.filter(Swap.schedule_date == schedule_date)
     swaps = query.all()
 
-    # "Trocas do meu turno" = so as registradas desde que ESTE operador entrou.
-    # Desacopla o texto do CCO do filtro "Proximas 2h" da lista: o Jean (noite)
-    # nao pega mais as trocas do turno do Igor (dia). Sem login encontrado,
-    # nao filtra (melhor cair no dia todo do que esconder trocas).
+    # "Trocas do meu turno" = as que ESTE operador registrou no turno atual.
+    # Desacopla do filtro "Proximas 2h" da lista (o Jean da noite nao pega as
+    # trocas do Igor do dia). Seleciona os CARROS que ele mexeu desde o login e
+    # traz TODAS as linhas que ELE trocou com cada carro no dia — texto COMPLETO:
+    # se trocou o mesmo carro em varias linhas (a selecao do menu), todas entram,
+    # sem meia troca e sem misturar com outros operadores. Sem login encontrado,
+    # cai para todas as trocas dele no dia.
     turno_scope = since_login
     if since_login:
         login_utc = latest_login_utc(db, current_user.id)
+        my_swaps = [s for s in swaps if s.created_by == current_user.id]
         if login_utc is not None:
-            swaps = [s for s in swaps if s.created_at and s.created_at >= login_utc]
+            shift_labels = {
+                swap_attend_label(s)
+                for s in my_swaps
+                if s.created_at and s.created_at >= login_utc
+            }
+        else:
+            shift_labels = {swap_attend_label(s) for s in my_swaps}
+        swaps = [s for s in my_swaps if swap_attend_label(s) in shift_labels]
 
     if not swaps:
         return {

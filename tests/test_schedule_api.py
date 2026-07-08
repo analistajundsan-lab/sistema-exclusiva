@@ -1616,3 +1616,48 @@ def test_swaps_text_since_login_only_current_shift(admin_token):
     assert "8888" in text  # troca do meu turno entra
     assert "7777" not in text  # troca do turno anterior fica de fora
     assert data["total"] == 1
+
+
+def test_swaps_text_since_login_keeps_full_car(admin_token):
+    """Trocou o MESMO carro em varias linhas -> TODAS entram no texto (completo),
+    inclusive uma registrada antes de um relogin no meio do turno."""
+    from models import AuditLog, User, UserRole
+
+    db = TestingSessionLocal()
+    try:
+        admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        # 1a linha do carro 3050 registrada ANTES do (re)login.
+        a = _seed_line(db, line_code="7666", direction="ENTRADA", start_time="06:00")
+        sa = _seed_swap(db, a, vehicle_in="3050")
+        sa.created_by = admin.id
+        sa.created_at = datetime.utcnow() - timedelta(hours=1)
+
+        t_login = datetime.utcnow()
+        db.add(
+            AuditLog(
+                user_id=admin.id,
+                action="LOGIN_SUCCESS",
+                resource="auth",
+                resource_id=admin.id,
+                created_at=t_login,
+            )
+        )
+        b = _seed_line(db, line_code="7669", direction="SAIDA", start_time="07:00")
+        c = _seed_line(db, line_code="7666", direction="SAIDA", start_time="18:00")
+        for ln in (b, c):
+            s = _seed_swap(db, ln, vehicle_in="3050")
+            s.created_by = admin.id
+            s.created_at = t_login + timedelta(minutes=1)
+        db.commit()
+    finally:
+        db.close()
+
+    res = client.get(
+        "/swaps/whatsapp/text?unit=Caieiras&schedule_date=2026-04-13&since_login=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert res.status_code == 200
+    text = res.json()["text"]
+    # Carro selecionado por ter troca no turno (b,c) -> traz TODAS as suas linhas,
+    # inclusive a 'a' registrada antes do relogin.
+    assert "3050 - ATENDERA AS LINHAS : E 7666 - S 7669 - S 7666" in text
