@@ -123,6 +123,24 @@ def clean_optional(value: Optional[str]) -> Optional[str]:
     return value or None
 
 
+def latest_login_utc(db: Session, user_id: int) -> Optional[datetime]:
+    """Momento do ULTIMO login do usuario (UTC naive), para o 'texto do meu
+    turno': o operador da noite so quer as trocas que ELE registrou desde que
+    entrou, nao as do turno do dia. Fonte: evento de auditoria LOGIN_SUCCESS."""
+    log = (
+        db.query(AuditLog)
+        .filter(AuditLog.user_id == user_id, AuditLog.action == "LOGIN_SUCCESS")
+        .order_by(AuditLog.created_at.desc())
+        .first()
+    )
+    if not log or log.created_at is None:
+        return None
+    created = log.created_at
+    if created.tzinfo is not None:
+        created = created.astimezone(timezone.utc).replace(tzinfo=None)
+    return created
+
+
 def build_swap_whatsapp_text(
     vehicle_out: Optional[str],
     vehicle_in: Optional[str],
@@ -412,6 +430,7 @@ def swaps_whatsapp_text(
     unit: Optional[str] = None,
     schedule_date: Optional[date] = None,
     window_minutes: Optional[int] = Query(None, ge=1, le=720),
+    since_login: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -424,13 +443,27 @@ def swaps_whatsapp_text(
         query = query.filter(Swap.schedule_date == schedule_date)
     swaps = query.all()
 
+    # "Trocas do meu turno" = so as registradas desde que ESTE operador entrou.
+    # Desacopla o texto do CCO do filtro "Proximas 2h" da lista: o Jean (noite)
+    # nao pega mais as trocas do turno do Igor (dia). Sem login encontrado,
+    # nao filtra (melhor cair no dia todo do que esconder trocas).
+    turno_scope = since_login
+    if since_login:
+        login_utc = latest_login_utc(db, current_user.id)
+        if login_utc is not None:
+            swaps = [s for s in swaps if s.created_at and s.created_at >= login_utc]
+
     if not swaps:
         return {
             "total": 0,
             "text": (
-                "Nenhuma troca deste horario."
-                if window_minutes is not None
-                else "Nenhuma troca registrada para os filtros informados."
+                "Nenhuma troca do seu turno (desde que voce entrou)."
+                if turno_scope
+                else (
+                    "Nenhuma troca deste horario."
+                    if window_minutes is not None
+                    else "Nenhuma troca registrada para os filtros informados."
+                )
             ),
         }
 

@@ -138,10 +138,10 @@ export function OnCall() {
   // Busca por linha APLICADA (ja normalizada pelo buildPendingFilters).
   const lineSearch = appliedFilters.line_code
 
-  // Envio ao CCO por TURNO: por padrao (modo "Proximas 2h" ligado) o texto traz
-  // so as trocas das linhas que comecam por volta de agora (~3h em torno). Com o
-  // modo desligado, envia o dia inteiro. Evita repetir manha/meio-dia/noite.
-  const sendWindowMinutes = autoMode && !lineSearch ? 180 : null
+  // Envio ao CCO por TURNO: o texto traz as trocas que ESTE operador registrou
+  // desde que entrou (since_login no backend), independente do filtro "Proximas
+  // 2h" da lista. Assim o plantonista da noite (ex.: Jean) nao pega as trocas do
+  // turno do dia (ex.: Igor) — pega so as do periodo dele.
 
   const pending = useSchedule(appliedFilters)
   const swapsList = useSwaps({ unit: appliedFilters.unit, schedule_date: appliedFilters.schedule_date })
@@ -641,11 +641,12 @@ export function OnCall() {
       const params = new URLSearchParams()
       if (appliedFilters.unit) params.set('unit', appliedFilters.unit)
       if (appliedFilters.schedule_date) params.set('schedule_date', appliedFilters.schedule_date)
-      if (sendWindowMinutes != null) params.set('window_minutes', String(sendWindowMinutes))
+      // Texto do CCO = trocas do MEU turno (desde que entrei), nao o dia todo.
+      params.set('since_login', 'true')
       const res = await client.get(`/swaps/whatsapp/text?${params}`)
       const text = res.data.text as string
       if (!text || res.data.total === 0) {
-        setActionError(sendWindowMinutes != null ? 'Nenhuma troca deste horário para enviar.' : 'Nenhuma troca registrada para enviar.')
+        setActionError('Nenhuma troca do seu turno para enviar.')
         return
       }
       // Nao depende de clipboard: abre o WhatsApp com o texto pre-preenchido.
@@ -661,11 +662,12 @@ export function OnCall() {
       const params = new URLSearchParams()
       if (appliedFilters.unit) params.set('unit', appliedFilters.unit)
       if (appliedFilters.schedule_date) params.set('schedule_date', appliedFilters.schedule_date)
-      if (sendWindowMinutes != null) params.set('window_minutes', String(sendWindowMinutes))
+      // Texto do CCO = trocas do MEU turno (desde que entrei), nao o dia todo.
+      params.set('since_login', 'true')
       const res = await client.get(`/swaps/whatsapp/text?${params}`)
       const text = res.data.text as string
       if (!text || res.data.total === 0) {
-        setActionError(sendWindowMinutes != null ? 'Nenhuma troca deste horário para copiar.' : 'Nenhuma troca registrada para copiar.')
+        setActionError('Nenhuma troca do seu turno para copiar.')
         return
       }
       const ok = await copyToClipboard(text)
@@ -834,7 +836,7 @@ export function OnCall() {
                 <p className="text-green-800 dark:text-green-300 font-semibold">Todas as linhas foram confirmadas!</p>
                 {/* O botao envia as TROCAS registradas (nao um resumo de confirmacao). */}
                 <p className="text-green-700 dark:text-green-400 text-sm">
-                  {sendWindowMinutes != null ? 'Envie as trocas do turno pelo WhatsApp.' : 'Envie as trocas do dia pelo WhatsApp.'}
+                  Envie as trocas do seu turno pelo WhatsApp.
                 </p>
               </div>
             </div>
@@ -1281,9 +1283,7 @@ export function OnCall() {
                 Trocas registradas
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {sendWindowMinutes != null
-                  ? 'O envio traz só as trocas do turno atual (linhas por volta de agora).'
-                  : 'O envio traz todas as trocas do dia.'}
+                O envio traz as trocas que você registrou desde que entrou (seu turno).
               </p>
               {swapsList.swaps.length > 0 && (
                 <button
@@ -1291,7 +1291,7 @@ export function OnCall() {
                   className="mt-2 w-full flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all"
                 >
                   <MessageCircle size={12} />
-                  {sendWindowMinutes != null ? 'Copiar trocas do turno (WhatsApp)' : 'Copiar todas as trocas (WhatsApp)'}
+                  Copiar trocas do meu turno (WhatsApp)
                 </button>
               )}
             </div>

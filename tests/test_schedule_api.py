@@ -1052,9 +1052,9 @@ def force_confirmed_yesterday(line_id: int) -> None:
     try:
         line = db.query(ScheduleLine).filter(ScheduleLine.id == line_id).first()
         line.status = ScheduleLineStatus.CONFIRMADA
-        line.confirmed_at = datetime.now(timezone.utc).replace(
-            tzinfo=None
-        ) - timedelta(days=1)
+        line.confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            days=1
+        )
         db.commit()
     finally:
         db.close()
@@ -1471,9 +1471,23 @@ def test_lines_prefix_code_exact_does_not_match_partial(admin_token):
     prefix_code_exact so pode devolver o proprio prefixo."""
     db = TestingSessionLocal()
     try:
-        _seed_line(db, prefix_code="3", line_code="01", direction="ENTRADA", start_time="05:30")
-        _seed_line(db, prefix_code="2230", line_code="7403", direction="ENTRADA", start_time="03:35")
-        _seed_line(db, prefix_code="2730", line_code="7912", direction="ENTRADA", start_time="04:10")
+        _seed_line(
+            db, prefix_code="3", line_code="01", direction="ENTRADA", start_time="05:30"
+        )
+        _seed_line(
+            db,
+            prefix_code="2230",
+            line_code="7403",
+            direction="ENTRADA",
+            start_time="03:35",
+        )
+        _seed_line(
+            db,
+            prefix_code="2730",
+            line_code="7912",
+            direction="ENTRADA",
+            start_time="04:10",
+        )
         db.commit()
     finally:
         db.close()
@@ -1563,3 +1577,42 @@ def test_swaps_text_window_keeps_whole_car_group(admin_token):
     assert "2400" not in text
     assert "7416" not in text
     assert data["total"] == 2
+
+
+def test_swaps_text_since_login_only_current_shift(admin_token):
+    """'Trocas do meu turno' = so as registradas DESDE que o operador logou.
+    O plantonista da noite (Jean) nao pega as trocas do turno do dia (Igor)."""
+    from models import AuditLog, User, UserRole
+
+    db = TestingSessionLocal()
+    try:
+        admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        t_login = datetime.utcnow()
+        db.add(
+            AuditLog(
+                user_id=admin.id,
+                action="LOGIN_SUCCESS",
+                resource="auth",
+                resource_id=admin.id,
+                created_at=t_login,
+            )
+        )
+        line = _seed_line(db, line_code="9001", direction="SAIDA", start_time="20:00")
+        antes = _seed_swap(db, line, vehicle_in="7777")  # turno anterior
+        antes.created_at = t_login - timedelta(hours=2)
+        agora = _seed_swap(db, line, vehicle_in="8888")  # meu turno
+        agora.created_at = t_login + timedelta(minutes=1)
+        db.commit()
+    finally:
+        db.close()
+
+    res = client.get(
+        "/swaps/whatsapp/text?unit=Caieiras&schedule_date=2026-04-13&since_login=true",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    text = data["text"]
+    assert "8888" in text  # troca do meu turno entra
+    assert "7777" not in text  # troca do turno anterior fica de fora
+    assert data["total"] == 1
