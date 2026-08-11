@@ -53,7 +53,9 @@ class UserCreate(BaseModel):
 
 class UserProfileUpdate(BaseModel):
     display_name: Optional[str] = Field(None, max_length=255)
-    photo_url: Optional[str] = None
+    # Foto em data-URL base64. Limite ~400KB (~300KB de imagem) para nao inflar
+    # a linha de users no banco — foto maior deve ser comprimida no cliente.
+    photo_url: Optional[str] = Field(default=None, max_length=400_000)
 
 
 class UserAdminUpdate(BaseModel):
@@ -84,7 +86,9 @@ class UserResponse(BaseModel):
     unit: Optional[str] = None
     units: Optional[str] = None
     display_name: Optional[str] = None
-    photo_url: Optional[str] = None
+    # photo_url saiu de proposito: a foto (base64) inflava TODA resposta de
+    # /auth/me e /auth/users. O frontend busca via GET /auth/me/photo (cacheado
+    # por ETag) ou GET /auth/users/{id}/photo.
     created_at: datetime
 
 
@@ -497,7 +501,10 @@ class ChecklistResponse(BaseModel):
     emdec_doc: Optional[str] = None
 
     observacoes: Optional[str] = None
+    # Contrato: em LISTAS evidencias vem [] e a contagem vem em
+    # evidencias_count; no DETALHE (GET por id) evidencias vem completas.
     evidencias: Optional[List[str]] = None
+    evidencias_count: int = 0
 
     created_at: datetime
 
@@ -703,7 +710,10 @@ class SinistroResponse(BaseModel):
     tipo_sinistro: str
     descricao: Optional[str] = None
     danos_identificados: Optional[List[str]] = None
+    # Contrato: em LISTAS evidencias vem [] e a contagem vem em
+    # evidencias_count; no DETALHE (GET por id) evidencias vem completas.
     evidencias: Optional[List[str]] = None
+    evidencias_count: int = 0
     envolvidos: Optional[List[str]] = None
     gravidade: Optional[str] = None
     probabilidade: Optional[str] = None

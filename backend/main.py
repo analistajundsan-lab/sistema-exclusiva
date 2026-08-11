@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import logging
 import time
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError, OperationalError
 from config import settings
 from models import Base, SessionLocal, engine
 from routes_auth import router as auth_router
@@ -41,6 +42,47 @@ app = FastAPI(
     redoc_url="/redoc" if docs_enabled else None,
     openapi_url="/openapi.json" if docs_enabled else None,
 )
+
+
+# Handlers de banco indisponivel ANTES do generico: na resolucao do Starlette
+# a classe mais especifica da excecao vence, entao OperationalError/DBAPIError
+# de conexao viram 503 (transitorio, com Retry-After) em vez de 500 generico.
+
+
+@app.exception_handler(OperationalError)
+async def db_unavailable_handler(request: Request, exc: Exception):
+    """Banco fora/instavel (Neon acordando, timeout de conexao, rede): 503 com
+    Retry-After para o frontend tratar como indisponibilidade transitoria."""
+    logger.error(
+        "Banco indisponivel em %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+    )
+    response = JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Sistema temporariamente indisponível. "
+            "Tente novamente em instantes."
+        },
+        headers={"Retry-After": "30"},
+    )
+    # Mesmos headers CORS do handler generico: sem eles o browser bloqueia a
+    # resposta de erro e o frontend enxerga "sem conexao".
+    origin = request.headers.get("origin", "")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
+@app.exception_handler(DBAPIError)
+async def dbapi_error_handler(request: Request, exc: DBAPIError):
+    """DBAPIError de CONEXAO (connection_invalidated) tambem vira 503; as
+    demais violacoes (integridade, SQL invalido) seguem para o 500 generico."""
+    if exc.connection_invalidated:
+        return await db_unavailable_handler(request, exc)
+    return await global_exception_handler(request, exc)
 
 
 @app.exception_handler(Exception)

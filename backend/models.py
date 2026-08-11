@@ -693,6 +693,11 @@ _database_url = (
     settings.DATABASE_URL
     or "postgresql://postgres:postgres@localhost:5432/sistema_exclusiva"
 )
+# connect_timeout so existe no driver do Postgres (o sqlite3 dos testes nao
+# aceita): sem ele, um Neon sem responder no handshake pendurava a requisicao.
+_connect_args = (
+    {"connect_timeout": 10} if _database_url.startswith("postgresql") else {}
+)
 engine = create_engine(
     _clean_db_url(_database_url),
     pool_pre_ping=True,
@@ -701,6 +706,7 @@ engine = create_engine(
     max_overflow=20,
     pool_recycle=300,
     pool_timeout=30,
+    connect_args=_connect_args,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

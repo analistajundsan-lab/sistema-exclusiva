@@ -98,9 +98,15 @@ def sst_alertas(
     recorrente na liberacao. Cada alerta tem nivel (medio/alto/critico)."""
     today = _today()
     inicio = today - timedelta(days=dias)
+    # with_entities: agregacao pura — sem trazer descricao/evidencias (base64).
     sinistros = (
         _scoped_sinistros(db, current_user, unit)
         .filter(Sinistro.data_ocorrencia >= inicio)
+        .with_entities(
+            Sinistro.condutor_nome,
+            Sinistro.prefixo,
+            Sinistro.data_ocorrencia,
+        )
         .all()
     )
 
@@ -138,11 +144,18 @@ def sst_alertas(
     )
     if unit:
         lib_q = lib_q.filter(LiberacaoCondutor.unit == unit)
-    bloqueios = lib_q.filter(
-        LiberacaoCondutor.resultado.in_(
-            [LiberacaoStatus.NAO_LIBERADO, LiberacaoStatus.LIBERADO_COM_RESTRICAO]
+    bloqueios = (
+        lib_q.filter(
+            LiberacaoCondutor.resultado.in_(
+                [LiberacaoStatus.NAO_LIBERADO, LiberacaoStatus.LIBERADO_COM_RESTRICAO]
+            )
         )
-    ).all()
+        # So os campos agregados — sem respostas/evidencias (Text pesado).
+        .with_entities(
+            LiberacaoCondutor.condutor_nome,
+            LiberacaoCondutor.categoria_bloqueio,
+        ).all()
+    )
     blk = defaultdict(lambda: {"total": 0, "categorias": set()})
     for lb in bloqueios:
         rec = blk[lb.condutor_nome]
@@ -188,9 +201,19 @@ def sst_score_preditivo(
     """
     today = _today()
     inicio = today - timedelta(days=dias)
+    # with_entities: score agrega so estes campos — sem colunas Text pesadas.
     sinistros = (
         _scoped_sinistros(db, current_user, unit)
         .filter(Sinistro.data_ocorrencia >= inicio)
+        .with_entities(
+            Sinistro.condutor_nome,
+            Sinistro.prefixo,
+            Sinistro.unit,
+            Sinistro.data_ocorrencia,
+            Sinistro.gravidade,
+            Sinistro.houve_vitima,
+            Sinistro.houve_afastamento,
+        )
         .all()
     )
 
@@ -289,9 +312,11 @@ def sst_comparativo(
     primeiro = labels[0]
     inicio = date_type(int(primeiro[:4]), int(primeiro[5:]), 1)
 
+    # with_entities: o comparativo so usa data e unidade de cada sinistro.
     sinistros = (
         _scoped_sinistros(db, current_user, None)
         .filter(Sinistro.data_ocorrencia >= inicio)
+        .with_entities(Sinistro.data_ocorrencia, Sinistro.unit)
         .all()
     )
 
@@ -312,7 +337,7 @@ def sst_comparativo(
         current_user,
     )
     frota = defaultdict(int)
-    for v in veic_q.all():
+    for v in veic_q.with_entities(SafetyVehicle.unit).all():
         if v.unit:
             frota[v.unit] += 1
 

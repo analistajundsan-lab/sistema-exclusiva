@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from auth import apply_user_unit_scope, ensure_unit_access, get_current_user
 from email_service import send_ficha_tecnica, send_sst_approval_notification
@@ -514,9 +514,11 @@ def approve_ticket_for_sst(
     ticket.status = MaintenanceTicketStatus.VALIDATED
     db.flush()
 
-    # Notifica técnicos/engenheiros da unidade via email
+    # Notifica técnicos/engenheiros da unidade via email. load_only: so as
+    # colunas usadas no filtro de e-mail — sem foto base64 nem hashes.
     sst_users = (
         db.query(User)
+        .options(load_only(User.id, User.email, User.role, User.unit, User.units))
         .filter(
             User.is_active.is_(True),
             User.role.in_([UserRole.TECNICO_SEGURANCA, UserRole.ENGENHEIRO_SEGURANCA]),

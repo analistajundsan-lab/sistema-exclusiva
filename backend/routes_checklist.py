@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
-from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import JSON, and_, case, cast, func, or_
+from sqlalchemy.orm import Session, defer
 
 from auth import (
     apply_user_unit_scope,
@@ -190,6 +190,31 @@ def _report_status(c: VehicleChecklist) -> str:
     return "OK"
 
 
+def json_array_count_expr(db: Session, column):
+    """COUNT de itens de uma coluna Text com JSON array, direto no SQL.
+
+    Evita trazer o conteudo (base64) so para contar. Dialeto-especifico porque
+    json_array_length aceita text no SQLite mas exige cast em Postgres; JSON
+    invalido/nao-array e protegido pelas etapas do CASE (avaliacao preguicosa
+    em ambos os bancos — o cast so roda depois da validacao).
+    """
+    empty = or_(column.is_(None), column == "")
+    if db.get_bind().dialect.name == "postgresql":
+        return case(
+            (empty, 0),
+            # pg_input_is_valid exige PG16+ (prod = Neon PG17).
+            (func.pg_input_is_valid(column, "json").is_(False), 0),
+            (func.json_typeof(cast(column, JSON)) != "array", 0),
+            else_=func.json_array_length(cast(column, JSON)),
+        )
+    return case(
+        (empty, 0),
+        (func.json_valid(column) == 0, 0),
+        (func.json_type(column) != "array", 0),
+        else_=func.json_array_length(column),
+    )
+
+
 def _parse_json_list(value) -> list:
     if not value:
         return []
@@ -204,7 +229,9 @@ def _parse_json_list(value) -> list:
     return []
 
 
-def _checklist_report_workbook(checklists: list[VehicleChecklist]) -> BytesIO:
+def _checklist_report_workbook(rows: list[tuple[VehicleChecklist, int]]) -> BytesIO:
+    """Monta o XLSM. `rows` traz (checklist, qtd_evidencias): a contagem vem do
+    SQL para o relatorio nao carregar as evidencias base64 de ate 5000 linhas."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Vistorias por carro"
@@ -250,7 +277,7 @@ def _checklist_report_workbook(checklists: list[VehicleChecklist]) -> BytesIO:
             horizontal="center", vertical="center", wrap_text=True
         )
 
-    for c in checklists:
+    for c, evid_count in rows:
         created_at = c.created_at.strftime("%d/%m/%Y %H:%M") if c.created_at else ""
         ws.append(
             [
@@ -281,7 +308,7 @@ def _checklist_report_workbook(checklists: list[VehicleChecklist]) -> BytesIO:
                 _label(_parse_json_list(c.wifi_status)),
                 _label(c.wifi_outro),
                 _label(c.observacoes),
-                len(_parse_json_list(c.evidencias)),
+                int(evid_count or 0),
             ]
         )
 
@@ -354,9 +381,24 @@ def _as_macro_enabled_package(xlsx_output: BytesIO) -> BytesIO:
     return macro_output
 
 
-def _to_response(c: VehicleChecklist) -> ChecklistResponse:
-    data: dict = {col.name: getattr(c, col.name) for col in c.__table__.columns}
+def _to_response(
+    c: VehicleChecklist, evidencias_count: Optional[int] = None
+) -> ChecklistResponse:
+    """Serializa um checklist.
+
+    Contrato: em LISTAS (evidencias_count preenchido pela query) as evidencias
+    NAO trafegam — vao como [] com a contagem em evidencias_count. No DETALHE
+    (GET por id) evidencias vem completas. Quando em modo lista, a coluna
+    evidencias esta deferida: nao pode ser acessada (dispararia SELECT extra).
+    """
+    data: dict = {
+        col.name: getattr(c, col.name)
+        for col in c.__table__.columns
+        if not (evidencias_count is not None and col.name == "evidencias")
+    }
     for field in JSON_FIELDS:
+        if field not in data:
+            continue
         val = data.get(field)
         if isinstance(val, str):
             try:
@@ -365,6 +407,11 @@ def _to_response(c: VehicleChecklist) -> ChecklistResponse:
                 data[field] = []
         elif val is None:
             data[field] = []
+    if evidencias_count is not None:
+        data["evidencias"] = []
+        data["evidencias_count"] = int(evidencias_count or 0)
+    else:
+        data["evidencias_count"] = len(data.get("evidencias") or [])
     return ChecklistResponse(**data)
 
 
@@ -454,7 +501,15 @@ def list_checklists(
         query, current_user, prefixo, garagem, tipo, situacao, data_inicio, data_fim
     )
 
-    return [_to_response(c) for c in query.offset(skip).limit(limit).all()]
+    # Lista NUNCA carrega as evidencias (base64): defer + contagem via SQL.
+    rows = (
+        query.options(defer(VehicleChecklist.evidencias))
+        .add_columns(json_array_count_expr(db, VehicleChecklist.evidencias))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [_to_response(c, evidencias_count=n) for c, n in rows]
 
 
 @router.get("/download")
@@ -476,8 +531,15 @@ def download_checklist_report(
     query = _apply_checklist_filters(
         query, current_user, prefixo, garagem, tipo, situacao, data_inicio, data_fim
     )
-    checklists = query.limit(5000).all()
-    output = _checklist_report_workbook(checklists)
+    # O relatorio so usa a QUANTIDADE de evidencias: conta no SQL e deixa a
+    # coluna base64 deferida (fora do trafego).
+    rows = (
+        query.options(defer(VehicleChecklist.evidencias))
+        .add_columns(json_array_count_expr(db, VehicleChecklist.evidencias))
+        .limit(5000)
+        .all()
+    )
+    output = _checklist_report_workbook(rows)
 
     filename_date = datetime.now(BRASILIA_TZ).strftime("%d-%m-%Y")
     filename = f"RELATORIO CHECKLIST {filename_date}.xlsm"
@@ -518,6 +580,12 @@ def update_checklist(
     ensure_unit_access(current_user, c.garagem)
 
     data = body.model_dump(exclude_unset=True)
+    # Guard de transicao (PWA): bundles antigos editam a partir da LISTA, que
+    # agora vem com evidencias=[] — um PUT desses apagaria as fotos. Lista
+    # vazia e tratada como "nao tocar"; para remover fotos, mantenha ao menos
+    # uma ou use um fluxo dedicado.
+    if data.get("evidencias") == []:
+        data.pop("evidencias")
     for field in JSON_FIELDS:
         if field in data:
             val = data[field]

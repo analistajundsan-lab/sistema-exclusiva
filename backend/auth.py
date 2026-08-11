@@ -246,9 +246,11 @@ def get_current_user(
     # load_only: get_current_user roda em TODA requisicao (o polling de ~2s de
     # cada aparelho bate aqui). Carregar a linha inteira de users trazia colunas
     # pesadas/desnecessarias do Neon a cada request — em especial photo_url (foto
-    # de perfil em base64). Traz so o que auth/authz usa; colunas pesadas (foto,
-    # hash de senha, segredo MFA, timestamps) ficam deferidas e so carregam se
-    # realmente acessadas (raro). Corta drasticamente a transferencia do banco.
+    # de perfil em base64). Traz so o que auth/authz usa MAIS o que o
+    # UserResponse serializa em /auth/me (can_delete_history, mfa_enabled,
+    # created_at) — sem elas, cada /auth/me disparava um SELECT extra de
+    # colunas deferidas. Colunas pesadas (foto, hash de senha, segredo MFA)
+    # continuam deferidas e so carregam se realmente acessadas (raro).
     user = (
         db.query(User)
         .options(
@@ -260,10 +262,13 @@ def get_current_user(
                 User.role,
                 User.is_active,
                 User.is_super_admin,
+                User.mfa_enabled,
                 User.must_change_password,
+                User.can_delete_history,
                 User.unit,
                 User.units,
                 User.display_name,
+                User.created_at,
             )
         )
         .filter(User.id == user_id)

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Header, Request, Response
+from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from jose import JWTError, jwt
@@ -124,17 +125,21 @@ def find_user_by_cpf(db: Session, cpf: str) -> tuple["User | None", bool]:
 
     Retorna (user, needs_rehash) onde needs_rehash indica que o usuario foi
     encontrado pelo hash legado e deve ser migrado para o formato seguro.
+
+    A foto (base64) fica deferida: o login precisa de password_hash/cpf/mfa,
+    nunca da foto — carrega-la aqui puxava a coluna mais pesada de users.
     """
+    base = db.query(User).options(defer(User.photo_url))
     if settings.CPF_HASH_PEPPER:
         secure = _hash_cpf_secure(cpf)
-        user = db.query(User).filter(User.cpf_hash == secure).first()
+        user = base.filter(User.cpf_hash == secure).first()
         if user:
             return user, False
         legacy = _hash_cpf_legacy(cpf)
-        user = db.query(User).filter(User.cpf_hash == legacy).first()
+        user = base.filter(User.cpf_hash == legacy).first()
         return user, bool(user)
     legacy = _hash_cpf_legacy(cpf)
-    return db.query(User).filter(User.cpf_hash == legacy).first(), False
+    return base.filter(User.cpf_hash == legacy).first(), False
 
 
 def hash_reset_token(raw_token: str) -> str:
@@ -458,9 +463,14 @@ def refresh(
     except (JWTError, ValueError, AttributeError):
         raise invalid
 
+    # defer(photo_url): o refresh roda a cada expiracao de token de todos os
+    # aparelhos; so precisa de id/role/is_active — nunca da foto.
     user = (
-        db.query(User).filter(User.id == user_id, User.is_active == True).first()
-    )  # noqa: E712
+        db.query(User)
+        .options(defer(User.photo_url))
+        .filter(User.id == user_id, User.is_active == True)  # noqa: E712
+        .first()
+    )
     if not user:
         raise invalid
 
@@ -562,8 +572,11 @@ def mfa_verify(
         raise invalid
 
     user = (
-        db.query(User).filter(User.id == user_id, User.is_active == True).first()
-    )  # noqa: E712
+        db.query(User)
+        .options(defer(User.photo_url))
+        .filter(User.id == user_id, User.is_active == True)  # noqa: E712
+        .first()
+    )
     if not user or not user.mfa_enabled:
         raise invalid
 
@@ -869,8 +882,73 @@ def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    """Lista todos os usuários (somente admin)."""
-    return db.query(User).order_by(User.created_at.desc()).all()
+    """Lista todos os usuários (somente admin).
+
+    defer(photo_url): a lista serializa UserResponse (sem foto); carregar as
+    fotos base64 de todos os usuarios multiplicava o egress da listagem.
+    """
+    return (
+        db.query(User)
+        .options(defer(User.photo_url))
+        .order_by(User.created_at.desc())
+        .all()
+    )
+
+
+# ── Foto de perfil (fora do hot path) ─────────────────────────────────────────
+# A foto base64 saiu do UserResponse; estes endpoints devolvem so a foto, com
+# ETag + Cache-Control para o navegador revalidar barato (304 sem corpo).
+
+
+def _photo_etag(photo: str | None) -> str:
+    # sha1 apenas como fingerprint de cache (nao e uso criptografico).
+    return 'W/"' + hashlib.sha1((photo or "").encode("utf-8")).hexdigest() + '"'
+
+
+def _photo_cached_response(request: Request, photo: str | None) -> Response:
+    etag = _photo_etag(photo)
+    # no-cache = revalida SEMPRE via ETag (304 sem corpo, egress minimo) e
+    # troca de foto aparece na hora; max-age seguraria a foto antiga por 1h.
+    headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    return JSONResponse(content={"photo_url": photo}, headers=headers)
+
+
+@router.get("/me/photo")
+def my_photo(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Foto do proprio usuario: {"photo_url": <string|null>} com cache por ETag."""
+    photo = (
+        db.query(User.photo_url).filter(User.id == current_user.id).scalar()
+    )  # so a coluna da foto — nunca a linha inteira
+    return _photo_cached_response(request, photo)
+
+
+@router.get("/users/{user_id}/photo")
+def user_photo(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Foto de um usuario: mesmo gate do GET /auth/users (admin) OU o proprio."""
+    is_self = current_user.id == user_id
+    is_admin = current_user.role == UserRole.ADMIN or getattr(
+        current_user, "has_full_access", False
+    )
+    if not is_self and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sem permissao para ver a foto deste usuario",
+        )
+    row = db.query(User.photo_url).filter(User.id == user_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return _photo_cached_response(request, row[0])
 
 
 @router.patch("/users/{user_id}/toggle", response_model=UserResponse)

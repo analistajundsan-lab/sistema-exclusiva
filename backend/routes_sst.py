@@ -5,9 +5,11 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, defer
 
 from auth import apply_user_unit_scope, get_current_user, require_role
+from routes_checklist import json_array_count_expr
 from routes_incidents import brt_day_utc_window
 from models import (
     AuditLog,
@@ -70,11 +72,27 @@ def _to_json(value: Optional[List[str]]) -> Optional[str]:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _serialize_sinistro(s: Sinistro) -> dict:
-    d = {c.name: getattr(s, c.name) for c in s.__table__.columns}
+def _serialize_sinistro(s: Sinistro, evidencias_count: Optional[int] = None) -> dict:
+    """Serializa um sinistro.
+
+    Contrato: em LISTAS (evidencias_count preenchido pela query) as evidencias
+    NAO trafegam — vao como [] com a contagem em evidencias_count. No DETALHE
+    (GET por id) evidencias vem completas. Em modo lista a coluna evidencias
+    esta deferida: nao pode ser acessada (dispararia SELECT extra).
+    """
+    d = {
+        c.name: getattr(s, c.name)
+        for c in s.__table__.columns
+        if not (evidencias_count is not None and c.name == "evidencias")
+    }
     d["danos_identificados"] = _json_list(s.danos_identificados)
-    d["evidencias"] = _json_list(s.evidencias)
     d["envolvidos"] = _json_list(s.envolvidos)
+    if evidencias_count is not None:
+        d["evidencias"] = []
+        d["evidencias_count"] = int(evidencias_count or 0)
+    else:
+        d["evidencias"] = _json_list(s.evidencias)
+        d["evidencias_count"] = len(d["evidencias"] or [])
     return d
 
 
@@ -330,7 +348,38 @@ def sst_dashboard_v2(
     fetch_start = min(
         d_start, prev_start, date_type(int(months[0][:4]), int(months[0][5:]), 1)
     )
-    sin_objs = _sin_q().filter(Sinistro.data_ocorrencia >= fetch_start).all()
+    # with_entities: o dashboard so AGREGA — trazer o objeto completo puxava
+    # descricao e evidencias/danos/envolvidos (base64) de todos os sinistros.
+    # As Rows preservam acesso por atributo (s.tipo_sinistro etc.).
+    sin_objs = (
+        _sin_q()
+        .filter(Sinistro.data_ocorrencia >= fetch_start)
+        .with_entities(
+            Sinistro.id,
+            Sinistro.numero,
+            Sinistro.unit,
+            Sinistro.data_ocorrencia,
+            Sinistro.hora_ocorrencia,
+            Sinistro.tipo_sinistro,
+            Sinistro.turno,
+            Sinistro.condutor_nome,
+            Sinistro.prefixo,
+            Sinistro.cidade,
+            Sinistro.gravidade,
+            Sinistro.probabilidade,
+            Sinistro.fator_contribuinte,
+            Sinistro.responsabilidade,
+            Sinistro.custo_final,
+            Sinistro.houve_vitima,
+            Sinistro.houve_terceiro,
+            Sinistro.houve_afastamento,
+            Sinistro.status_acao,
+            Sinistro.responsavel_acao,
+            Sinistro.prazo_acao,
+            Sinistro.tratativa_acao,
+        )
+        .all()
+    )
 
     por_mes = {mo: 0 for mo in months}
     por_tipo, por_turno, por_unidade = {}, {}, {}
@@ -528,11 +577,25 @@ def sst_dashboard_v2(
     ]
     bloqueio_motivos = {label: 0 for _, label in flag_labels}
     bloqueio_categoria, alerta_fadiga = {}, {}
-    for lb in lib_q.filter(
-        LiberacaoCondutor.resultado.in_(
-            [LiberacaoStatus.NAO_LIBERADO, LiberacaoStatus.LIBERADO_COM_RESTRICAO]
+    # with_entities: agrega so flags/categoria — sem respostas/evidencias (Text).
+    for lb in (
+        lib_q.filter(
+            LiberacaoCondutor.resultado.in_(
+                [LiberacaoStatus.NAO_LIBERADO, LiberacaoStatus.LIBERADO_COM_RESTRICAO]
+            )
         )
-    ).all():
+        .with_entities(
+            LiberacaoCondutor.documentacao_ok,
+            LiberacaoCondutor.treinamentos_ok,
+            LiberacaoCondutor.exames_ok,
+            LiberacaoCondutor.aso_ok,
+            LiberacaoCondutor.reciclagem_ok,
+            LiberacaoCondutor.avaliacoes_sst_ok,
+            LiberacaoCondutor.categoria_bloqueio,
+            LiberacaoCondutor.alerta_fadiga,
+        )
+        .all()
+    ):
         for attr, label in flag_labels:
             if getattr(lb, attr) is False:
                 bloqueio_motivos[label] += 1
@@ -681,11 +744,29 @@ def create_sinistro(
     data["danos_identificados"] = _to_json(data.pop("danos_identificados"))
     data["evidencias"] = _to_json(data.pop("evidencias"))
     data["envolvidos"] = _to_json(data.pop("envolvidos"))
-    data["numero"] = _next_sinistro_number(db)
 
-    sinistro = Sinistro(**data, created_by=current_user.id)
-    db.add(sinistro)
-    db.flush()
+    # numero e UNIQUE e gerado por contagem: dois creates simultaneos podem
+    # calcular o MESMO numero e o segundo estourava IntegrityError -> 500.
+    # Retry (ate 3x) recalculando o numero; outras violacoes sobem intactas.
+    sinistro = None
+    for _tentativa in range(3):
+        candidato = Sinistro(
+            **data, numero=_next_sinistro_number(db), created_by=current_user.id
+        )
+        db.add(candidato)
+        try:
+            db.flush()
+            sinistro = candidato
+            break
+        except IntegrityError as exc:
+            db.rollback()
+            if "numero" not in str(getattr(exc, "orig", exc)).lower():
+                raise
+    if sinistro is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflito ao gerar o numero do sinistro. Tente novamente.",
+        )
 
     _log_sinistro_history(
         db, sinistro.id, current_user.id, None, None, None, "Sinistro criado"
@@ -737,8 +818,15 @@ def list_sinistros(
     if data_fim:
         query = query.filter(Sinistro.data_ocorrencia <= data_fim)
 
-    rows = query.offset(skip).limit(limit).all()
-    return [_serialize_sinistro(r) for r in rows]
+    # Lista NUNCA carrega as evidencias (base64): defer + contagem via SQL.
+    rows = (
+        query.options(defer(Sinistro.evidencias))
+        .add_columns(json_array_count_expr(db, Sinistro.evidencias))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [_serialize_sinistro(r, evidencias_count=n) for r, n in rows]
 
 
 @router.get("/sinistros/{sinistro_id}")
@@ -771,6 +859,12 @@ def update_sinistro(
     ensure_unit_access(current_user, sinistro.unit)
 
     update_data = body.model_dump(exclude_unset=True)
+    # Guard de transicao (PWA): bundles antigos editam a partir da LISTA, que
+    # agora vem com evidencias=[] — um PUT desses apagaria as fotos. Lista
+    # vazia e tratada como "nao tocar"; para remover fotos, mantenha ao menos
+    # uma ou use um fluxo dedicado.
+    if update_data.get("evidencias") == []:
+        update_data.pop("evidencias")
     for field in ("danos_identificados", "evidencias", "envolvidos"):
         if field in update_data:
             update_data[field] = _to_json(update_data[field])
@@ -778,13 +872,21 @@ def update_sinistro(
     for field, new_val in update_data.items():
         old_val = getattr(sinistro, field)
         if str(old_val) != str(new_val):
+            if field == "evidencias":
+                # Evidencias sao base64 pesadas: o historico guarda apenas o
+                # RESUMO ("3 itens -> 5 itens"), nunca o conteudo.
+                old_txt = f"{len(_json_list(old_val) or [])} itens"
+                new_txt = f"{len(_json_list(new_val) or [])} itens"
+            else:
+                old_txt = str(old_val)
+                new_txt = str(new_val)
             _log_sinistro_history(
                 db,
                 sinistro.id,
                 current_user.id,
                 field,
-                str(old_val),
-                str(new_val),
+                old_txt,
+                new_txt,
             )
         setattr(sinistro, field, new_val)
 

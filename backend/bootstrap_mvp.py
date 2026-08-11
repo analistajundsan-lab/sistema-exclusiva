@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import inspect, text
+from sqlalchemy.orm import load_only
 
 from auth import hash_password
 import hashlib
@@ -437,7 +438,14 @@ def main() -> None:
     migrate_existing_sqlite()
     db = SessionLocal()
     try:
-        for user in db.query(User).filter(User.must_change_password.is_(None)).all():
+        # load_only: correcao pontual de flag — nao precisa carregar a linha
+        # inteira (foto base64 inclusa) de cada usuario no startup.
+        for user in (
+            db.query(User)
+            .options(load_only(User.id, User.must_change_password))
+            .filter(User.must_change_password.is_(None))
+            .all()
+        ):
             user.must_change_password = False
         upsert_admin(
             db,
