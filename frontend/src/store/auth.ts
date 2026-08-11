@@ -1,11 +1,12 @@
 import { create } from 'zustand'
-import { revokeSession } from '../api/client'
+import api, { revokeSession } from '../api/client'
 
+// A foto de perfil NAO vem mais no UserResponse (/auth/me etc.) — sai de
+// UserProfile e e buscada separadamente em /auth/me/photo (ver fetchPhoto).
 interface UserProfile {
   id: number
   name: string
   display_name: string | null
-  photo_url: string | null
   unit: string | null
   units: string | null
   has_full_access?: boolean
@@ -26,6 +27,8 @@ interface AuthState {
   mustChangePassword: boolean
   setAuth: (token: string, role: string, refreshToken?: string) => void
   setUserProfile: (profile: UserProfile) => void
+  setPhotoUrl: (url: string | null) => void
+  fetchPhoto: () => Promise<void>
   setMustChangePassword: (v: boolean) => void
   logout: () => void
 }
@@ -36,6 +39,12 @@ const parseUnits = (raw: string | null): string[] | null => {
   return parts.length > 0 ? parts : null
 }
 
+// Foto propria: buscada UMA vez por sessao em GET /auth/me/photo. O endpoint
+// responde com ETag/Cache-Control — o cache HTTP do navegador cuida da
+// revalidacao; NUNCA persistir a foto (base64 pesado) em localStorage.
+let photoFetched = false
+let photoFetchPromise: Promise<void> | null = null
+
 export const useAuthStore = create<AuthState>((set) => ({
   token: localStorage.getItem('token'),
   refreshToken: localStorage.getItem('refreshToken'),
@@ -43,7 +52,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   userId: localStorage.getItem('userId') ? Number(localStorage.getItem('userId')) : null,
   userName: localStorage.getItem('userName'),
   displayName: localStorage.getItem('displayName'),
-  photoUrl: localStorage.getItem('photoUrl'),
+  photoUrl: null,
   userUnit: localStorage.getItem('userUnit'),
   userUnits: parseUnits(localStorage.getItem('userUnits')),
   hasFullAccess: localStorage.getItem('hasFullAccess') === 'true',
@@ -58,7 +67,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('userId', String(profile.id))
     localStorage.setItem('userName', profile.name || '')
     localStorage.setItem('displayName', profile.display_name || '')
-    localStorage.setItem('photoUrl', profile.photo_url || '')
     localStorage.setItem('userUnit', profile.unit || '')
     localStorage.setItem('userUnits', profile.units || '')
     localStorage.setItem('hasFullAccess', profile.has_full_access ? 'true' : 'false')
@@ -67,12 +75,36 @@ export const useAuthStore = create<AuthState>((set) => ({
       userId: profile.id,
       userName: profile.name,
       displayName: profile.display_name,
-      photoUrl: profile.photo_url,
       userUnit: profile.unit,
       userUnits: parseUnits(profile.units),
       hasFullAccess: !!profile.has_full_access,
       mustChangePassword: !!profile.must_change_password,
     })
+  },
+  // Atualizacao local apos salvar o perfil (o PATCH /auth/profile nao ecoa
+  // mais a foto na resposta — a fonte da verdade e o que foi enviado).
+  setPhotoUrl: (url) => set({ photoUrl: url }),
+  fetchPhoto: async () => {
+    if (photoFetched) return
+    if (!localStorage.getItem('token')) return
+    // Dedupe: Layout monta a cada navegacao; so uma requisicao em voo.
+    if (!photoFetchPromise) {
+      photoFetchPromise = api
+        .get<{ photo_url: string | null }>('/auth/me/photo')
+        .then((res) => {
+          photoFetched = true
+          set({ photoUrl: res.data.photo_url })
+        })
+        .catch(() => {
+          // Falha (ex.: 503 de banco fora): avatar fica nas iniciais; a
+          // proxima montagem do Layout tenta de novo (no maximo 1 req extra
+          // por navegacao, deduplicada).
+        })
+        .finally(() => {
+          photoFetchPromise = null
+        })
+    }
+    await photoFetchPromise
   },
   setMustChangePassword: (v) => {
     localStorage.setItem('mustChangePassword', v ? 'true' : 'false')
@@ -81,12 +113,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     // Revoga a sessao no servidor antes de limpar (best-effort).
     void revokeSession()
+    photoFetched = false
+    photoFetchPromise = null
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('role')
     localStorage.removeItem('userId')
     localStorage.removeItem('userName')
     localStorage.removeItem('displayName')
+    // Chave legado: versoes antigas persistiam a foto no localStorage.
     localStorage.removeItem('photoUrl')
     localStorage.removeItem('userUnit')
     localStorage.removeItem('userUnits')

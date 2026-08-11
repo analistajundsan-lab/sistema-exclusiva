@@ -114,14 +114,21 @@ function CameraRow({ label: lbl2, value }: { label: string; value?: string | nul
   )
 }
 
-function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
+function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete, evidLoading, evidError }: {
   c: ChecklistData
   expanded: boolean
   onToggle: () => void
   isAdmin: boolean
   onEdit: () => void
   onDelete: () => void
+  // Evidencias nao vem mais na lista (so a contagem); o detalhe e buscado ao
+  // expandir — estes flags mostram o progresso dessa busca.
+  evidLoading: boolean
+  evidError: boolean
 }) {
+  // Tolerante aos dois shapes: contrato novo (evidencias_count) e resposta de
+  // detalhe ja mesclada (evidencias completas).
+  const evidCount = c.evidencias?.length || c.evidencias_count || 0
   const status = hasPendency(c)
   const date = parseApiDate(c.created_at).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
@@ -165,6 +172,12 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
             {c.garagem} · {c.auditor_name} · {date}
+            {evidCount > 0 && (
+              <span className="inline-flex items-center gap-1 ml-1.5 text-gray-400 dark:text-gray-500">
+                · <Camera size={10} aria-hidden="true" /> {evidCount}
+                <span className="sr-only">{evidCount === 1 ? 'evidência' : 'evidências'}</span>
+              </span>
+            )}
           </p>
         </div>
         {expanded ? <ChevronUp size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />}
@@ -268,17 +281,33 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
             </div>
           )}
 
-          {/* Evidências */}
-          {c.evidencias && c.evidencias.length > 0 && (
+          {/* Evidências: a lista traz so a contagem; as fotos vem do detalhe
+              (GET /checklist/{id}) buscado ao expandir o card. */}
+          {evidCount > 0 && (
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Evidências</p>
-              <div className="flex gap-2">
-                {c.evidencias.map((src, i) => (
-                  <a key={i} href={src} target="_blank" rel="noreferrer">
-                    <img src={src} alt="" className="w-20 h-20 rounded-xl object-cover border-2 border-gray-200 dark:border-gray-700" />
-                  </a>
-                ))}
-              </div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                Evidências ({evidCount})
+              </p>
+              {c.evidencias && c.evidencias.length > 0 ? (
+                <div className="flex gap-2">
+                  {c.evidencias.map((src, i) => (
+                    <a key={i} href={src} target="_blank" rel="noreferrer">
+                      <img src={src} alt={`Evidência ${i + 1}`} className="w-20 h-20 rounded-xl object-cover border-2 border-gray-200 dark:border-gray-700" />
+                    </a>
+                  ))}
+                </div>
+              ) : evidLoading ? (
+                <div className="flex gap-2" aria-live="polite">
+                  {Array.from({ length: Math.min(evidCount, 2) }).map((_, i) => (
+                    <div key={i} className="w-20 h-20 rounded-xl bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                  ))}
+                  <span className="sr-only">Carregando evidências…</span>
+                </div>
+              ) : evidError ? (
+                <p className="text-xs text-red-500 dark:text-red-400">
+                  Não foi possível carregar as evidências. Feche e abra o card para tentar de novo.
+                </p>
+              ) : null}
             </div>
           )}
         </div>
@@ -290,7 +319,7 @@ function ChecklistCard({ c, expanded, onToggle, isAdmin, onEdit, onDelete }: {
 export function ChecklistConsulta() {
   const navigate = useNavigate()
   const { role, hasFullAccess, userUnit, userUnits } = useAuthStore()
-  const { listChecklists, deleteChecklist, downloadChecklistReport } = useChecklist()
+  const { listChecklists, deleteChecklist, downloadChecklistReport, getChecklist } = useChecklist()
   const isAdmin = hasFullAccess || role === 'admin'
 
   // Garagens que este usuario pode filtrar: admin ve todas; quem tem 2+ unidades
@@ -306,6 +335,9 @@ export function ChecklistConsulta() {
   const [loadingList, setLoadingList] = useState(true)
   const [downloading, setDownloading] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
+  // Busca do detalhe (evidencias) do card expandido: id em carga / ids que falharam.
+  const [evidLoadingId, setEvidLoadingId] = useState<number | null>(null)
+  const [evidErrorIds, setEvidErrorIds] = useState<Set<number>>(new Set())
 
   const [garagem, setGaragem] = useState('')
   const [prefixo, setPrefixo] = useState('')
@@ -339,8 +371,41 @@ export function ChecklistConsulta() {
 
   const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
 
-  const handleEdit = (c: ChecklistData) => {
-    navigate('/vistoria/novo', { state: { editData: c } })
+  // Expande/recolhe um card. Ao expandir um item com evidencias ainda nao
+  // carregadas (a lista traz so a contagem), busca o detalhe pelo id e mescla.
+  const handleToggle = async (c: ChecklistData) => {
+    const next = expanded === c.id ? null : c.id
+    setExpanded(next)
+    if (next === null) return
+    const needsDetail = (c.evidencias_count ?? 0) > 0 && !(c.evidencias && c.evidencias.length > 0)
+    if (!needsDetail || evidLoadingId === c.id) return
+    setEvidLoadingId(c.id)
+    setEvidErrorIds(prev => {
+      if (!prev.has(c.id)) return prev
+      const nextSet = new Set(prev)
+      nextSet.delete(c.id)
+      return nextSet
+    })
+    try {
+      const full = await getChecklist(c.id)
+      setItems(prev => prev.map(item => (item.id === c.id ? { ...item, ...full } : item)))
+    } catch {
+      setEvidErrorIds(prev => new Set(prev).add(c.id))
+    } finally {
+      setEvidLoadingId(prev => (prev === c.id ? null : prev))
+    }
+  }
+
+  // Edicao SEMPRE parte do detalhe completo: a lista vem com evidencias: [] e,
+  // se fosse enviada assim no PATCH, apagaria as fotos existentes no servidor.
+  const handleEdit = async (c: ChecklistData) => {
+    try {
+      const needsDetail = (c.evidencias_count ?? 0) > 0 && !(c.evidencias && c.evidencias.length > 0)
+      const full = needsDetail ? await getChecklist(c.id) : c
+      navigate('/vistoria/novo', { state: { editData: full } })
+    } catch {
+      alert('Não foi possível carregar a vistoria para edição. Tente novamente.')
+    }
   }
 
   const handleDelete = async (c: ChecklistData) => {
@@ -494,10 +559,12 @@ export function ChecklistConsulta() {
               key={c.id}
               c={c}
               expanded={expanded === c.id}
-              onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
+              onToggle={() => handleToggle(c)}
               isAdmin={isAdmin}
               onEdit={() => handleEdit(c)}
               onDelete={() => handleDelete(c)}
+              evidLoading={evidLoadingId === c.id}
+              evidError={evidErrorIds.has(c.id)}
             />
           ))}
         </div>

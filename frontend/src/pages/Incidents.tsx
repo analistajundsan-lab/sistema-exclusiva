@@ -1,10 +1,10 @@
-import { useEffect, useState, useMemo, Fragment } from 'react'
+import { useEffect, useState, useMemo, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { Layout } from '../components/Layout'
 import { Incident, useIncidents } from '../hooks/useIncidents'
 import { useVisibleInterval } from '../hooks/useVisibleInterval'
 import { useAuthStore } from '../store/auth'
-import api from '../api/client'
+import api, { apiErrorMessage } from '../api/client'
 import { parseApiDate } from '../utils/datetime'
 import { AlertTriangle, Plus, Clock, Hash, Bus, X, ChevronLeft, ChevronRight, ChevronDown, MessageCircle, Pencil, Trash2, Check, MapPin, Building2, User as UserIcon, Users as UsersIcon } from 'lucide-react'
 
@@ -160,8 +160,26 @@ export function Incidents() {
   }
 
   // So atualiza com a aba visivel; 15s (economiza requests/transferencia do banco).
+  // Backoff simples em falha (5xx/rede): apos 3 falhas seguidas pula 1 tick
+  // (~30s efetivos); com 6+ falhas, 3 ticks (~60s). Sucesso zera — a cadencia
+  // normal de 15s nao muda com o backend saudavel.
+  const pollFailuresRef = useRef(0)
+  const pollSkipTicksRef = useRef(0)
   useVisibleInterval(() => {
-    fetchIncidents(filters, page * 20, true)
+    if (pollSkipTicksRef.current > 0) {
+      pollSkipTicksRef.current -= 1
+      return
+    }
+    void fetchIncidents(filters, page * 20, true).then((ok) => {
+      if (ok) {
+        pollFailuresRef.current = 0
+        return
+      }
+      pollFailuresRef.current += 1
+      if (pollFailuresRef.current >= 3) {
+        pollSkipTicksRef.current = pollFailuresRef.current >= 6 ? 3 : 1
+      }
+    })
   }, 15000)
 
   const sendWhatsApp = (text: string, kind: 'personal' | 'business' = 'personal') => {
@@ -249,7 +267,7 @@ export function Incidents() {
       try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignora */ }
       await fetchIncidents(filters, page * 20)
     } catch (e: any) {
-      setFormError(e?.response?.data?.detail || 'Erro ao registrar ocorrência.')
+      setFormError(apiErrorMessage(e, 'Erro ao registrar ocorrência.'))
     } finally {
       setSaving(false)
     }

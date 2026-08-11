@@ -93,8 +93,27 @@ export function Dashboard() {
   }, [loadStats])
   // Atualiza a cada 15s so com a aba visivel (economiza requests/transferencia
   // do banco — dashboard e visao de fundo, nao precisa de 8s).
+  // Backoff simples em falha (5xx/rede): apos 3 falhas seguidas pula 1 tick
+  // (~30s efetivos); com 6+ falhas, 3 ticks (~60s). Sucesso zera — a cadencia
+  // normal de 15s nao muda com o backend saudavel.
+  const statsFailuresRef = useRef(0)
+  const statsSkipTicksRef = useRef(0)
   useVisibleInterval(() => {
-    loadStats().catch(() => setDashboard(null))
+    if (statsSkipTicksRef.current > 0) {
+      statsSkipTicksRef.current -= 1
+      return
+    }
+    loadStats()
+      .then(() => {
+        statsFailuresRef.current = 0
+      })
+      .catch(() => {
+        setDashboard(null)
+        statsFailuresRef.current += 1
+        if (statsFailuresRef.current >= 3) {
+          statsSkipTicksRef.current = statsFailuresRef.current >= 6 ? 3 : 1
+        }
+      })
   }, 15000)
 
   // Virada de dia (00:00 BRT): se o dia BRT mudou e o operador esta vendo "hoje",

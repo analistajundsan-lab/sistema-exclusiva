@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import api from '../api/client'
+import api, { SERVER_UNAVAILABLE_MESSAGE } from '../api/client'
 import { useAuthStore } from '../store/auth'
 
 export function useAuth() {
@@ -16,12 +16,14 @@ export function useAuth() {
       id: me.data.id,
       name: me.data.name,
       display_name: me.data.display_name,
-      photo_url: me.data.photo_url,
       unit: me.data.unit,
       units: me.data.units,
       has_full_access: me.data.has_full_access,
       must_change_password: me.data.must_change_password,
     })
+    // Foto vem de endpoint proprio (/auth/me/photo) — best-effort, nao
+    // bloqueia o login se falhar.
+    void useAuthStore.getState().fetchPhoto()
     return { ok: true, mustChangePassword: !!me.data.must_change_password }
   }
 
@@ -51,6 +53,9 @@ export function useAuth() {
         setError('Muitas tentativas. Aguarde 1 minuto e tente novamente.')
       } else if (status === 401) {
         setError('CPF ou senha inválidos.')
+      } else if (status >= 500) {
+        // 5xx (banco fora etc.): nunca mostrar "Erro interno do servidor" cru.
+        setError(SERVER_UNAVAILABLE_MESSAGE)
       } else if (!status) {
         setError('Sem conexão com o servidor. Verifique sua internet.')
       } else {
@@ -72,6 +77,8 @@ export function useAuth() {
       const status = err?.response?.status
       if (status === 401) {
         setError('Código inválido ou expirado. Tente novamente.')
+      } else if (status >= 500) {
+        setError(SERVER_UNAVAILABLE_MESSAGE)
       } else if (!status) {
         setError('Sem conexão com o servidor. Verifique sua internet.')
       } else {

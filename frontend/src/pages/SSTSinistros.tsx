@@ -3,6 +3,7 @@ import { AlertTriangle, Plus, Search, X } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import {
   createSinistro,
+  getSinistro,
   getSinistroHistorico,
   listSinistros,
   Sinistro,
@@ -103,10 +104,18 @@ export function SSTSinistros() {
     setShowForm(true)
   }
 
-  const openEdit = (s: Sinistro) => {
-    setEditing(s)
-    setForm({ ...s })
-    setShowForm(true)
+  // Edicao SEMPRE parte do detalhe completo (GET /sst/sinistros/{id}): a lista
+  // vem com evidencias: [] e, se esse array vazio fosse enviado no PUT, as
+  // fotos existentes seriam apagadas no servidor.
+  const openEdit = async (s: Sinistro) => {
+    try {
+      const full = await getSinistro(s.id)
+      setEditing(full)
+      setForm({ ...full })
+      setShowForm(true)
+    } catch {
+      alert('Não foi possível carregar o sinistro para edição. Tente novamente.')
+    }
   }
 
   const openHistorico = async (s: Sinistro) => {
@@ -193,7 +202,7 @@ export function SSTSinistros() {
           <table className="min-w-full text-sm">
             <thead>
               <tr>
-                {['Número', 'Data', 'Unidade', 'Prefixo', 'Condutor', 'Tipo', 'Status', 'Ações'].map((h) => (
+                {['Número', 'Data', 'Unidade', 'Prefixo', 'Condutor', 'Tipo', 'Evid.', 'Status', 'Ações'].map((h) => (
                   <th key={h}>
                     {h}
                   </th>
@@ -211,6 +220,9 @@ export function SSTSinistros() {
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{s.prefixo || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{s.condutor_nome || '—'}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{s.tipo_sinistro}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-center">
+                    {(s.evidencias_count ?? s.evidencias?.length ?? 0) || '—'}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={STATUS_COLOR[s.status]}>
                       {STATUS_LABEL[s.status]}

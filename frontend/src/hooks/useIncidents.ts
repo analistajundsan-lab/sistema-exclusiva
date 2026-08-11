@@ -49,9 +49,9 @@ export function useIncidents(initialFilters?: IncidentFilters) {
     return p
   }
 
-  const fetchIncidents = useCallback(async (f = filters, skip = page * PAGE_SIZE, silent = false) => {
+  // Devolve true/false (sucesso) para o poll da tela aplicar backoff em falha.
+  const fetchIncidents = useCallback(async (f = filters, skip = page * PAGE_SIZE, silent = false): Promise<boolean> => {
     if (!silent) setLoading(true)
-    setError(null)
     try {
       const params = buildParams(f, skip)
       const [listRes, countRes] = await Promise.all([
@@ -60,8 +60,13 @@ export function useIncidents(initialFilters?: IncidentFilters) {
       ])
       setIncidents(listRes.data)
       setTotal(countRes.data.total)
+      // Limpa o erro APENAS em sucesso: um refetch silencioso que falha nao
+      // pode apagar o banner e deixar dados velhos na tela sem aviso.
+      setError(null)
+      return true
     } catch (err: any) {
       if (!silent) setError(apiErrorMessage(err, 'Erro ao carregar ocorrencias'))
+      return false
     } finally {
       if (!silent) setLoading(false)
     }

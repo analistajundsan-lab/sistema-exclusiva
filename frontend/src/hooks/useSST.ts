@@ -54,7 +54,10 @@ export interface Sinistro {
   tipo_sinistro: string
   descricao: string | null
   danos_identificados: string[] | null
+  // Lista (GET /sst/sinistros): evidencias vem SEMPRE [] + evidencias_count.
+  // O array completo (base64) so vem no detalhe (GET /sst/sinistros/{id}).
   evidencias: string[] | null
+  evidencias_count?: number
   envolvidos: string[] | null
   gravidade?: string | null
   probabilidade?: string | null

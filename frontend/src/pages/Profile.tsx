@@ -1,12 +1,52 @@
 import { useState, useRef, useEffect } from 'react'
 import { Layout } from '../components/Layout'
 import { useAuthStore } from '../store/auth'
-import api from '../api/client'
+import api, { apiErrorMessage } from '../api/client'
 import { Camera, Check, AlertCircle, User } from 'lucide-react'
 import { MfaCard } from '../components/MfaCard'
 
+// O backend agora limita a foto a ~400k chars (data URL). O avatar e exibido
+// no maximo a 112px, entao 512px + JPEG comprimido sobra qualidade e cabe com
+// folga — e permite aceitar fotos de camera grandes (que antes estouravam).
+const AVATAR_MAX_DIM = 512
+const AVATAR_MAX_CHARS = 400_000
+
+function compressAvatar(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const ratio = Math.min(1, AVATAR_MAX_DIM / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.width * ratio))
+      canvas.height = Math.max(1, Math.round(img.height * ratio))
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('canvas-indisponivel'))
+        return
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      // Reduz a qualidade em degraus ate caber no limite do backend.
+      for (const quality of [0.8, 0.6, 0.4]) {
+        const out = canvas.toDataURL('image/jpeg', quality)
+        if (out.length <= AVATAR_MAX_CHARS) {
+          resolve(out)
+          return
+        }
+      }
+      reject(new Error('foto-grande-demais'))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('imagem-invalida'))
+    }
+    img.src = url
+  })
+}
+
 export function Profile() {
-  const { userName, displayName, photoUrl, setUserProfile, userId } = useAuthStore()
+  const { userName, displayName, photoUrl, setUserProfile, setPhotoUrl, userId } = useAuthStore()
   const [form, setForm] = useState({ display_name: displayName || '', photo_url: photoUrl || '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -17,17 +57,22 @@ export function Profile() {
     setForm({ display_name: displayName || '', photo_url: photoUrl || '' })
   }, [displayName, photoUrl])
 
-  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // Permite escolher o mesmo arquivo de novo depois de um erro.
+    e.target.value = ''
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Foto muito grande. Máximo 2MB.')
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Foto muito grande. Máximo 10MB.')
       return
     }
     setError(null)
-    const reader = new FileReader()
-    reader.onload = () => setForm(f => ({ ...f, photo_url: reader.result as string }))
-    reader.readAsDataURL(file)
+    try {
+      const dataUrl = await compressAvatar(file)
+      setForm(f => ({ ...f, photo_url: dataUrl }))
+    } catch {
+      setError('Não foi possível processar a imagem. Tente outra foto.')
+    }
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -44,15 +89,17 @@ export function Profile() {
         id: userId!,
         name: userName!,
         display_name: res.data.display_name,
-        photo_url: res.data.photo_url,
         unit: res.data.unit,
         units: res.data.units,
       })
+      // A resposta do PATCH nao ecoa mais a foto (payload pesado); a fonte da
+      // verdade local e o que acabou de ser enviado.
+      setPhotoUrl(form.photo_url || null)
       setSaved(true)
       // Clear saved feedback after 3s
       setTimeout(() => setSaved(false), 3000)
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Erro ao salvar perfil.')
+      setError(apiErrorMessage(err, 'Erro ao salvar perfil.'))
     } finally {
       setSaving(false)
     }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, ShieldAlert } from 'lucide-react'
 import { getPublicSafetyChecklist, PublicSafetyChecklist as Checklist, submitPublicSafetyChecklist } from '../hooks/useSafety'
+import { apiErrorMessage } from '../api/client'
 
 type AnswerValue = 'ok' | 'not_ok' | 'na'
 
@@ -67,7 +68,7 @@ export function PublicSafetyChecklist() {
       })
       setResult({ status: response.overall_status, message: response.message })
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Erro ao enviar check-list.')
+      setError(apiErrorMessage(e, 'Erro ao enviar check-list.'))
     } finally {
       setSubmitting(false)
     }

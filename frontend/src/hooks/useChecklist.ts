@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import api from '../api/client'
+import api, { apiErrorMessage } from '../api/client'
 
 export interface ChecklistData {
   id: number
@@ -35,7 +35,10 @@ export interface ChecklistData {
   artesp_doc?: string
   emdec_doc?: string
   observacoes?: string
+  // Lista (GET /checklist/): evidencias vem SEMPRE [] + evidencias_count.
+  // O array completo (base64) so vem no detalhe (GET /checklist/{id}).
   evidencias?: string[]
+  evidencias_count?: number
   created_at: string
 }
 
@@ -50,8 +53,7 @@ export function useChecklist() {
       const res = await api.post('/checklist/', data)
       return res.data as ChecklistData
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || 'Erro ao salvar checklist.'
-      setError(msg)
+      setError(apiErrorMessage(e, 'Erro ao salvar checklist.'))
       throw e
     } finally {
       setLoading(false)
@@ -65,8 +67,7 @@ export function useChecklist() {
       const res = await api.patch(`/checklist/${id}`, data)
       return res.data as ChecklistData
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || 'Erro ao atualizar checklist.'
-      setError(msg)
+      setError(apiErrorMessage(e, 'Erro ao atualizar checklist.'))
       throw e
     } finally {
       setLoading(false)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
-import api from '../api/client'
+import api, { apiErrorMessage } from '../api/client'
 import { formatCpf } from '../utils/cpf'
 import { parseApiDate } from '../utils/datetime'
 import { Users as UsersIcon, Plus } from 'lucide-react'
@@ -142,7 +142,7 @@ export function Users() {
       await api.delete(`/auth/users/${u.id}`)
       setUsers(prev => prev.filter(x => x.id !== u.id))
     } catch (e: any) {
-      alert(e?.response?.data?.detail || 'Erro ao excluir usuário')
+      alert(apiErrorMessage(e, 'Erro ao excluir usuário'))
     }
   }
 
@@ -183,7 +183,7 @@ export function Users() {
       setModal(false)
       await load()
     } catch (e: any) {
-      setFormError(e?.response?.data?.detail || 'Erro ao cadastrar usuário')
+      setFormError(apiErrorMessage(e, 'Erro ao cadastrar usuário'))
     } finally {
       setSaving(false)
     }
@@ -214,7 +214,7 @@ export function Users() {
       setUsers(prev => prev.map(u => u.id === editingId ? res.data : u))
       setModal(false)
     } catch (e: any) {
-      setFormError(e?.response?.data?.detail || 'Erro ao editar usuário')
+      setFormError(apiErrorMessage(e, 'Erro ao editar usuário'))
     } finally {
       setSaving(false)
     }

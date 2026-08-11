@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import api from '../api/client'
+import api, { apiErrorMessage } from '../api/client'
 import QRCode from 'qrcode'
 import { ShieldCheck, ShieldOff, AlertCircle, Check } from 'lucide-react'
 
@@ -28,7 +28,7 @@ export function MfaCard() {
       setSecret(r.data.secret)
       setQr(await QRCode.toDataURL(r.data.otpauth_uri, { margin: 1, width: 200 }))
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Erro ao iniciar a configuração.')
+      setError(apiErrorMessage(e, 'Erro ao iniciar a configuração.'))
     } finally {
       setBusy(false)
     }
@@ -40,7 +40,7 @@ export function MfaCard() {
       await api.post('/auth/mfa/enable', { code })
       setEnabled(true); setSecret(''); setQr(''); setCode(''); setMsg('MFA ativado com sucesso!')
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Código inválido.')
+      setError(apiErrorMessage(e, 'Código inválido.'))
     } finally {
       setBusy(false)
     }
@@ -52,7 +52,7 @@ export function MfaCard() {
       await api.post('/auth/mfa/disable', { code })
       setEnabled(false); setCode(''); setMsg('MFA desativado.')
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Código inválido.')
+      setError(apiErrorMessage(e, 'Código inválido.'))
     } finally {
       setBusy(false)
     }

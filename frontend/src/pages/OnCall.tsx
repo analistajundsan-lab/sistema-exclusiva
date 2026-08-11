@@ -250,11 +250,30 @@ export function OnCall() {
   // confirmacao/troca alheia aparece em ~2s, sem baixar a escala a cada ciclo.
   // A atualizacao e silenciosa (sem spinner; so re-renderiza se os dados mudarem).
   const lastVersionRef = useRef<number | null>(null)
+  // Backoff simples em falha (5xx/queda de rede — fetchVersion devolve null):
+  // apos 3 falhas seguidas os ticks de 2s passam a ser pulados (~10s efetivos)
+  // e, se a queda persistir (6+), ~30s de teto. A primeira resposta OK zera
+  // tudo — a cadencia normal de 2s NAO muda quando o backend esta saudavel.
+  const versionFailuresRef = useRef(0)
+  const versionSkipTicksRef = useRef(0)
   // So roda com a aba visivel (useVisibleInterval): aba oculta = sem poll, o
   // banco pode suspender. Ao voltar, atualiza na hora.
   useVisibleInterval(async () => {
+    if (versionSkipTicksRef.current > 0) {
+      versionSkipTicksRef.current -= 1
+      return
+    }
     const v = await pending.fetchVersion()
-    if (v == null) return
+    if (v == null) {
+      versionFailuresRef.current += 1
+      if (versionFailuresRef.current >= 3) {
+        // 4 ticks pulados ≈ 10s entre tentativas; com 6+ falhas, 14 ≈ 30s.
+        versionSkipTicksRef.current = versionFailuresRef.current >= 6 ? 14 : 4
+      }
+      return
+    }
+    versionFailuresRef.current = 0
+    versionSkipTicksRef.current = 0
     if (lastVersionRef.current === null) {
       lastVersionRef.current = v
       return

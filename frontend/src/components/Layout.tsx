@@ -42,8 +42,14 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Layout({ children }: { children: ReactNode }) {
   const { logout, role } = useAuth()
-  const { userName, displayName, photoUrl, hasFullAccess } = useAuthStore()
+  const { userName, displayName, photoUrl, hasFullAccess, fetchPhoto } = useAuthStore()
   const { dark, toggle } = useThemeStore()
+
+  // Foto de perfil vem de endpoint proprio (/auth/me/photo, com ETag) e vive
+  // so em memoria: busca 1x por sessao (deduplicado no store) ao montar.
+  useEffect(() => {
+    void fetchPhoto()
+  }, [fetchPhoto])
   const navigate = useNavigate()
   const location = useLocation()
 

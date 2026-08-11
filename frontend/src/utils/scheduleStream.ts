@@ -69,8 +69,17 @@ export function openScheduleStream(onChange: (ev: ScheduleEvent) => void): () =>
       // queda/erro de rede: reconecta com backoff abaixo
     } finally {
       if (!closed) {
-        attempt = Math.min(attempt + 1, 6)
-        setTimeout(connect, 1000 * attempt) // 1s,2s,...,6s
+        attempt += 1
+        // Backoff progressivo: 1s..6s nas primeiras quedas (recuperacao
+        // rapida de blips de rede); se a falha PERSISTIR (ex.: banco fora),
+        // o teto sobe em degraus — 12s, 30s e por fim 60s — para nao
+        // martelar o backend caido. Conexao OK zera (attempt = 0 acima).
+        const delay =
+          attempt <= 6 ? 1000 * attempt
+          : attempt <= 10 ? 12000
+          : attempt <= 15 ? 30000
+          : 60000
+        setTimeout(connect, delay)
       }
     }
   }

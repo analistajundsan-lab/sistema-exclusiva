@@ -103,7 +103,6 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
     const { silent = false, fresh = false } = opts
     const seq = ++requestSeq.current
     if (!silent) setLoading(true)
-    setError(null)
     try {
       // Um unico request (/board) traz lines + total + summary, cortando 2/3 dos
       // round-trips por refresh. fresh=1 ignora o cache do servidor (usado logo
@@ -114,6 +113,10 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
       // Resposta obsoleta: outra requisicao mais recente ja foi disparada.
       // Ignora para nao "ressuscitar" uma linha que ja foi confirmada.
       if (seq !== requestSeq.current) return
+      // Limpa o erro APENAS em sucesso: antes, o setError(null) no inicio de
+      // um refetch silencioso apagava o banner durante uma queda do backend,
+      // deixando dados velhos na tela sem nenhum aviso.
+      setError(null)
       const data = res.data as { lines: ScheduleLine[]; total: number; summary: ScheduleSummary[] }
       setLines(prev => JSON.stringify(prev) === JSON.stringify(data.lines) ? prev : data.lines)
       setTotal(prev => prev === data.total ? prev : data.total)
@@ -148,8 +151,7 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
       await fetchSchedule(nextFilters, 0, { fresh: true })
       return res.data
     } catch (err: any) {
-      const detail = err.response?.data?.detail
-      setError(detail || 'Erro ao importar escala. Confira se o arquivo e uma planilha .xlsx no modelo esperado.')
+      setError(apiErrorMessage(err, 'Erro ao importar escala. Confira se o arquivo e uma planilha .xlsx no modelo esperado.'))
       return null
     } finally {
       setImporting(false)
@@ -171,8 +173,7 @@ export function useSchedule(initialFilters: ScheduleFilters = {}) {
       setImportPreview(res.data)
       return res.data
     } catch (err: any) {
-      const detail = err.response?.data?.detail
-      setError(detail || 'Erro ao gerar previa da escala.')
+      setError(apiErrorMessage(err, 'Erro ao gerar previa da escala.'))
       return null
     } finally {
       setPreviewing(false)

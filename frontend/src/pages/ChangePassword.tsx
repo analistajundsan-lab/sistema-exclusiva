@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import api from '../api/client'
+import api, { SERVER_UNAVAILABLE_MESSAGE } from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { Eye, EyeOff, Lock, AlertCircle, ArrowLeft } from 'lucide-react'
 
@@ -19,6 +19,9 @@ export function validatePasswordPolicy(password: string): string | null {
 // Extrai uma mensagem legivel de um erro de API (o detail de um 422 do
 // FastAPI vem como array de objetos — renderiza-lo direto quebra o React).
 export function extractApiError(e: any, fallback: string): string {
+  const status = e?.response?.status
+  // 5xx nunca vaza cru ("Erro interno do servidor") para o operador.
+  if (typeof status === 'number' && status >= 500) return SERVER_UNAVAILABLE_MESSAGE
   const detail = e?.response?.data?.detail
   if (typeof detail === 'string') return detail
   if (Array.isArray(detail)) {

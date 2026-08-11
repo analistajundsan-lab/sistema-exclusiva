@@ -52,9 +52,20 @@ export function handleSessionExpired() {
   }
 }
 
+// Mensagem unica para QUALQUER 5xx (500 cru, 503 de banco fora, gateway...).
+// Nunca mostrar "Erro interno do servidor" cru para o operador.
+export const SERVER_UNAVAILABLE_MESSAGE =
+  'Sistema temporariamente indisponível. Tente novamente em instantes.'
+
 export function apiErrorMessage(err: any, fallback: string): string {
   const status = err?.response?.status
   const detail = err?.response?.data?.detail
+
+  // 5xx SEMPRE vira a mensagem amigavel — antes do detail, para o "Erro
+  // interno do servidor" do backend nunca vazar para a tela.
+  if (typeof status === 'number' && status >= 500) {
+    return SERVER_UNAVAILABLE_MESSAGE
+  }
 
   if (typeof detail === 'string') {
     if (detail.includes('Troca de senha obrigatoria')) {
