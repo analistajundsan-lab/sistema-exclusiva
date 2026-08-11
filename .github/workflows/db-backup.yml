@@ -20,6 +20,12 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # issues: write apenas neste job, para o passo de alerta abrir/comentar
+    # issue quando o backup falha (gatilhos sao schedule/dispatch — nunca
+    # roda em contexto de PR de fork, entao o token nao vaza para forks).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Instalar PostgreSQL client 17
         run: |
@@ -59,3 +65,34 @@ jobs:
           path: ${{ env.ARTIFACT }}
           retention-days: 30
           if-no-files-found: error
+
+      # A falha do backup era SILENCIOSA (so aparecia na aba Actions).
+      # Este passo transforma qualquer falha do job em issue aberta com a
+      # label backup-failure — ou comenta na issue ja aberta, evitando spam.
+      - name: Falha do backup vira issue (alerta nao-silencioso)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # garante a label (tolerante a "ja existe")
+          gh label create backup-failure \
+            --repo "$GITHUB_REPOSITORY" \
+            --color D93F0B \
+            --description "Falha no backup diario do banco (Neon)" \
+            || true
+          STAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          EXISTING="$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --state open --label backup-failure --limit 1 \
+            --json number --jq '.[0].number // empty')"
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" \
+              --body "Backup falhou de novo em ${STAMP}: ${RUN_URL}"
+          else
+            BODY="$(printf 'O backup diario do banco de producao (Neon) FALHOU.\n\n- Run: %s\n- Data: %s\n\n**Lembrete operacional:** 5+ falhas consecutivas deste workflow = padrao classico de cota de TRANSFERENCIA (egress) do Neon Free estourada — foi exatamente o sintoma dos incidentes de 07/2026 e 08/2026. Verificar o dashboard do Neon ANTES de suspeitar do workflow.\n\nRestauracao e detalhes: docs/BACKUPS.md.' "$RUN_URL" "$STAMP")"
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "Backup diário do banco FALHOU — verificar Neon" \
+              --label backup-failure \
+              --body "$BODY"
+          fi

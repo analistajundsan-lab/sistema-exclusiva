@@ -1,3 +1,7 @@
+# ATENCAO: este compose NAO e a producao real (prod = Fly.io backend +
+# Vercel frontend + Neon Postgres). Ele existe para ambiente
+# self-hosted/homologacao com stack completa local.
+#
 # Producao: segredos vem do ambiente/secret manager — NUNCA versionar valores reais.
 # Banco, Redis, Prometheus e Grafana ficam apenas na rede interna (sem portas publicas).
 # Apenas o backend (e, se usado, o frontend) sao expostos.
@@ -98,10 +102,14 @@ services:
   frontend:
     build: ./frontend
     container_name: exclusiva_frontend
-    environment:
-      VITE_API_URL: ${VITE_API_URL:?VITE_API_URL obrigatorio}
+    # VITE_API_URL removida daqui: e variavel de BUILD (o Vite embute o valor
+    # no bundle durante `npm run build`) — como env de runtime nao tem efeito.
     ports:
-      - "443:3000"
+      # nginx do container escuta 80 (frontend/nginx.conf). Sem TLS aqui:
+      # TLS real e terminado FORA deste compose (reverse proxy/LB/CDN na
+      # frente). O antigo "443:3000" era ilusorio: nem TLS na 443, nem
+      # processo algum escutando na 3000.
+      - "80:80"
     networks:
       - public
     depends_on:

@@ -1,0 +1,77 @@
+# CD do backend no Fly.io — dispara automaticamente quando o CI passa na main.
+#
+# REQUISITO (acao manual, uma unica vez): criar o secret FLY_API_TOKEN em
+# Settings -> Secrets and variables -> Actions, com um token de DEPLOY
+# escopado no app (NAO token pessoal):
+#     fly tokens create deploy -a sistema-exclusiva
+#
+# SEGURANCA (repo publico): o filtro branches:[main] NAO basta — um fork com
+# branch chamada "main" que abra PR gera run de CI com head_branch == "main".
+# Por isso o job exige tambem event == 'push' E head_repository == este repo:
+# so o push direto na main deste repositorio deploya. NUNCA trocar este
+# gatilho por pull_request_target.
+
+name: Deploy Backend (Fly.io)
+
+on:
+  workflow_run:
+    workflows: [CI]           # nome exato do workflow em .github/workflows/ci.yml
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false   # nunca cancelar um deploy no meio
+
+jobs:
+  deploy:
+    # Checagem quadrupla (alem do filtro branches acima): CI com SUCESSO, em
+    # PUSH (nao pull_request de fork com branch "main"), da main DESTE repo.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Gate opcional de 1 clique: em Settings -> Environments -> production,
+    # adicione "Required reviewers" — o deploy passa a esperar aprovacao
+    # manual antes de rodar. Sem reviewers configurados, segue automatico.
+    environment: production
+    steps:
+      - name: Checkout no commit exato aprovado pelo CI
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy no Fly.io (build remoto)
+        working-directory: backend
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only
+
+      - name: Smoke test /health (falha o job se nao-200)
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 5 --retry-delay 5 --retry-all-errors \
+            https://sistema-exclusiva.fly.dev/health
+          echo
+          echo "/health respondeu 200 — deploy validado."
+
+      - name: Checar /ready (informativo, NAO falha o job)
+        run: |
+          # Sem 'set -e' de proposito: passo puramente informativo.
+          # /ready depende do banco (Neon); 503 aqui = banco fora do ar.
+          # Falhar o CD por isso travaria justamente o deploy da correcao
+          # durante um incidente de banco (cenario dos incidentes 07-08/2026).
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' https://sistema-exclusiva.fly.dev/ready || echo 000)"
+          echo "/ready retornou HTTP ${CODE}"
+          if [ "${CODE}" != "200" ]; then
+            echo "::warning title=/ready nao-200::/ready retornou ${CODE} (503 = banco indisponivel, ex.: cota do Neon estourada). O deploy segue valido; investigar o banco."
+          fi
